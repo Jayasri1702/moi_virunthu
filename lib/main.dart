@@ -1,0 +1,43 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'utils/constants.dart';
+import 'screens/admin/login_screen.dart';
+import 'screens/admin/admin_dashboard.dart';
+import 'screens/admin/operator_dashboard.dart';
+import 'screens/admin/create_operator_screen.dart';
+import 'screens/admin/user_list_screen.dart';
+import 'screens/admin/create_event_screen.dart';
+import 'screens/admin/all_events_screen.dart';
+import 'screens/admin/todays_events_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+  );
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Auth Starter',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const LoginScreen(),
+        '/admin': (context) => const AdminDashboard(),
+        '/operator': (context) => const OperatorDashboard(),
+        '/admin/create-operator': (context) => const CreateOperatorScreen(),
+        '/admin/user-list': (context) => const UserListScreen(),
+        '/admin/create-event': (context) => const CreateEventScreen(),
+        '/admin/all-events' : (context) => const AllEventsScreen(),
+        '/admin/todays-event': (context) => const TodaysEventsScreen(),
+      },
+    );
+  }
+}

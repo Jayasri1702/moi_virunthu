@@ -1,0 +1,2 @@
+const String SUPABASE_URL = 'https://agmwcgxssorjwiinpknr.supabase.co';
+const String SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnbXdjZ3hzc29yandpaW5wa25yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5MTQ0NjAsImV4cCI6MjA3NTQ5MDQ2MH0.dEQqrPlpKlweACPHdTk2PlJfoxUHSKeaKHecQYiQ8s0';

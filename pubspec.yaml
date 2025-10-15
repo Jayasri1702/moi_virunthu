@@ -1,0 +1,48 @@
+name: moi_virunthu
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Supabase SDK for Flutter
+  supabase_flutter: ^2.5.6
+
+  # Hashing passwords (Argon2)
+  argon2: ^1.0.1
+
+  intl: ^0.20.2
+  pdf: ^3.11.3
+  printing: ^5.14.2
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.2
+  share_plus: ^12.0.0
+
+  # For API calls (Supabase HTTP requests)
+  http: ^1.2.2
+
+  # For storing login/session data locally
+  shared_preferences: ^2.2.3
+
+  # For managing environment variables (optional)
+  flutter_dotenv: ^5.1.0
+
+  # Cupertino Icons for iOS
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
