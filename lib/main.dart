@@ -3,12 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'utils/constants.dart';
 import 'screens/admin/login_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
-import 'screens/admin/operator_dashboard.dart';
 import 'screens/admin/create_operator_screen.dart';
 import 'screens/admin/user_list_screen.dart';
 import 'screens/admin/create_event_screen.dart';
 import 'screens/admin/all_events_screen.dart';
 import 'screens/admin/todays_events_screen.dart';
+import 'screens/operator/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,12 +31,13 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const LoginScreen(),
         '/admin': (context) => const AdminDashboard(),
-        '/operator': (context) => const OperatorDashboard(),
         '/admin/create-operator': (context) => const CreateOperatorScreen(),
         '/admin/user-list': (context) => const UserListScreen(),
         '/admin/create-event': (context) => const CreateEventScreen(),
         '/admin/all-events' : (context) => const AllEventsScreen(),
         '/admin/todays-event': (context) => const TodaysEventsScreen(),
+        '/operator/home': (context) => const OperatorHomeScreen(),
+        //'/operator/event-dashboard': (context) => const EventDashboardScreen(), // Create this next
       },
     );
   }

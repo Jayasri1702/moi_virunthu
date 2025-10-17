@@ -27,10 +27,15 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    // Pass user data as arguments when navigating
     if (user.role == 'admin') {
-      Navigator.pushReplacementNamed(context, '/admin');
+      Navigator.pushReplacementNamed(context, '/admin', arguments: user);
     } else {
-      Navigator.pushReplacementNamed(context, '/operator');
+      Navigator.pushReplacementNamed(
+        context,
+        '/operator/home',
+        arguments: user,  // ← Pass the user object here
+      );
     }
   }
 
@@ -59,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   child: Image.asset(
-                    'assets/images/money_transfer.png', // Add your image here
+                    'assets/images/money_transfer.png',
                     height: 150,
                     width: 200,
                     fit: BoxFit.contain,

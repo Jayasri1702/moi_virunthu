@@ -299,8 +299,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final pdf = pw.Document();
 
       // Load Tamil font for proper rendering
-      final tamilFont = await PdfGoogleFonts.muktaRegular();
-      final tamilFontBold = await PdfGoogleFonts.muktaBold();
+      final tamilFont = await PdfGoogleFonts.notoSansTamilRegular();
+      final tamilFontBold = await PdfGoogleFonts.notoSansTamilBold();
 
       pdf.addPage(
         pw.Page(
@@ -311,202 +311,142 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
                 children: [
-                  // Header with border
-                  pw.Container(
-                    width: double.infinity,
-                    padding: const pw.EdgeInsets.all(8),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(width: 2),
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Text(
-                          'ஹைடெக் மொய்',
-                          style: pw.TextStyle(
-                            font: tamilFontBold,
-                            fontSize: 20,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                  // Header - Hitech Moi (without phone numbers)
+                  pw.Text(
+                    'ஹைடெக் மொய்',
+                    style: pw.TextStyle(
+                      font: tamilFontBold,
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
                     ),
                   ),
-                  pw.SizedBox(height: 4),
+                  pw.SizedBox(height: 8),
+                  pw.Divider(),
+                  pw.SizedBox(height: 8),
 
-                  // Date, Time, Admin section with border
-                  pw.Container(
-                    width: double.infinity,
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(width: 1),
-                    ),
-                    child: pw.Row(
-                      children: [
-                        pw.Expanded(
-                          child: pw.Container(
-                            padding: const pw.EdgeInsets.all(8),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.start,
-                              children: [
-                                pw.Text(
-                                  DateFormat('dd-MM-yyyy').format(_selectedDate),
-                                  style: pw.TextStyle(font: tamilFont, fontSize: 12),
-                                ),
-                                pw.SizedBox(height: 2),
-                                pw.Text(
-                                  _selectedTime != null
-                                      ? '${_selectedTime!.hour.toString().padLeft(2, '0')}.${_selectedTime!.minute.toString().padLeft(2, '0')} ${_selectedTime!.hour < 12 ? 'am' : 'pm'}'
-                                      : '10.30 am',
-                                  style: pw.TextStyle(font: tamilFont, fontSize: 12),
-                                ),
-                              ],
+                  // Date, Time, Admin
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            DateFormat('dd-MM-yyyy').format(_selectedDate),
+                            style: pw.TextStyle(font: tamilFont, fontSize: 11),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            _selectedTime != null
+                                ? '${_selectedTime!.hour.toString().padLeft(2, '0')}.${_selectedTime!.minute.toString().padLeft(2, '0')} ${_selectedTime!.hour < 12 ? 'am' : 'pm'}'
+                                : '10.30 am',
+                            style: pw.TextStyle(font: tamilFont, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.end,
+                        children: [
+                          pw.Text(
+                            'Admin',
+                            style: pw.TextStyle(
+                              font: tamilFont,
+                              fontSize: 11,
+                              fontWeight: pw.FontWeight.bold,
                             ),
                           ),
-                        ),
-                        pw.Container(
-                          width: 1,
-                          height: 50,
-                          color: PdfColors.black,
-                        ),
-                        pw.Expanded(
-                          child: pw.Container(
-                            padding: const pw.EdgeInsets.all(8),
-                            child: pw.Column(
-                              crossAxisAlignment: pw.CrossAxisAlignment.end,
-                              mainAxisAlignment: pw.MainAxisAlignment.center,
-                              children: [
-                                pw.Text(
-                                  'Typer',
-                                  style: pw.TextStyle(
-                                    font: tamilFont,
-                                    fontSize: 12,
-                                    fontWeight: pw.FontWeight.bold,
-                                  ),
-                                ),
-                                pw.Text(
-                                  typerName,
-                                  style: pw.TextStyle(
-                                    font: tamilFont,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    ],
+                  ),
+                  pw.SizedBox(height: 12),
+
+                  // Center content
+                  pw.Text(
+                    'வ.எண் : $receiptNo',
+                    style: pw.TextStyle(
+                      font: tamilFontBold,
+                      fontSize: 12,
                     ),
                   ),
                   pw.SizedBox(height: 4),
-
-                  // Center content with border
-                  pw.Container(
-                    width: double.infinity,
-                    padding: const pw.EdgeInsets.all(12),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(width: 1),
+                  pw.Text(
+                    _customerName.text,
+                    style: pw.TextStyle(
+                      font: tamilFontBold,
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
                     ),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      children: [
-                        pw.Text(
-                          'வ.எண் : $receiptNo',
-                          style: pw.TextStyle(
-                            font: tamilFontBold,
-                            fontSize: 14,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.Text(
-                          _customerName.text,
-                          style: pw.TextStyle(
-                            font: tamilFontBold,
-                            fontSize: 16,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.Text(
-                          _venue.text.isNotEmpty ? _venue.text : 'தொழை',
-                          style: pw.TextStyle(
-                            font: tamilFont,
-                            fontSize: 14,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.Text(
-                          eventTypeName,
-                          style: pw.TextStyle(
-                            font: tamilFontBold,
-                            fontSize: 18,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                      ],
-                    ),
+                    textAlign: pw.TextAlign.center,
                   ),
                   pw.SizedBox(height: 4),
+                  pw.Text(
+                    _venue.text.isNotEmpty ? _venue.text : 'தொழை',
+                    style: pw.TextStyle(
+                      font: tamilFont,
+                      fontSize: 12,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    eventTypeName,
+                    style: pw.TextStyle(
+                      font: tamilFontBold,
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 12),
+                  pw.Divider(),
+                  pw.SizedBox(height: 12),
 
-                  // Footer with border
-                  pw.Container(
-                    width: double.infinity,
-                    padding: const pw.EdgeInsets.all(12),
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(width: 1),
+                  // Footer
+                  pw.Text(
+                    'தங்கள் வருகைக்கு நன்றி!',
+                    style: pw.TextStyle(
+                      font: tamilFont,
+                      fontSize: 12,
                     ),
-                    child: pw.Column(
-                      crossAxisAlignment: pw.CrossAxisAlignment.center,
-                      children: [
-                        pw.Text(
-                          'தங்கள் வருகைக்கு நன்றி!',
-                          style: pw.TextStyle(
-                            font: tamilFont,
-                            fontSize: 13,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.Text(
-                          'அன்புடன்...',
-                          style: pw.TextStyle(
-                            font: tamilFont,
-                            fontSize: 12,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.Text(
-                          _customerName.text,
-                          style: pw.TextStyle(
-                            font: tamilFontBold,
-                            fontSize: 14,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          _city.text.isNotEmpty ? _city.text : '',
-                          style: pw.TextStyle(
-                            font: tamilFont,
-                            fontSize: 13,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          _contactNumber.text,
-                          style: pw.TextStyle(
-                            font: tamilFont,
-                            fontSize: 13,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                      ],
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'அன்புடன்',
+                    style: pw.TextStyle(
+                      font: tamilFont,
+                      fontSize: 11,
                     ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    _customerName.text,
+                    style: pw.TextStyle(
+                      font: tamilFontBold,
+                      fontSize: 12,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    _city.text.isNotEmpty ? _city.text : '',
+                    style: pw.TextStyle(
+                      font: tamilFont,
+                      fontSize: 12,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+                  pw.SizedBox(height: 2),
+                  pw.Text(
+                    _contactNumber.text,
+                    style: pw.TextStyle(
+                      font: tamilFont,
+                      fontSize: 12,
+                    ),
+                    textAlign: pw.TextAlign.center,
                   ),
                 ],
               ),
