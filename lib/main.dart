@@ -9,6 +9,7 @@ import 'screens/admin/create_event_screen.dart';
 import 'screens/admin/all_events_screen.dart';
 import 'screens/admin/todays_events_screen.dart';
 import 'screens/operator/home_screen.dart';
+import 'screens/operator/event_dashboard_screen.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,10 +35,10 @@ class MyApp extends StatelessWidget {
         '/admin/create-operator': (context) => const CreateOperatorScreen(),
         '/admin/user-list': (context) => const UserListScreen(),
         '/admin/create-event': (context) => const CreateEventScreen(),
-        '/admin/all-events' : (context) => const AllEventsScreen(),
+        '/admin/all-events': (context) => const AllEventsScreen(),
         '/admin/todays-event': (context) => const TodaysEventsScreen(),
         '/operator/home': (context) => const OperatorHomeScreen(),
-        //'/operator/event-dashboard': (context) => const EventDashboardScreen(), // Create this next
+        '/operator/event-dashboard': (context) => const EventDashboardScreen(), // Add this route
       },
     );
   }

@@ -162,10 +162,14 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
   }
 
   void _navigateToEventDashboard(Map<String, dynamic> event) {
+    // Add operator name to the event data
+    final eventWithOperator = Map<String, dynamic>.from(event);
+    eventWithOperator['_operator_name'] = _operatorName;
+
     Navigator.pushNamed(
       context,
       '/operator/event-dashboard',
-      arguments: event,
+      arguments: eventWithOperator,
     );
   }
 
