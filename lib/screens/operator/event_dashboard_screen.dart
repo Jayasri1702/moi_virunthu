@@ -4,6 +4,7 @@ import 'collect_moi_screen.dart';
 import 'correct_village_name.dart'; // Add this import
 import 'uncle_reorder_screen.dart';
 import 'denomination_screen.dart';
+import 'user_wise_collection.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -202,9 +203,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                     );
                   }),
-                  const SizedBox(height: 12),
                   _buildActionButton('User wise collection', () {
-                    // Navigate to User wise collection screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UserWiseCollectionScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Similar Entries', () {
