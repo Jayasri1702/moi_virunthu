@@ -15,6 +15,7 @@ import 'screens/operator/correct_village_name.dart'; // Add this line
 import 'screens/operator/uncle_reorder_screen.dart'; // Add this line
 import 'screens/operator/denomination_screen.dart';
 import 'screens/operator/user_wise_collection.dart';
+import 'screens/operator/similar_entries_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +50,7 @@ class MyApp extends StatelessWidget {
         '/operator/uncle-reorder': (context) => const UncleReorderScreen(), // Add this line
         '/operator/denomination': (context) => const DenominationScreen(),
         '/operator/user-collection': (context) => const UserWiseCollectionScreen(),
+        '/operator/similar-entries': (context) => const SimilarEntriesScreen(),
       },
     );
   }

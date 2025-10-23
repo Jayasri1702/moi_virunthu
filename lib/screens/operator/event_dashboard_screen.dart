@@ -5,6 +5,7 @@ import 'correct_village_name.dart'; // Add this import
 import 'uncle_reorder_screen.dart';
 import 'denomination_screen.dart';
 import 'user_wise_collection.dart';
+import 'similar_entries_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -211,9 +212,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                     );
                   }),
-                  const SizedBox(height: 12),
                   _buildActionButton('Similar Entries', () {
-                    // Navigate to Similar Entries screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SimilarEntriesScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Modified Report', () {
