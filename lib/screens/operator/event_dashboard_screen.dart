@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'collect_moi_screen.dart'; // Add this import
+import 'collect_moi_screen.dart';
+import 'correct_village_name.dart'; // Add this import
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -175,7 +176,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Correct Village Names', () {
-                    // Navigate to Correct Village Names screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CorrectVillageNamesScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Uncle Re-order', () {
