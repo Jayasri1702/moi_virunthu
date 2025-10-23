@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'collect_moi_screen.dart'; // Add this import
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -165,6 +166,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 children: [
                   _buildActionButton('Collect Moi', () {
                     // Navigate to Collect Moi screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CollectMoiScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Correct Village Names', () {
