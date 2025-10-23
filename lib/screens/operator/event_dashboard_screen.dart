@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'collect_moi_screen.dart';
 import 'correct_village_name.dart'; // Add this import
 import 'uncle_reorder_screen.dart';
+import 'denomination_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -193,9 +194,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                     );
                   }),
-                  const SizedBox(height: 12),
                   _buildActionButton('Denomination', () {
-                    // Navigate to Denomination screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DenominationScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('User wise collection', () {
