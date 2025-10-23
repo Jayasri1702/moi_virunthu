@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'collect_moi_screen.dart';
 import 'correct_village_name.dart'; // Add this import
+import 'uncle_reorder_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -185,7 +186,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Uncle Re-order', () {
-                    // Navigate to Uncle Re-order screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const UncleReorderScreen(),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Denomination', () {
