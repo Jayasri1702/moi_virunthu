@@ -41,7 +41,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _selectedTime;
   String? _selectedEventType;
-  String? _selectedOperator;
+  List<String> _selectedOperators = [];
   String _selectedStatus = 'Upcoming';
   bool _skipDenomination = false;
   bool _skipPrint = false;
@@ -149,28 +149,30 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final status = _editingEvent!['status']?.toString() ?? 'upcoming';
     _selectedStatus = status[0].toUpperCase() + status.substring(1).toLowerCase();
 
-    _loadAssignedOperator();
+    _loadAssignedOperators();
   }
 
-  Future<void> _loadAssignedOperator() async {
+  Future<void> _loadAssignedOperators() async {
     if (_editingEvent == null) return;
 
     try {
-      final assignment = await _auth.client
+      final assignments = await _auth.client
           .from('event_assignments')
           .select('operator_id')
-          .eq('event_id', _editingEvent!['id'])
-          .maybeSingle();
+          .eq('event_id', _editingEvent!['id']);
 
-      if (assignment != null && mounted) {
+      if (assignments != null && mounted) {
         setState(() {
-          _selectedOperator = assignment['operator_id'];
+          _selectedOperators = assignments
+              .map((a) => a['operator_id'] as String)
+              .toList();
         });
       }
     } catch (e) {
       // Handle error silently
     }
   }
+
   static const platform = MethodChannel('com.example.moi_virunthu/whatsapp');
   Future<void> _generateReceiptAndSendWhatsApp() async {
     if (!_formKey.currentState!.validate()) {
@@ -243,11 +245,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
         eventId = result['id'];
 
-        if (_selectedOperator != null) {
-          await _auth.client.from('event_assignments').insert({
+        if (_selectedOperators.isNotEmpty) {
+          final assignments = _selectedOperators.map((operatorId) => {
             'event_id': eventId,
-            'operator_id': _selectedOperator,
-          });
+            'operator_id': operatorId,
+          }).toList();
+
+          await _auth.client.from('event_assignments').insert(assignments);
         }
 
         // Update state to edit mode after first save
@@ -819,11 +823,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
         eventId = result['id'];
 
-        if (_selectedOperator != null) {
-          await _auth.client.from('event_assignments').insert({
+        if (_selectedOperators.isNotEmpty) {
+          final assignments = _selectedOperators.map((operatorId) => {
             'event_id': eventId,
-            'operator_id': _selectedOperator,
-          });
+            'operator_id': operatorId,
+          }).toList();
+
+          await _auth.client.from('event_assignments').insert(assignments);
         }
 
         // Update state to edit mode after first save
@@ -869,11 +875,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           .delete()
           .eq('event_id', eventId);
 
-      if (_selectedOperator != null) {
-        await _auth.client.from('event_assignments').insert({
+      if (_selectedOperators.isNotEmpty) {
+        final assignments = _selectedOperators.map((operatorId) => {
           'event_id': eventId,
-          'operator_id': _selectedOperator,
-        });
+          'operator_id': operatorId,
+        }).toList();
+
+        await _auth.client.from('event_assignments').insert(assignments);
       }
     } catch (e) {
       // Handle error
@@ -897,7 +905,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _selectedDate = DateTime.now();
       _selectedTime = null;
       _selectedStatus = 'Upcoming';
-      _selectedOperator = null;
+      _selectedOperators.clear();
       _skipDenomination = false;
       _skipPrint = false;
       if (_eventTypes.isNotEmpty) {
@@ -1223,32 +1231,83 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             const SizedBox(height: 16),
 
                             _buildFormRow(
-                              label: 'Operator',
+                              label: 'Operators',
                               required: false,
                               isSmallScreen: isSmallScreen,
-                              child: DropdownButtonFormField<String>(
-                                value: _selectedOperator,
-                                isExpanded: true,
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  isDense: true,
-                                  hintText: 'Select Operator',
-                                ),
-                                items: _operators.map((operator) {
-                                  return DropdownMenuItem<String>(
-                                    value: operator['id'],
-                                    child: Text(
-                                      '${operator['full_name']} - ${operator['phone']}',
-                                      overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (_selectedOperators.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.grey[300]!),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: _selectedOperators.map((operatorId) {
+                                          final operatorIndex = _operators.indexWhere((op) => op['id'] == operatorId);
+                                          if (operatorIndex == -1) return const SizedBox.shrink();
+
+                                          final operator = _operators[operatorIndex];
+                                          return Chip(
+                                            label: Text(operator['full_name'], style: const TextStyle(fontSize: 13)),
+                                            deleteIcon: const Icon(Icons.close, size: 16),
+                                            onDeleted: () {
+                                              setState(() {
+                                                _selectedOperators.remove(operatorId);
+                                              });
+                                            },
+                                            visualDensity: VisualDensity.compact,
+                                          );
+                                        }).toList(),
+                                      ),
                                     ),
-                                  );
-                                }).toList(),
-                                onChanged: (value) {
-                                  setState(() => _selectedOperator = value);
-                                },
+                                  if (_selectedOperators.isNotEmpty)
+                                    const SizedBox(height: 8),
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey('operator_${_selectedOperators.length}_${_selectedOperators.hashCode}'),
+                                    value: null,
+                                    isExpanded: true,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      isDense: true,
+                                      hintText: 'Add Operator',
+                                    ),
+                                    items: _operators
+                                        .where((op) => !_selectedOperators.contains(op['id']))
+                                        .map((operator) {
+                                      return DropdownMenuItem<String>(
+                                        value: operator['id'],
+                                        child: Text(
+                                          '${operator['full_name']} - ${operator['phone']}',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                    onChanged: (value) {
+                                      print('DEBUG: Dropdown value selected: $value');
+                                      print('DEBUG: Current _selectedOperators BEFORE: $_selectedOperators');
+
+                                      if (value != null && !_selectedOperators.contains(value)) {
+                                        setState(() {
+                                          _selectedOperators.add(value);
+                                          print('DEBUG: Operator added successfully');
+                                          print('DEBUG: Current _selectedOperators AFTER: $_selectedOperators');
+                                          print('DEBUG: Total operators now: ${_selectedOperators.length}');
+                                        });
+                                      } else {
+                                        print('DEBUG: Operator NOT added. value=$value, already exists=${_selectedOperators.contains(value)}');
+                                      }
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
+
                             const SizedBox(height: 16),
 
                             _buildFormRow(
@@ -1273,6 +1332,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 },
                               ),
                             ),
+
                             const SizedBox(height: 16),
 
                             _buildFormRow(
