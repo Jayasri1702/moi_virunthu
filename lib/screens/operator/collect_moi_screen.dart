@@ -1019,10 +1019,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           child: InkWell(
             onTap: () {
               if (label == 'Cash Drawing') {
-                // Navigate to Cash Withdrawal Screen
                 Navigator.pushNamed(
                   context,
                   '/operator/cash_withdrawal',
+                  arguments: eventData,
+                );
+              } else if (label == 'Exchange Denomination') {
+                Navigator.pushNamed(
+                  context,
+                  '/operator/exchange-denomination',
                   arguments: eventData,
                 );
               } else {
