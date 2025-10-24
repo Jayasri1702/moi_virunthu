@@ -165,6 +165,7 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
     // Add operator name to the event data
     final eventWithOperator = Map<String, dynamic>.from(event);
     eventWithOperator['_operator_name'] = _operatorName;
+    eventWithOperator['_operator_id'] = _currentUserId; // Add this line
 
     Navigator.pushNamed(
       context,

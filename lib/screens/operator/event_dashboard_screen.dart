@@ -17,6 +17,8 @@ class EventDashboardScreen extends StatefulWidget {
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   Map<String, dynamic>? eventData;
   String operatorName = '';
+  String? operatorId; // Add this
+
 
   @override
   void didChangeDependencies() {
@@ -28,6 +30,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventData = args;
         // Get operator name from the event data if it was passed
         operatorName = args['_operator_name'] ?? '';
+        operatorId = args['_operator_id']; // Add this
       });
     }
   }
@@ -169,12 +172,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 children: [
+                  // And in the Collect Moi button:
                   _buildActionButton('Collect Moi', () {
-                    // Navigate to Collect Moi screen
+                    final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                    eventDataWithOperator['operator_id'] = operatorId;
+
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => const CollectMoiScreen(),
+                        settings: RouteSettings(arguments: eventDataWithOperator),
                       ),
                     );
                   }),
@@ -193,6 +200,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const UncleReorderScreen(),
+                        settings: RouteSettings(arguments: eventData), // Pass event data here
                       ),
                     );
                   }),

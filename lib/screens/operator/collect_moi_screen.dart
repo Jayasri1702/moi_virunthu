@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -10,9 +11,10 @@ class CollectMoiScreen extends StatefulWidget {
 
 class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _supabase = Supabase.instance.client;
 
   // Controllers
-  final _serialNoController = TextEditingController(text: 'O1');
+  final _serialNoController = TextEditingController();
   final _mobileController = TextEditingController();
   final _villageController = TextEditingController();
   final _livingPlaceController = TextEditingController();
@@ -26,10 +28,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _job2Controller = TextEditingController();
   final _notesController = TextEditingController();
   final _amountController = TextEditingController();
-
-  // Checkboxes
-  bool _isCheckAdvanceUPI = false;
-  bool _isUncle = false;
+  final _moiDetailsController = TextEditingController();
 
   // Denomination controllers
   final _denom500Controller = TextEditingController();
@@ -42,6 +41,88 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   int _totalCount = 0;
   double _totalAmount = 0.0;
+
+  // Payment method - CASH or OTHERS
+  String _paymentMethod = 'CASH';
+  bool _isUncle = false;
+
+  // Event data
+  Map<String, dynamic>? eventData;
+
+  // Current group_id for grouped entries
+  int? _currentGroupId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Get event data from navigation arguments
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null && args is Map<String, dynamic>) {
+      setState(() {
+        eventData = args;
+      });
+      print('Event data received: ${eventData?['id']}');
+      print('Operator ID received: ${eventData?['operator_id']}');
+      _loadNextSerialNumber();
+    }
+  }
+
+  Future<void> _loadNextSerialNumber() async {
+    if (eventData == null) return;
+
+    try {
+      final eventId = eventData!['id'];
+
+      // Get the highest serial number for this event
+      final response = await _supabase
+          .from('mois')
+          .select('serial_no')
+          .eq('event_id', eventId)
+          .order('serial_no', ascending: false)
+          .limit(1);
+
+      int nextSerial = 1;
+      if (response.isNotEmpty && response[0]['serial_no'] != null) {
+        nextSerial = (response[0]['serial_no'] as int) + 1;
+      }
+
+      setState(() {
+        _serialNoController.text = 'O$nextSerial';
+      });
+    } catch (e) {
+      print('Error loading serial number: $e');
+      setState(() {
+        _serialNoController.text = 'O1';
+      });
+    }
+  }
+
+  Future<int> _getNextGroupId() async {
+    if (eventData == null) return 1;
+
+    try {
+      final eventId = eventData!['id'];
+
+      // Get the highest group_id for this event
+      final response = await _supabase
+          .from('mois')
+          .select('group_id')
+          .eq('event_id', eventId)
+          .not('group_id', 'is', null)
+          .order('group_id', ascending: false)
+          .limit(1);
+
+      int nextGroupId = 1;
+      if (response.isNotEmpty && response[0]['group_id'] != null) {
+        nextGroupId = (response[0]['group_id'] as int) + 1;
+      }
+
+      return nextGroupId;
+    } catch (e) {
+      print('Error loading group_id: $e');
+      return 1;
+    }
+  }
 
   @override
   void dispose() {
@@ -59,6 +140,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _job2Controller.dispose();
     _notesController.dispose();
     _amountController.dispose();
+    _moiDetailsController.dispose();
     _denom500Controller.dispose();
     _denom200Controller.dispose();
     _denom100Controller.dispose();
@@ -79,17 +161,352 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     int count1 = int.tryParse(_denom1Controller.text) ?? 0;
 
     setState(() {
-      _totalCount = count500 + count200 + count100 + count50 + count20 + count10 + count1;
+      _totalCount =
+          count500 + count200 + count100 + count50 + count20 + count10 + count1;
       _totalAmount = (count500 * 500) + (count200 * 200) + (count100 * 100) +
           (count50 * 50) + (count20 * 20) + (count10 * 10) + (count1 * 1);
       _amountController.text = _totalAmount.toStringAsFixed(0);
     });
   }
 
-  String _numberToWords(double number) {
-    // Basic implementation - you can enhance this
-    if (number == 0) return 'Zero';
-    return 'Rs. ${number.toStringAsFixed(0)} Only';
+  void _clearAllFields() {
+    setState(() {
+      _mobileController.clear();
+      _villageController.clear();
+      _livingPlaceController.clear();
+      _init1Controller.clear();
+      _name1Controller.clear();
+      _qualification1Controller.clear();
+      _job1Controller.clear();
+      _init2Controller.clear();
+      _name2Controller.clear();
+      _qualification2Controller.clear();
+      _job2Controller.clear();
+      _notesController.clear();
+      _amountController.clear();
+      _moiDetailsController.clear(); // Clear moi details too
+      _denom500Controller.clear();
+      _denom200Controller.clear();
+      _denom100Controller.clear();
+      _denom50Controller.clear();
+      _denom20Controller.clear();
+      _denom10Controller.clear();
+      _denom1Controller.clear();
+      _paymentMethod = 'CASH';
+      _isUncle = false;
+      _totalCount = 0;
+      _totalAmount = 0.0;
+      _currentGroupId = null; // Reset group ID
+    });
+
+    // Reload next serial number
+    _loadNextSerialNumber();
+  }
+
+  void _clearFieldsExceptMoiDetails() {
+    setState(() {
+      _mobileController.clear();
+      _villageController.clear();
+      _livingPlaceController.clear();
+      _init1Controller.clear();
+      _name1Controller.clear();
+      _qualification1Controller.clear();
+      _job1Controller.clear();
+      _init2Controller.clear();
+      _name2Controller.clear();
+      _qualification2Controller.clear();
+      _job2Controller.clear();
+      _notesController.clear();
+      _amountController.clear();
+      _denom500Controller.clear();
+      _denom200Controller.clear();
+      _denom100Controller.clear();
+      _denom50Controller.clear();
+      _denom20Controller.clear();
+      _denom10Controller.clear();
+      _denom1Controller.clear();
+      _paymentMethod = 'CASH';
+      _isUncle = false;
+      _totalCount = 0;
+      _totalAmount = 0.0;
+      // Keep _currentGroupId as is for grouping
+    });
+  }
+
+  String _generatePersonSummary() {
+    List<String> summaries = [];
+    double currentAmount = double.tryParse(_amountController.text) ?? 0.0;
+
+    // Add Person 1 if has data
+    if (_name1Controller.text.isNotEmpty) {
+      String person1 = '${_init1Controller.text} ${_name1Controller.text}';
+      summaries.add(person1);
+    }
+
+    // Add Person 2 if has data
+    if (_name2Controller.text.isNotEmpty) {
+      String person2 = '${_init2Controller.text} ${_name2Controller.text}';
+      summaries.add(person2);
+    }
+
+    return summaries.join(', ') +
+        (currentAmount > 0 ? ' - ₹${currentAmount.toStringAsFixed(0)}' : '');
+  }
+
+  Future<void> _handleGroup() async {
+    // Validation
+    if (_amountController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter amount')),
+      );
+      return;
+    }
+
+    if (_name1Controller.text.isEmpty && _name2Controller.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter at least one person details')),
+      );
+      return;
+    }
+
+    String summary = _generatePersonSummary();
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Add to Group'),
+          content: Text('Save this entry to group?\n\n$summary'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Add & Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final eventId = eventData?['id'];
+      final operatorId = eventData?['operator_id'];
+
+      if (eventId == null || operatorId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Event or Operator ID not found')),
+        );
+        return;
+      }
+
+      // Get or create group_id
+      if (_currentGroupId == null) {
+        _currentGroupId = await _getNextGroupId();
+      }
+
+      // Prepare persons data for current entry
+      List<Map<String, dynamic>> personsData = [];
+      if (_name1Controller.text.isNotEmpty) {
+        personsData.add({
+          'init': _init1Controller.text,
+          'name': _name1Controller.text,
+          'qualification': _qualification1Controller.text,
+          'job': _job1Controller.text,
+        });
+      }
+      if (_name2Controller.text.isNotEmpty) {
+        personsData.add({
+          'init': _init2Controller.text,
+          'name': _name2Controller.text,
+          'qualification': _qualification2Controller.text,
+          'job': _job2Controller.text,
+        });
+      }
+
+      // Save to database immediately
+      final response = await _supabase.from('mois').insert({
+        'event_id': eventId,
+        'operator_id': operatorId,
+        'serial_no': int.tryParse(_serialNoController.text.replaceAll('O', '')),
+        'amount': double.parse(_amountController.text),
+        'payment_method': _paymentMethod,
+        'persons': personsData,
+        'village_name': _villageController.text.trim(),
+        'living_place': _livingPlaceController.text.trim(),
+        'phone': _mobileController.text.trim(),
+        'notes': _notesController.text.trim(),
+        'is_uncle': _isUncle,
+        'group_id': _currentGroupId, // Set group_id
+      }).select();
+
+      if (response.isNotEmpty) {
+        // Update Moi Details display
+        setState(() {
+          if (_moiDetailsController.text.isNotEmpty) {
+            _moiDetailsController.text += '\n$summary';
+          } else {
+            _moiDetailsController.text = summary;
+          }
+        });
+
+        _clearFieldsExceptMoiDetails();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Entry saved to group. Add more or Save & Print for receipt.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Increment serial number for next entry
+        await _loadNextSerialNumber();
+      }
+    } catch (e) {
+      print('Error saving grouped entry: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving: $e')),
+      );
+    }
+  }
+
+  Future<void> _showReceiptTypeDialog() async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Receipt Type'),
+          content: const Text('How would you like to print the receipts?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _saveAndPrint(isSingleReceipt: true);
+              },
+              child: const Text('Single Receipt'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _saveAndPrint(isSingleReceipt: false);
+              },
+              child: const Text('Group Receipt'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _saveAndPrint({required bool isSingleReceipt}) async {
+    if (_amountController.text.isEmpty && _moiDetailsController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter amount or create group entries')),
+      );
+      return;
+    }
+
+    try {
+      final eventId = eventData?['id'];
+      final operatorId = eventData?['operator_id'];
+
+      if (eventId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Event ID not found')),
+        );
+        return;
+      }
+
+      if (operatorId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Operator ID not found. Please go back and try again.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // If there's current form data, save it
+      if (_amountController.text.isNotEmpty) {
+        // Prepare persons data
+        List<Map<String, dynamic>> personsData = [];
+        if (_name1Controller.text.isNotEmpty) {
+          personsData.add({
+            'init': _init1Controller.text,
+            'name': _name1Controller.text,
+            'qualification': _qualification1Controller.text,
+            'job': _job1Controller.text,
+          });
+        }
+        if (_name2Controller.text.isNotEmpty) {
+          personsData.add({
+            'init': _init2Controller.text,
+            'name': _name2Controller.text,
+            'qualification': _qualification2Controller.text,
+            'job': _job2Controller.text,
+          });
+        }
+
+        // Insert into database
+        final response = await _supabase.from('mois').insert({
+          'event_id': eventId,
+          'operator_id': operatorId,
+          'serial_no': int.tryParse(_serialNoController.text.replaceAll('O', '')),
+          'amount': double.parse(_amountController.text),
+          'payment_method': _paymentMethod,
+          'persons': personsData,
+          'village_name': _villageController.text.trim(),
+          'living_place': _livingPlaceController.text.trim(),
+          'phone': _mobileController.text.trim(),
+          'notes': _notesController.text.trim(),
+          'is_uncle': _isUncle,
+          'group_id': _currentGroupId, // Will be null for non-grouped entries
+        }).select();
+
+        if (response.isEmpty) {
+          throw Exception('Failed to save entry');
+        }
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isSingleReceipt
+              ? 'Moi saved! Printing single receipts...'
+              : 'Moi saved! Printing group receipt...'),
+        ),
+      );
+
+      // TODO: Implement actual printing logic here
+      // You can call a print function based on isSingleReceipt flag
+      // For grouped entries, query DB with group_id = _currentGroupId
+
+      // Clear everything after successful save and print
+      _clearAllFields();
+    } catch (e) {
+      print('Error saving moi: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving moi: $e'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleSaveAndPrint() async {
+    if (_moiDetailsController.text.isNotEmpty) {
+      // Show dialog if there are grouped entries
+      await _showReceiptTypeDialog();
+    } else {
+      // Direct save for single entry
+      await _saveAndPrint(isSingleReceipt: true);
+    }
   }
 
   @override
@@ -143,14 +560,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                             height: 40,
                             decoration: BoxDecoration(
                               border: Border.all(color: Colors.black, width: 2),
+                              color: Colors.grey[200],
                             ),
                             child: Center(
-                              child: TextField(
-                                controller: _serialNoController,
-                                textAlign: TextAlign.center,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                _serialNoController.text,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ),
@@ -242,8 +659,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                 const SizedBox(height: 16),
 
-                // Person 1 Details
-                _buildPersonRow(
+                // Person 1 Details (Vertical Layout)
+                _buildPersonVertical(
+                  'Person 1',
                   _init1Controller,
                   _name1Controller,
                   _qualification1Controller,
@@ -252,8 +670,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                 const SizedBox(height: 16),
 
-                // Person 2 Details
-                _buildPersonRow(
+                // Person 2 Details (Vertical Layout)
+                _buildPersonVertical(
+                  'Person 2',
                   _init2Controller,
                   _name2Controller,
                   _qualification2Controller,
@@ -267,7 +686,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                 const SizedBox(height: 16),
 
-                // Amount and Checkboxes Section
+                // Payment Method Selection
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -275,169 +694,193 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     border: Border.all(color: Colors.black, width: 2),
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'Payment Method',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Amount Section
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Amount',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Container(
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.black, width: 2),
-                                  ),
-                                  child: TextField(
-                                    controller: _amountController,
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    decoration: const InputDecoration(
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Amount in words',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              ],
+                            child: RadioListTile<String>(
+                              title: const Text('Cash'),
+                              value: 'CASH',
+                              groupValue: _paymentMethod,
+                              onChanged: (value) {
+                                setState(() {
+                                  _paymentMethod = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          // Checkboxes and Denomination
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('Check/Advance/UPI'),
+                              value: 'OTHERS',
+                              groupValue: _paymentMethod,
+                              onChanged: (value) {
+                                setState(() {
+                                  _paymentMethod = value!;
+                                });
+                              },
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Amount Section
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.black, width: 2),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Amount',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _isUncle,
+                            onChanged: (value) {
+                              setState(() {
+                                _isUncle = value ?? false;
+                              });
+                            },
+                          ),
+                          const Text('Uncle'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Denomination Table (Only show if payment method is CASH)
+                if (_paymentMethod == 'CASH') ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.black, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Denomination',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDenomRow('500', _denom500Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('200', _denom200Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('100', _denom100Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('50', _denom50Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('20', _denom20Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('10', _denom10Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('1', _denom1Controller),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            border: Border.all(color: Colors.black, width: 2),
+                          ),
+                          child: Column(
                             children: [
-                              // Check/Advance/UPI row
                               Row(
-                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 35,
-                                    child: Checkbox(
-                                      value: _isCheckAdvanceUPI,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _isCheckAdvanceUPI = value ?? false;
-                                        });
-                                      },
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      visualDensity: VisualDensity.compact,
+                                  Text(
+                                    'Total Count: $_totalCount',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const SizedBox(
-                                    width: 100,
-                                    child: Text(
-                                      'Check / Advance / UPI',
-                                      style: TextStyle(fontSize: 11),
-                                      maxLines: 2,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildDenomCell('500', _denom500Controller),
                                 ],
                               ),
-                              // Uncle row
+                              const SizedBox(height: 4),
                               Row(
-                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  SizedBox(
-                                    width: 24,
-                                    height: 35,
-                                    child: Checkbox(
-                                      value: _isUncle,
-                                      onChanged: (value) {
-                                        setState(() {
-                                          _isUncle = value ?? false;
-                                        });
-                                      },
-                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      visualDensity: VisualDensity.compact,
+                                  const Text(
+                                    'Total Amount:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  const SizedBox(
-                                    width: 100,
+                                  Flexible(
                                     child: Text(
-                                      'Uncle',
-                                      style: TextStyle(fontSize: 11),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  _buildDenomCell('200', _denom200Controller),
-                                ],
-                              ),
-                              // Rest of denominations
-                              _buildDenomCell('100', _denom100Controller),
-                              _buildDenomCell('50', _denom50Controller),
-                              _buildDenomCell('20', _denom20Controller),
-                              _buildDenomCell('10', _denom10Controller),
-                              _buildDenomCell('1', _denom1Controller),
-                              // Total row
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    width: 60,
-                                    height: 35,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.black, width: 2),
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'Total',
-                                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                      '₹${_totalAmount.toStringAsFixed(0)}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
                                       ),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 70,
-                                    height: 35,
-                                    decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.black, width: 2),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        _totalAmount.toStringAsFixed(0),
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
-                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Count : $_totalCount'),
-                          Text('Amount : ${_totalAmount.toStringAsFixed(0)}'),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
 
                 const SizedBox(height: 16),
 
@@ -471,11 +914,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                         child: Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: TextField(
+                            controller: _moiDetailsController,
                             maxLines: null,
                             expands: true,
+                            readOnly: true,
                             decoration: const InputDecoration(
                               border: InputBorder.none,
-                              hintText: 'Enter moi details here...',
+                              hintText: 'Grouped entries will appear here...',
                             ),
                           ),
                         ),
@@ -486,35 +931,87 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                 const SizedBox(height: 20),
 
-                // Submit Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      if (_formKey.currentState!.validate()) {
-                        // Handle form submission
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Moi collected successfully!')),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
-                        side: const BorderSide(color: Colors.black, width: 2),
+                // Action Buttons - Updated with 3 buttons
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _handleSaveAndPrint,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: const BorderSide(
+                                      color: Colors.black, width: 2),
+                                ),
+                              ),
+                              child: const Text(
+                                'Save & Print',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _handleGroup,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: const BorderSide(
+                                      color: Colors.black, width: 2),
+                                ),
+                              ),
+                              child: const Text(
+                                'Group',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _clearAllFields,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.zero,
+                            side: const BorderSide(
+                                color: Colors.black, width: 2),
+                          ),
+                        ),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
-                    child: const Text(
-                      'Submit',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
 
                 const SizedBox(height: 20),
@@ -538,7 +1035,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           color: Colors.white,
           child: InkWell(
             onTap: () {
-              // Handle button tap
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('$label clicked')),
               );
@@ -589,62 +1085,142 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildPersonRow(
+  Widget _buildPersonVertical(
+      String title,
       TextEditingController initController,
       TextEditingController nameController,
       TextEditingController qualificationController,
       TextEditingController jobController,
       ) {
     return Container(
-      height: 80,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildPersonCell('Init', initController, flex: 1),
-          _buildPersonCell('Name', nameController, flex: 3),
-          _buildPersonCell('Qualification', qualificationController, flex: 2),
-          _buildPersonCell('Job', jobController, flex: 2),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPersonCell(String label, TextEditingController controller,
-      {int flex = 1}) {
-    return Expanded(
-      flex: flex,
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.black, width: 2),
-          ),
-        ),
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
             ),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  isDense: true,
+          ),
+          const SizedBox(height: 16),
+          // Init
+          Row(
+            children: [
+              const SizedBox(
+                width: 100,
+                child: Text(
+                  'Init',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
-            ),
-          ],
-        ),
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  child: TextField(
+                    controller: initController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Name
+          Row(
+            children: [
+              const SizedBox(
+                width: 100,
+                child: Text(
+                  'Name',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  child: TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Qualification
+          Row(
+            children: [
+              const SizedBox(
+                width: 100,
+                child: Text(
+                  'Qualification',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  child: TextField(
+                    controller: qualificationController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Job
+          Row(
+            children: [
+              const SizedBox(
+                width: 100,
+                child: Text(
+                  'Job',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: Container(
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black, width: 1),
+                  ),
+                  child: TextField(
+                    controller: jobController,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -681,39 +1257,81 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildDenomCell(String label, TextEditingController controller) {
+  Widget _buildDenomRow(String denomination, TextEditingController controller) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 60,
-          height: 35,
+          width: 80,
+          height: 40,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.black, width: 2),
+            color: Colors.grey[300],
           ),
           child: Center(
             child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              '₹ $denomination',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        const Text(
+          'x',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: '0',
+              ),
+              onChanged: (value) => _calculateDenomination(),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          '=',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 8),
         Container(
-          width: 70,
-          height: 35,
+          width: 100,
+          height: 40,
           decoration: BoxDecoration(
             border: Border.all(color: Colors.black, width: 2),
+            color: Colors.grey[200],
           ),
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14),
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  ((int.tryParse(controller.text) ?? 0) *
+                      int.parse(denomination))
+                      .toString(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
             ),
-            onChanged: (value) => _calculateDenomination(),
           ),
         ),
       ],

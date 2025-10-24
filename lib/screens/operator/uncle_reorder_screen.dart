@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class UncleReorderScreen extends StatefulWidget {
   const UncleReorderScreen({super.key});
@@ -9,19 +10,100 @@ class UncleReorderScreen extends StatefulWidget {
 }
 
 class _UncleReorderScreenState extends State<UncleReorderScreen> {
-  // Empty list for now - will be populated from database later
+  final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> uncles = [];
-
   final Map<int, TextEditingController> _controllers = {};
+  bool _isLoading = true;
+  Map<String, dynamic>? eventData;
 
   @override
-  void initState() {
-    super.initState();
-    // Initialize controllers for each uncle
-    for (int i = 0; i < uncles.length; i++) {
-      _controllers[i] = TextEditingController(
-        text: uncles[i]['serial_no']?.toString() ?? '0',
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Get event data from navigation arguments
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null && args is Map<String, dynamic>) {
+      setState(() {
+        eventData = args;
+      });
+      _loadUncles();
+    }
+  }
+
+  Future<void> _loadUncles() async {
+    if (eventData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event data not found')),
       );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final eventId = eventData!['id'];
+
+      // Fetch all mois where is_uncle = true for this event
+      final response = await _supabase
+          .from('mois')
+          .select('id, persons, uncle_order')
+          .eq('event_id', eventId)
+          .eq('is_uncle', true)
+          .order('uncle_order', ascending: true);
+
+      List<Map<String, dynamic>> loadedUncles = [];
+
+      // Process each moi record to extract only first person's name
+      for (var moi in response) {
+        final persons = moi['persons'] as List<dynamic>?;
+        if (persons != null && persons.isNotEmpty) {
+          // Get only the first person
+          final firstPerson = persons[0];
+          if (firstPerson is Map<String, dynamic>) {
+            String fullName = '';
+            if (firstPerson['init'] != null && firstPerson['init'].toString().isNotEmpty) {
+              fullName += '${firstPerson['init']} ';
+            }
+            if (firstPerson['name'] != null && firstPerson['name'].toString().isNotEmpty) {
+              fullName += firstPerson['name'];
+            }
+
+            if (fullName.trim().isNotEmpty) {
+              loadedUncles.add({
+                'id': moi['id'],
+                'uncle_name': fullName.trim(),
+                'serial_no': moi['uncle_order'] ?? 0,
+              });
+            }
+          }
+        }
+      }
+
+      setState(() {
+        uncles = loadedUncles;
+        _isLoading = false;
+      });
+
+      // Initialize controllers
+      _controllers.clear();
+      for (int i = 0; i < uncles.length; i++) {
+        final serialNo = uncles[i]['serial_no'];
+        _controllers[i] = TextEditingController(
+          text: (serialNo != null && serialNo > 0) ? serialNo.toString() : '',
+        );
+      }
+    } catch (e) {
+      print('Error loading uncles: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading uncles: $e')),
+      );
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -34,14 +116,80 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
     super.dispose();
   }
 
-  void _updateSerialNumbers() {
-    // Update logic will be implemented when connecting to database
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Serial numbers updated successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
+  Future<void> _updateSerialNumbers() async {
+    try {
+      // Collect all serial numbers and validate
+      Map<int, int> serialNumberMap = {};
+      Set<int> usedSerialNumbers = {};
+
+      for (int i = 0; i < uncles.length; i++) {
+        final text = _controllers[i]?.text.trim() ?? '';
+
+        if (text.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please enter a serial number for ${uncles[i]['uncle_name']}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        final serialNo = int.tryParse(text);
+        if (serialNo == null || serialNo <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please enter a valid serial number for ${uncles[i]['uncle_name']}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Check for duplicates
+        if (usedSerialNumbers.contains(serialNo)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Serial number $serialNo is used multiple times. Please use unique numbers.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        usedSerialNumbers.add(serialNo);
+        serialNumberMap[i] = serialNo;
+      }
+
+      // Update each uncle's serial number in database
+      for (int i = 0; i < uncles.length; i++) {
+        final uncleId = uncles[i]['id'];
+        final serialNo = serialNumberMap[i]!;
+
+        await _supabase
+            .from('mois')
+            .update({'uncle_order': serialNo})
+            .eq('id', uncleId);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Serial numbers updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Reload the list to show updated order
+      await _loadUncles();
+    } catch (e) {
+      print('Error updating serial numbers: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -130,6 +278,7 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ),
@@ -139,7 +288,13 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
 
                   // Table Body
                   Expanded(
-                    child: uncles.isEmpty
+                    child: _isLoading
+                        ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF6B4C9A),
+                      ),
+                    )
+                        : uncles.isEmpty
                         ? const Center(
                       child: Text(
                         'No uncles to display',
@@ -201,6 +356,10 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
                                         vertical: 8,
                                         horizontal: 8,
                                       ),
+                                      hintText: '0',
+                                      hintStyle: TextStyle(
+                                        color: Colors.grey[400],
+                                      ),
                                       border: OutlineInputBorder(
                                         borderSide: BorderSide(
                                           color: Colors.grey[400]!,
@@ -213,12 +372,6 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
                                         ),
                                       ),
                                     ),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        uncles[index]['serial_no'] =
-                                            int.tryParse(value) ?? 0;
-                                      });
-                                    },
                                   ),
                                 ),
                               ),
@@ -261,7 +414,7 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _updateSerialNumbers,
+                    onPressed: _isLoading ? null : _updateSerialNumbers,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE91E63),
                       padding: const EdgeInsets.symmetric(vertical: 16),
