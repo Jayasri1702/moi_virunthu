@@ -186,6 +186,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     );
                   }),
                   const SizedBox(height: 12),
+
                   _buildActionButton('Correct Village Names', () {
                     Navigator.push(
                       context,

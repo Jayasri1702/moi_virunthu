@@ -1018,9 +1018,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           color: Colors.white,
           child: InkWell(
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('$label clicked')),
-              );
+              if (label == 'Cash Drawing') {
+                // Navigate to Cash Withdrawal Screen
+                Navigator.pushNamed(
+                  context,
+                  '/operator/cash_withdrawal',
+                  arguments: eventData,
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$label clicked')),
+                );
+              }
             },
             child: Center(
               child: Text(
