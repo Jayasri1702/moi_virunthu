@@ -37,6 +37,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _denom50Controller = TextEditingController();
   final _denom20Controller = TextEditingController();
   final _denom10Controller = TextEditingController();
+  final _denom5Controller = TextEditingController();
   final _denom1Controller = TextEditingController();
 
   int _totalCount = 0;
@@ -147,6 +148,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _denom50Controller.dispose();
     _denom20Controller.dispose();
     _denom10Controller.dispose();
+    _denom5Controller.dispose();
     _denom1Controller.dispose();
     super.dispose();
   }
@@ -159,12 +161,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     int count20 = int.tryParse(_denom20Controller.text) ?? 0;
     int count10 = int.tryParse(_denom10Controller.text) ?? 0;
     int count1 = int.tryParse(_denom1Controller.text) ?? 0;
+    int count5 = int.tryParse(_denom5Controller.text) ?? 0;
 
     setState(() {
-      _totalCount =
-          count500 + count200 + count100 + count50 + count20 + count10 + count1;
+      // Update totalCount to include count5:
+      _totalCount = count500 + count200 + count100 + count50 + count20 + count10 + count5 + count1;
+
+// Update totalAmount to include count5:
       _totalAmount = (count500 * 500) + (count200 * 200) + (count100 * 100) +
-          (count50 * 50) + (count20 * 20) + (count10 * 10) + (count1 * 1);
+          (count50 * 50) + (count20 * 20) + (count10 * 10) + (count5 * 5) + (count1 * 1);
+
       _amountController.text = _totalAmount.toStringAsFixed(0);
     });
   }
@@ -191,6 +197,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _denom50Controller.clear();
       _denom20Controller.clear();
       _denom10Controller.clear();
+      _denom5Controller.clear();
       _denom1Controller.clear();
       _paymentMethod = 'CASH';
       _isUncle = false;
@@ -224,6 +231,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _denom50Controller.clear();
       _denom20Controller.clear();
       _denom10Controller.clear();
+      _denom5Controller.clear();
       _denom1Controller.clear();
       _paymentMethod = 'CASH';
       _isUncle = false;
@@ -527,6 +535,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
         'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
         'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
+        'denom_5': int.tryParse(_denom5Controller.text) ?? 0,
         'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
       });
     } catch (e) {
@@ -853,6 +862,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                         _buildDenomRow('20', _denom20Controller),
                         const SizedBox(height: 8),
                         _buildDenomRow('10', _denom10Controller),
+                        const SizedBox(height: 8),
+                        _buildDenomRow('5', _denom5Controller),
                         const SizedBox(height: 8),
                         _buildDenomRow('1', _denom1Controller),
                         const SizedBox(height: 16),
