@@ -1,18 +1,125 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 
 class DenominationScreen extends StatefulWidget {
-  const DenominationScreen({super.key});
+  final String eventId;
+
+  const DenominationScreen({
+    super.key,
+    required this.eventId,
+  });
 
   @override
   State<DenominationScreen> createState() => _DenominationScreenState();
 }
 
 class _DenominationScreenState extends State<DenominationScreen> {
-  // Empty list for now - will be populated from database later
+  final _auth = AuthService();
   List<Map<String, dynamic>> userDenominations = [];
+  bool _isLoading = true;
 
   // Denomination values
   final List<int> denominations = [500, 200, 100, 50, 20, 10, 1];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDenominations();
+  }
+
+  Future<void> _loadDenominations() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Fetch all moi_denominations for this event with operator info
+      // Only for CASH payment method
+      final data = await _auth.client
+          .from('moi_denominations')
+          .select('''
+            moi_id,
+            denom_500,
+            denom_200,
+            denom_100,
+            denom_50,
+            denom_20,
+            denom_10,
+            denom_1,
+            operator_id,
+            users!moi_denominations_operator_id_fkey (
+              id,
+              full_name
+            ),
+            mois!moi_denominations_moi_id_fkey (
+              payment_method
+            )
+          ''')
+          .eq('event_id', widget.eventId);
+
+      // Filter only CASH payments and group by operator
+      Map<String, Map<String, dynamic>> operatorDenoms = {};
+
+      for (var entry in data) {
+        final operatorId = entry['operator_id'];
+
+        // Skip if no operator or not CASH payment
+        if (operatorId == null) continue;
+
+        final paymentMethod = entry['mois']?['payment_method'];
+        if (paymentMethod != 'CASH') continue;
+
+        final operatorName = entry['users']?['full_name'] ?? 'Unknown';
+
+        if (!operatorDenoms.containsKey(operatorId)) {
+          operatorDenoms[operatorId] = {
+            'user_name': operatorName,
+            'denom_500': 0,
+            'denom_200': 0,
+            'denom_100': 0,
+            'denom_50': 0,
+            'denom_20': 0,
+            'denom_10': 0,
+            'denom_1': 0,
+          };
+        }
+
+        // Sum up denominations
+        operatorDenoms[operatorId]!['denom_500'] =
+            (operatorDenoms[operatorId]!['denom_500'] as int) + (entry['denom_500'] ?? 0);
+        operatorDenoms[operatorId]!['denom_200'] =
+            (operatorDenoms[operatorId]!['denom_200'] as int) + (entry['denom_200'] ?? 0);
+        operatorDenoms[operatorId]!['denom_100'] =
+            (operatorDenoms[operatorId]!['denom_100'] as int) + (entry['denom_100'] ?? 0);
+        operatorDenoms[operatorId]!['denom_50'] =
+            (operatorDenoms[operatorId]!['denom_50'] as int) + (entry['denom_50'] ?? 0);
+        operatorDenoms[operatorId]!['denom_20'] =
+            (operatorDenoms[operatorId]!['denom_20'] as int) + (entry['denom_20'] ?? 0);
+        operatorDenoms[operatorId]!['denom_10'] =
+            (operatorDenoms[operatorId]!['denom_10'] as int) + (entry['denom_10'] ?? 0);
+        operatorDenoms[operatorId]!['denom_1'] =
+            (operatorDenoms[operatorId]!['denom_1'] as int) + (entry['denom_1'] ?? 0);
+      }
+
+      // Convert to list and sort by name
+      List<Map<String, dynamic>> denoms = operatorDenoms.values.toList();
+      denoms.sort((a, b) =>
+          (a['user_name'] as String).compareTo(b['user_name'] as String));
+
+      setState(() {
+        userDenominations = denoms;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading denomination data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   // Calculate totals
   Map<String, dynamic> _calculateTotals() {
@@ -34,6 +141,13 @@ class _DenominationScreenState extends State<DenominationScreen> {
       'amounts': totalAmounts,
       'grandTotal': grandTotal,
     };
+  }
+
+  String _formatAmount(int amount) {
+    return amount.toString().replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]},',
+    );
   }
 
   @override
@@ -66,7 +180,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
             padding: const EdgeInsets.all(16),
             color: Colors.white,
             child: const Text(
-              'Denomination',
+              'Cash Denomination List',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -109,7 +223,13 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
                   // Table Body
                   Expanded(
-                    child: userDenominations.isEmpty
+                    child: _isLoading
+                        ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF6B4C9A),
+                      ),
+                    )
+                        : userDenominations.isEmpty
                         ? const Center(
                       child: Text(
                         'No denomination data available',
@@ -173,7 +293,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                                   flex: 1,
                                 ),
                                 _buildDataCell(
-                                  userTotal.toString(),
+                                  _formatAmount(userTotal),
                                   flex: 2,
                                   bold: true,
                                 ),
@@ -264,35 +384,35 @@ class _DenominationScreenState extends State<DenominationScreen> {
                       children: [
                         _buildFooterCell('Total Amount', flex: 2, bold: true),
                         _buildFooterCell(
-                          totals['amounts'][500].toString(),
+                          _formatAmount(totals['amounts'][500]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][200].toString(),
+                          _formatAmount(totals['amounts'][200]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][100].toString(),
+                          _formatAmount(totals['amounts'][100]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][50].toString(),
+                          _formatAmount(totals['amounts'][50]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][20].toString(),
+                          _formatAmount(totals['amounts'][20]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][10].toString(),
+                          _formatAmount(totals['amounts'][10]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['amounts'][1].toString(),
+                          _formatAmount(totals['amounts'][1]),
                           flex: 1,
                         ),
                         _buildFooterCell(
-                          totals['grandTotal'].toString(),
+                          _formatAmount(totals['grandTotal']),
                           flex: 2,
                           bold: true,
                           color: Colors.blue,

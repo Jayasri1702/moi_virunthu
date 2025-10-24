@@ -48,8 +48,8 @@ class MyApp extends StatelessWidget {
         '/operator/collect-moi': (context) => const CollectMoiScreen(),
         '/operator/correct-village-names': (context) => const CorrectVillageNamesScreen(),
         '/operator/uncle-reorder': (context) => const UncleReorderScreen(), // Add this line
-        '/operator/denomination': (context) => const DenominationScreen(),
-        '/operator/user-collection': (context) => const UserWiseCollectionScreen(),
+        //'/operator/denomination': (context) => const DenominationScreen(),
+        //'/operator/user-collection': (context) => const UserWiseCollectionScreen(),
         //'/operator/similar-entries': (context) => const SimilarEntriesScreen(),
       },
     );

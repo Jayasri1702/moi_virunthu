@@ -1,24 +1,104 @@
 import 'package:flutter/material.dart';
+import '../../services/auth_service.dart';
 
 class UserWiseCollectionScreen extends StatefulWidget {
-  const UserWiseCollectionScreen({super.key});
+  final String eventId;
+
+  const UserWiseCollectionScreen({
+    super.key,
+    required this.eventId,
+  });
 
   @override
   State<UserWiseCollectionScreen> createState() => _UserWiseCollectionScreenState();
 }
 
 class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
-  // Empty list for now - will be populated from database later
+  final _auth = AuthService();
   List<Map<String, dynamic>> userCollections = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserCollections();
+  }
+
+  Future<void> _loadUserCollections() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Fetch all mois entries for this event with operator info
+      final data = await _auth.client
+          .from('mois')
+          .select('''
+            id,
+            operator_id,
+            amount,
+            users!mois_operator_id_fkey (
+              id,
+              full_name
+            )
+          ''')
+          .eq('event_id', widget.eventId)
+          .eq('is_deleted', false);
+
+      // Group by operator and calculate totals
+      Map<String, Map<String, dynamic>> operatorStats = {};
+
+      for (var entry in data) {
+        final operatorId = entry['operator_id'];
+
+        // Skip entries without operator
+        if (operatorId == null) continue;
+
+        final operatorName = entry['users']?['full_name'] ?? 'Unknown';
+        final amount = double.tryParse(entry['amount']?.toString() ?? '0') ?? 0.0;
+
+        if (!operatorStats.containsKey(operatorId)) {
+          operatorStats[operatorId] = {
+            'name': operatorName,
+            'count': 0,
+            'amount': 0.0,
+          };
+        }
+
+        operatorStats[operatorId]!['count'] =
+            (operatorStats[operatorId]!['count'] as int) + 1;
+        operatorStats[operatorId]!['amount'] =
+            (operatorStats[operatorId]!['amount'] as double) + amount;
+      }
+
+      // Convert to list and sort by name
+      List<Map<String, dynamic>> collections = operatorStats.values.toList();
+      collections.sort((a, b) =>
+          (a['name'] as String).compareTo(b['name'] as String));
+
+      setState(() {
+        userCollections = collections;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading collection data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   // Calculate totals
   Map<String, dynamic> _calculateTotals() {
     int totalCount = 0;
-    int totalAmount = 0;
+    double totalAmount = 0.0;
 
     for (var user in userCollections) {
       totalCount += (user['count'] ?? 0) as int;
-      totalAmount += (user['amount'] ?? 0) as int;
+      totalAmount += (user['amount'] ?? 0.0) as double;
     }
 
     return {
@@ -27,8 +107,9 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
     };
   }
 
-  String _formatAmount(int amount) {
-    return amount.toString().replaceAllMapped(
+  String _formatAmount(double amount) {
+    String formatted = amount.toStringAsFixed(amount.truncateToDouble() == amount ? 0 : 2);
+    return formatted.replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]},',
     );
@@ -152,7 +233,13 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
 
                   // Table Body
                   Expanded(
-                    child: userCollections.isEmpty
+                    child: _isLoading
+                        ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF6B4C9A),
+                      ),
+                    )
+                        : userCollections.isEmpty
                         ? const Center(
                       child: Text(
                         'No collection data available',
@@ -219,7 +306,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   child: Text(
-                                    _formatAmount(user['amount'] ?? 0),
+                                    _formatAmount(user['amount'] ?? 0.0),
                                     style: const TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w500,

@@ -342,10 +342,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'phone': _mobileController.text.trim(),
         'notes': _notesController.text.trim(),
         'is_uncle': _isUncle,
-        'group_id': _currentGroupId, // Set group_id
+        'group_id': _currentGroupId,
       }).select();
 
       if (response.isNotEmpty) {
+        final moiId = response[0]['id'];
+        await _saveDenomination(moiId, eventId, operatorId);
         // Update Moi Details display
         setState(() {
           if (_moiDetailsController.text.isNotEmpty) {
@@ -466,12 +468,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           'phone': _mobileController.text.trim(),
           'notes': _notesController.text.trim(),
           'is_uncle': _isUncle,
-          'group_id': _currentGroupId, // Will be null for non-grouped entries
+          'group_id': _currentGroupId,
         }).select();
 
         if (response.isEmpty) {
           throw Exception('Failed to save entry');
         }
+        final moiId = response[0]['id'];
+        await _saveDenomination(moiId, eventId, operatorId);
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -498,7 +502,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
     }
   }
-
   Future<void> _handleSaveAndPrint() async {
     if (_moiDetailsController.text.isNotEmpty) {
       // Show dialog if there are grouped entries
@@ -506,6 +509,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } else {
       // Direct save for single entry
       await _saveAndPrint(isSingleReceipt: true);
+    }
+  }
+
+  Future<void> _saveDenomination(String moiId, String eventId, String operatorId) async {
+    // Only save denomination if payment method is CASH
+    if (_paymentMethod != 'CASH') return;
+
+    try {
+      await _supabase.from('moi_denominations').insert({
+        'moi_id': moiId,
+        'event_id': eventId,
+        'operator_id': operatorId,
+        'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
+        'denom_200': int.tryParse(_denom200Controller.text) ?? 0,
+        'denom_100': int.tryParse(_denom100Controller.text) ?? 0,
+        'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
+        'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
+        'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
+        'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
+      });
+    } catch (e) {
+      print('Error saving denomination: $e');
     }
   }
 

@@ -208,7 +208,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DenominationScreen(),
+                        builder: (context) => DenominationScreen(
+                          eventId: eventData!['id'],
+                        ),
                       ),
                     );
                   }),
@@ -216,7 +218,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const UserWiseCollectionScreen(),
+                        builder: (context) => UserWiseCollectionScreen(
+                          eventId: eventData!['id'],
+                        ),
                       ),
                     );
                   }),
