@@ -57,25 +57,20 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
 
       List<Map<String, dynamic>> loadedUncles = [];
 
-      // Process each moi record to extract only first person's name
+      // Process each moi record to extract only first person's name (without init)
       for (var moi in response) {
         final persons = moi['persons'] as List<dynamic>?;
         if (persons != null && persons.isNotEmpty) {
           // Get only the first person
           final firstPerson = persons[0];
           if (firstPerson is Map<String, dynamic>) {
-            String fullName = '';
-            if (firstPerson['init'] != null && firstPerson['init'].toString().isNotEmpty) {
-              fullName += '${firstPerson['init']} ';
-            }
-            if (firstPerson['name'] != null && firstPerson['name'].toString().isNotEmpty) {
-              fullName += firstPerson['name'];
-            }
+            // Only get the name, not the init
+            final name = firstPerson['name']?.toString() ?? '';
 
-            if (fullName.trim().isNotEmpty) {
+            if (name.trim().isNotEmpty) {
               loadedUncles.add({
                 'id': moi['id'],
-                'uncle_name': fullName.trim(),
+                'uncle_name': name.trim(),
                 'serial_no': moi['uncle_order'] ?? 0,
               });
             }

@@ -884,50 +884,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                 const SizedBox(height: 16),
 
-                // Moi Details
-                Container(
-                  height: 200,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Colors.black, width: 2),
-                          ),
-                        ),
-                        child: const Text(
-                          'Moi Details',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: TextField(
-                            controller: _moiDetailsController,
-                            maxLines: null,
-                            expands: true,
-                            readOnly: true,
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Grouped entries will appear here...',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                // Moi Details - REPLACE THE ENTIRE CONTAINER WITH THIS:
+                _buildMoiDetailsSection(),
 
                 const SizedBox(height: 20),
 
@@ -1337,4 +1295,74 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       ],
     );
   }
+
+  Widget _buildMoiDetailsSection() {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.black, width: 2),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Moi Details',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_currentGroupId != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      border: Border.all(color: Colors.blue, width: 2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      'Group ID - $_currentGroupId',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: TextField(
+                controller: _moiDetailsController,
+                maxLines: null,
+                expands: true,
+                readOnly: true,
+                style: const TextStyle(fontSize: 13),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Grouped entries will appear here...',
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 }
