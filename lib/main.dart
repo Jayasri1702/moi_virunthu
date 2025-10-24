@@ -50,7 +50,7 @@ class MyApp extends StatelessWidget {
         '/operator/uncle-reorder': (context) => const UncleReorderScreen(), // Add this line
         '/operator/denomination': (context) => const DenominationScreen(),
         '/operator/user-collection': (context) => const UserWiseCollectionScreen(),
-        '/operator/similar-entries': (context) => const SimilarEntriesScreen(),
+        //'/operator/similar-entries': (context) => const SimilarEntriesScreen(),
       },
     );
   }

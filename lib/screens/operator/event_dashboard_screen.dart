@@ -224,7 +224,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const SimilarEntriesScreen(),
+                        builder: (context) => SimilarEntriesScreen(
+                          eventId: eventData!['id'], // ✅ Get from eventData map
+                        ),
                       ),
                     );
                   }),
