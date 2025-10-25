@@ -603,6 +603,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           'updated_at': DateTime.now().toIso8601String(),
         };
 
+        // In _saveAndPrint method, after UPDATE MODE section:
+
         if (_isEditMode && _editMoiId != null) {
           // UPDATE MODE
           // Store old data before updating
@@ -620,32 +622,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           final moiId = response[0]['id'];
 
-          // Update or insert denomination
+          // Handle denomination based on payment method
           if (_paymentMethod == 'CASH') {
+            // Update or insert denomination
             await _updateDenomination(moiId, eventId, operatorId);
+          } else {
+            // Delete denomination if exists (switched from CASH to OTHERS)
+            try {
+              await _supabase
+                  .from('moi_denominations')
+                  .delete()
+                  .eq('moi_id', moiId);
+              print('Denomination deleted for payment method: $_paymentMethod');
+            } catch (e) {
+              print('Error deleting denomination: $e');
+            }
           }
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Moi updated successfully!'),
-            ),
-          );
-        } else {
-          // INSERT MODE (New entry)
-          final response = await _supabase.from('mois').insert(dataToSave).select();
-
-          if (response.isEmpty) {
-            throw Exception('Failed to save entry');
-          }
-
-          final moiId = response[0]['id'];
-          await _saveDenomination(moiId, eventId, operatorId);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(isSingleReceipt
-                  ? 'Moi saved! Printing single receipts...'
-                  : 'Moi saved! Printing group receipt...'),
             ),
           );
         }
@@ -681,10 +677,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-// Add this new method to update denomination:
   Future<void> _updateDenomination(String moiId, String eventId, String operatorId) async {
-    if (_paymentMethod != 'CASH') return;
-
     try {
       final denomData = {
         'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
@@ -697,30 +690,43 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
       };
 
-      // Check if denomination exists
+      // Check if denomination exists for this moi_id
       final existing = await _supabase
           .from('moi_denominations')
-          .select('id')
+          .select('moi_id')
           .eq('moi_id', moiId)
-          .limit(1);
+          .maybeSingle();
 
-      if (existing.isNotEmpty) {
-        // Update existing
+      if (existing != null) {
+        // Update existing denomination
+        print('Updating existing denomination for moi_id: $moiId');
         await _supabase
             .from('moi_denominations')
             .update(denomData)
             .eq('moi_id', moiId);
+        print('Denomination updated successfully');
       } else {
-        // Insert new
+        // Insert new denomination
+        print('Inserting new denomination for moi_id: $moiId');
         await _supabase.from('moi_denominations').insert({
           'moi_id': moiId,
           'event_id': eventId,
           'operator_id': operatorId,
           ...denomData,
         });
+        print('Denomination inserted successfully');
       }
     } catch (e) {
       print('Error updating denomination: $e');
+      // Show error to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating denomination: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
