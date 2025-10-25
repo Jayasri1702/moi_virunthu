@@ -288,20 +288,6 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
             letterSpacing: 1.2,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.minimize, color: Colors.white),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.crop_square, color: Colors.white, size: 20),
-            onPressed: () {},
-          ),
-          IconButton(
-            icon: const Icon(Icons.close, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
       ),
       body: Stack(
         children: [
@@ -367,8 +353,8 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                 ),
                 child: Row(
                   children: [
-                    _buildTableHeader('City', flex: 4),
-                    _buildTableHeader('Relations', flex: 2),
+                    _buildTableHeader('City', flex: 3),
+                    _buildTableHeader('Rel', flex: 2),
                     _buildTableHeader('Rename', flex: 4),
                   ],
                 ),
@@ -493,12 +479,15 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                             elevation: 0,
                             disabledBackgroundColor: Colors.grey[300],
                           ),
-                          child: const Text(
-                            'UPDATE',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: const Text(
+                              'UPDATE',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.2,
+                              ),
                             ),
                           ),
                         ),
@@ -575,7 +564,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
     return Expanded(
       flex: flex,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
           border: Border(
             right: BorderSide(color: Colors.grey[300]!, width: 1),
@@ -584,11 +573,12 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
         child: Text(
           title,
           style: const TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.bold,
             color: Colors.black,
           ),
-          textAlign: title == 'Relations' ? TextAlign.center : TextAlign.left,
+          textAlign: title == 'Rel' ? TextAlign.center : TextAlign.left,
+          overflow: TextOverflow.ellipsis,
         ),
       ),
     );
@@ -614,9 +604,9 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
           children: [
             // City
             Expanded(
-              flex: 4,
+              flex: 3,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 decoration: BoxDecoration(
                   border: Border(
                     right: BorderSide(color: Colors.grey[300]!, width: 1),
@@ -624,7 +614,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                 ),
                 child: Text(
                   city,
-                  style: const TextStyle(fontSize: 13),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ),
@@ -632,7 +622,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
             Expanded(
               flex: 2,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 decoration: BoxDecoration(
                   border: Border(
                     right: BorderSide(color: Colors.grey[300]!, width: 1),
@@ -640,7 +630,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                 ),
                 child: Text(
                   relations,
-                  style: const TextStyle(fontSize: 13),
+                  style: const TextStyle(fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -649,12 +639,12 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
             Expanded(
               flex: 4,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                 child: TextField(
                   controller: controller,
                   decoration: InputDecoration(
                     hintText: 'Enter new name',
-                    hintStyle: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    hintStyle: TextStyle(fontSize: 11, color: Colors.grey[400]),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.zero,
                       borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
@@ -667,10 +657,10 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                       borderRadius: BorderRadius.zero,
                       borderSide: BorderSide(color: Color(0xFF7B3F8F), width: 1.5),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
                     isDense: true,
                   ),
-                  style: const TextStyle(fontSize: 13),
+                  style: const TextStyle(fontSize: 12),
                 ),
               ),
             ),

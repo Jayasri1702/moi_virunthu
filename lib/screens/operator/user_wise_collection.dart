@@ -176,7 +176,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                         Expanded(
                           flex: 4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: const BoxDecoration(
                               border: Border(
                                 right: BorderSide(color: Colors.white, width: 1),
@@ -195,7 +195,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                         Expanded(
                           flex: 2,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
                             decoration: const BoxDecoration(
                               border: Border(
                                 right: BorderSide(color: Colors.white, width: 1),
@@ -215,7 +215,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                         Expanded(
                           flex: 3,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: const Text(
                               'Amount',
                               style: TextStyle(
@@ -267,7 +267,10 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                               Expanded(
                                 flex: 4,
                                 child: Container(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 16,
+                                  ),
                                   decoration: BoxDecoration(
                                     border: Border(
                                       right: BorderSide(
@@ -285,7 +288,10 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                               Expanded(
                                 flex: 2,
                                 child: Container(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 16,
+                                  ),
                                   decoration: BoxDecoration(
                                     border: Border(
                                       right: BorderSide(
@@ -304,7 +310,10 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                               Expanded(
                                 flex: 3,
                                 child: Container(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 16,
+                                  ),
                                   child: Text(
                                     _formatAmount(user['amount'] ?? 0.0),
                                     style: const TextStyle(
@@ -312,6 +321,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                                       fontWeight: FontWeight.w500,
                                     ),
                                     textAlign: TextAlign.right,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                               ),
@@ -324,7 +334,10 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
 
                   // Footer with totals
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
+                    ),
                     decoration: BoxDecoration(
                       border: Border(
                         top: BorderSide(color: Colors.grey[400]!, width: 2),
@@ -337,7 +350,7 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                         Text(
                           'Total Count ',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[800],
                           ),
@@ -345,26 +358,29 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
                         Text(
                           '${totals['totalCount']}',
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
                           ),
                         ),
-                        const SizedBox(width: 30),
+                        const SizedBox(width: 20),
                         Text(
                           'Total Amount ',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
                             color: Colors.grey[800],
                           ),
                         ),
-                        Text(
-                          _formatAmount(totals['totalAmount']),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                        Flexible(
+                          child: Text(
+                            _formatAmount(totals['totalAmount']),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

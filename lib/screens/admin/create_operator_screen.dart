@@ -6,6 +6,7 @@ import '../../models/user.dart';
 class CreateOperatorScreen extends StatefulWidget {
   final UserModel? userToEdit;
 
+
   const CreateOperatorScreen({super.key, this.userToEdit});
 
   @override
@@ -19,6 +20,7 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
   final _password = TextEditingController();
   final _contactNumber = TextEditingController();
   final _auth = AuthService();
+  bool _passwordVisible = false; // ← ADD THIS LINE
 
   String _selectedUserType = 'Operator';
   bool _loading = false;
@@ -49,12 +51,13 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
       // Update existing user
       result = await _updateUser();
     } else {
-      // Create new user
+      // Create new user - ADD role parameter
       result = await _auth.createOperator(
         fullName: _name.text.trim(),
         password: _password.text,
         phone: _contactNumber.text.trim(),
         email: _email.text.trim().isEmpty ? null : _email.text.trim(),
+        role: _selectedUserType == 'Administrator' ? 'admin' : 'operator', // ← ADD THIS LINE
       );
     }
 
@@ -296,8 +299,19 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                     hintText: isEditing ? 'Leave blank to keep current password' : null,
                                     hintStyle: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                    suffixIcon: IconButton(  // ← ADD THIS
+                                      icon: Icon(
+                                        _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                                        color: Colors.grey[600],
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _passwordVisible = !_passwordVisible;
+                                        });
+                                      },
+                                    ),
                                   ),
-                                  obscureText: true,
+                                  obscureText: !_passwordVisible, // ← CHANGE THIS LINE
                                   validator: (value) {
                                     // Password not required when editing (unless they want to change it)
                                     if (isEditing && (value == null || value.isEmpty)) {
@@ -314,6 +328,7 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                                   },
                                 ),
                               ),
+
                               const SizedBox(height: 16),
 
                               // Contact Number

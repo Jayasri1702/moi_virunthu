@@ -15,6 +15,7 @@ import 'screens/operator/correct_village_name.dart'; // Add this line
 import 'screens/operator/uncle_reorder_screen.dart'; // Add this line
 import 'screens/operator/cash_withdrawal_screen.dart';
 import 'screens/operator/exchange_denomination_screen.dart';
+import 'screens/operator/collection_details_screen.dart';
 
 
 void main() async {
@@ -50,6 +51,7 @@ class MyApp extends StatelessWidget {
         '/operator/uncle-reorder': (context) => const UncleReorderScreen(), // Add this line
         '/operator/cash_withdrawal': (context) => const CashWithdrawalScreen(),
         '/operator/exchange-denomination': (context) => const ExchangeDenominationScreen(),
+        '/operator/collection-details': (context) => const CollectionDetailsScreen(),
       },
     );
   }

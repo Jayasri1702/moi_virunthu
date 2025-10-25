@@ -281,43 +281,23 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                           border: Border.all(color: Colors.black, width: 2),
                         ),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Total Count: $_totalCount',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
+                            Text(
+                              'Total Count: $_totalCount',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Total Withdrawal Amount:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    '₹${_totalAmount.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.red,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(height: 8),
+                            Text(
+                              'Total Withdrawal Amount: ₹${_totalAmount.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: Colors.red,
+                              ),
                             ),
                           ],
                         ),
@@ -519,24 +499,25 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(width: 8),
-        Container(
-          width: 100,
-          height: 40,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.black, width: 2),
-            color: Colors.grey[200],
-          ),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  ((int.tryParse(controller.text) ?? 0) * int.parse(denomination))
-                      .toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+        Expanded(  // ← CHANGE: Replace Container with fixed width with Expanded
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 2),
+              color: Colors.grey[200],
+            ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    ((int.tryParse(controller.text) ?? 0) * int.parse(denomination))
+                        .toString(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               ),

@@ -49,10 +49,12 @@ class AuthService {
     final Uint8List out = Uint8List(_hashLength);
     _argon2.generateBytes(passwordBytes, out, 0, out.length);
 
-    final saltBase64 = base64Encode(utf8.encode(_fixedSalt)).replaceAll('=', '');
+    final saltBase64 = base64Encode(utf8.encode(_fixedSalt)).replaceAll(
+        '=', '');
     final hashBase64 = base64Encode(out).replaceAll('=', '');
 
-    return '\$argon2id\$v=19\$m=65536,t=2,p=1\$' + saltBase64 + '\$' + hashBase64;
+    return '\$argon2id\$v=19\$m=65536,t=2,p=1\$' + saltBase64 + '\$' +
+        hashBase64;
   }
 
   /// Verify password against stored hash
@@ -124,11 +126,14 @@ class AuthService {
 
   /// Creates a new operator
   /// Returns a Map with 'success' (bool) and 'message' (String)
+  /// Creates a new operator or admin
+  /// Returns a Map with 'success' (bool) and 'message' (String)
   Future<Map<String, dynamic>> createOperator({
     required String fullName,
     required String password,
     required String phone,
     String? email,
+    String role = 'operator', // ← ADD THIS PARAMETER
   }) async {
     try {
       // Validate password before creating operator
@@ -141,7 +146,9 @@ class AuthService {
       }
 
       // Validate phone number is not empty
-      if (phone.trim().isEmpty) {
+      if (phone
+          .trim()
+          .isEmpty) {
         return {
           'success': false,
           'message': 'Phone number is required',
@@ -149,7 +156,9 @@ class AuthService {
       }
 
       // Validate full name is not empty
-      if (fullName.trim().isEmpty) {
+      if (fullName
+          .trim()
+          .isEmpty) {
         return {
           'success': false,
           'message': 'Full name is required',
@@ -162,7 +171,7 @@ class AuthService {
         'full_name': fullName,
         'password_hash': hash,
         'phone': phone,
-        'role': 'operator',
+        'role': role, // ← CHANGE THIS FROM 'operator' to role parameter
         'is_active': true,
         'email': email,
       };
@@ -170,12 +179,14 @@ class AuthService {
       await client.from('users').insert([insert]);
       return {
         'success': true,
-        'message': 'Operator created successfully',
+        'message': '${role == 'admin'
+            ? 'Administrator'
+            : 'Operator'} created successfully',
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'Error creating operator: ${e.toString()}',
+        'message': 'Error creating user: ${e.toString()}',
       };
     }
   }

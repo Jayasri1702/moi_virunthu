@@ -8,6 +8,10 @@ class CollectMoiScreen extends StatefulWidget {
   @override
   State<CollectMoiScreen> createState() => _CollectMoiScreenState();
 }
+// Edit mode variables
+bool _isEditMode = false;
+String? _editMoiId;
+Map<String, dynamic>? _originalData;
 
 class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _formKey = GlobalKey<FormState>();
@@ -53,20 +57,121 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Current group_id for grouped entries
   int? _currentGroupId;
 
+  // Update didChangeDependencies method:
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Get event data from navigation arguments
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
       setState(() {
         eventData = args;
+
+        // Check if it's edit mode
+        _isEditMode = args['edit_mode'] == true;
+
+        if (_isEditMode && args['moi_data'] != null) {
+          _loadEditData(args['moi_data']);
+        } else {
+          _loadNextSerialNumber();
+        }
       });
       print('Event data received: ${eventData?['id']}');
       print('Operator ID received: ${eventData?['operator_id']}');
-      _loadNextSerialNumber();
     }
   }
+
+  // Add this new method to load edit data:
+
+  void _loadEditData(Map<String, dynamic> moiData) {
+    _editMoiId = moiData['id'];
+    _originalData = Map<String, dynamic>.from(moiData);
+
+    setState(() {
+      // Load serial number
+      _serialNoController.text = 'O${moiData['serial_no'] ?? ''}';
+
+      // Load basic fields
+      _mobileController.text = moiData['phone'] ?? '';
+      _villageController.text = moiData['village_name'] ?? '';
+      _livingPlaceController.text = moiData['living_place'] ?? '';
+      _notesController.text = moiData['notes'] ?? '';
+      _amountController.text = moiData['amount']?.toString() ?? '';
+
+      // Load payment method
+      _paymentMethod = moiData['payment_method'] ?? 'CASH';
+
+      // Load uncle status
+      _isUncle = moiData['is_uncle'] == true;
+
+      // Load persons data
+      if (moiData['persons'] != null) {
+        try {
+          List<dynamic> persons = moiData['persons'] is String
+              ? []
+              : (moiData['persons'] as List);
+
+          if (persons.isNotEmpty) {
+            var person1 = persons[0];
+            _init1Controller.text = person1['init'] ?? '';
+            _name1Controller.text = person1['name'] ?? '';
+            _qualification1Controller.text = person1['qualification'] ?? '';
+            _job1Controller.text = person1['job'] ?? '';
+          }
+
+          if (persons.length > 1) {
+            var person2 = persons[1];
+            _init2Controller.text = person2['init'] ?? '';
+            _name2Controller.text = person2['name'] ?? '';
+            _qualification2Controller.text = person2['qualification'] ?? '';
+            _job2Controller.text = person2['job'] ?? '';
+          }
+        } catch (e) {
+          print('Error loading persons: $e');
+        }
+      }
+
+      // Load group_id if exists
+      if (moiData['group_id'] != null) {
+        _currentGroupId = moiData['group_id'];
+      }
+    });
+
+    // Load denomination if payment method is CASH
+    if (_paymentMethod == 'CASH') {
+      _loadDenomination(moiData['id']);
+    }
+  }
+
+  // Add method to load denomination data:
+
+  Future<void> _loadDenomination(String moiId) async {
+    try {
+      final response = await _supabase
+          .from('moi_denominations')
+          .select('*')
+          .eq('moi_id', moiId)
+          .limit(1);
+
+      if (response.isNotEmpty) {
+        final denom = response[0];
+        setState(() {
+          _denom500Controller.text = (denom['denom_500'] ?? 0).toString();
+          _denom200Controller.text = (denom['denom_200'] ?? 0).toString();
+          _denom100Controller.text = (denom['denom_100'] ?? 0).toString();
+          _denom50Controller.text = (denom['denom_50'] ?? 0).toString();
+          _denom20Controller.text = (denom['denom_20'] ?? 0).toString();
+          _denom10Controller.text = (denom['denom_10'] ?? 0).toString();
+          _denom5Controller.text = (denom['denom_5'] ?? 0).toString();
+          _denom1Controller.text = (denom['denom_1'] ?? 0).toString();
+        });
+        _calculateDenomination();
+      }
+    } catch (e) {
+      print('Error loading denomination: $e');
+    }
+  }
+
 
   Future<void> _loadNextSerialNumber() async {
     if (eventData == null) return;
@@ -175,6 +280,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     });
   }
 
+  // Update the _clearAllFields to also reset edit mode variables:
   void _clearAllFields() {
     setState(() {
       _mobileController.clear();
@@ -190,7 +296,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _job2Controller.clear();
       _notesController.clear();
       _amountController.clear();
-      _moiDetailsController.clear(); // Clear moi details too
+      _moiDetailsController.clear();
       _denom500Controller.clear();
       _denom200Controller.clear();
       _denom100Controller.clear();
@@ -203,7 +309,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = false;
       _totalCount = 0;
       _totalAmount = 0.0;
-      _currentGroupId = null; // Reset group ID
+      _currentGroupId = null;
+
+      // Reset edit mode variables
+      _isEditMode = false;
+      _editMoiId = null;
+      _originalData = null;
     });
 
     // Reload next serial number
@@ -261,7 +372,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         (currentAmount > 0 ? ' - ₹${currentAmount.toStringAsFixed(0)}' : '');
   }
 
+  // Also update the _handleGroup method to prevent grouping in edit mode:
   Future<void> _handleGroup() async {
+    // Prevent grouping in edit mode
+    if (_isEditMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot group entries in edit mode. Please save changes first.'),
+        ),
+      );
+      return;
+    }
+
     // Validation
     if (_amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -356,6 +478,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (response.isNotEmpty) {
         final moiId = response[0]['id'];
         await _saveDenomination(moiId, eventId, operatorId);
+
         // Update Moi Details display
         setState(() {
           if (_moiDetailsController.text.isNotEmpty) {
@@ -463,8 +586,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           });
         }
 
-        // Insert into database
-        final response = await _supabase.from('mois').insert({
+        // Prepare the data to save
+        final dataToSave = {
           'event_id': eventId,
           'operator_id': operatorId,
           'serial_no': int.tryParse(_serialNoController.text.replaceAll('O', '')),
@@ -477,29 +600,76 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           'notes': _notesController.text.trim(),
           'is_uncle': _isUncle,
           'group_id': _currentGroupId,
-        }).select();
+          'updated_at': DateTime.now().toIso8601String(),
+        };
 
-        if (response.isEmpty) {
-          throw Exception('Failed to save entry');
+        if (_isEditMode && _editMoiId != null) {
+          // UPDATE MODE
+          // Store old data before updating
+          dataToSave['old_data'] = _originalData;
+
+          final response = await _supabase
+              .from('mois')
+              .update(dataToSave)
+              .eq('id', _editMoiId!)
+              .select();
+
+          if (response.isEmpty) {
+            throw Exception('Failed to update entry');
+          }
+
+          final moiId = response[0]['id'];
+
+          // Update or insert denomination
+          if (_paymentMethod == 'CASH') {
+            await _updateDenomination(moiId, eventId, operatorId);
+          }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Moi updated successfully!'),
+            ),
+          );
+        } else {
+          // INSERT MODE (New entry)
+          final response = await _supabase.from('mois').insert(dataToSave).select();
+
+          if (response.isEmpty) {
+            throw Exception('Failed to save entry');
+          }
+
+          final moiId = response[0]['id'];
+          await _saveDenomination(moiId, eventId, operatorId);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isSingleReceipt
+                  ? 'Moi saved! Printing single receipts...'
+                  : 'Moi saved! Printing group receipt...'),
+            ),
+          );
         }
-        final moiId = response[0]['id'];
-        await _saveDenomination(moiId, eventId, operatorId);
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isSingleReceipt
-              ? 'Moi saved! Printing single receipts...'
-              : 'Moi saved! Printing group receipt...'),
-        ),
-      );
 
       // TODO: Implement actual printing logic here
       // You can call a print function based on isSingleReceipt flag
       // For grouped entries, query DB with group_id = _currentGroupId
 
-      // Clear everything after successful save and print
-      _clearAllFields();
+      // Navigate to collection details if in edit mode
+      if (_isEditMode) {
+        // Clear everything after successful save and print
+        _clearAllFields();
+
+        // Navigate to collection details screen
+        Navigator.pushReplacementNamed(
+          context,
+          '/operator/collection-details',
+          arguments: eventData,
+        );
+      } else {
+        // Clear everything for new entry mode
+        _clearAllFields();
+      }
     } catch (e) {
       print('Error saving moi: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -510,6 +680,50 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
     }
   }
+
+// Add this new method to update denomination:
+  Future<void> _updateDenomination(String moiId, String eventId, String operatorId) async {
+    if (_paymentMethod != 'CASH') return;
+
+    try {
+      final denomData = {
+        'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
+        'denom_200': int.tryParse(_denom200Controller.text) ?? 0,
+        'denom_100': int.tryParse(_denom100Controller.text) ?? 0,
+        'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
+        'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
+        'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
+        'denom_5': int.tryParse(_denom5Controller.text) ?? 0,
+        'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
+      };
+
+      // Check if denomination exists
+      final existing = await _supabase
+          .from('moi_denominations')
+          .select('id')
+          .eq('moi_id', moiId)
+          .limit(1);
+
+      if (existing.isNotEmpty) {
+        // Update existing
+        await _supabase
+            .from('moi_denominations')
+            .update(denomData)
+            .eq('moi_id', moiId);
+      } else {
+        // Insert new
+        await _supabase.from('moi_denominations').insert({
+          'moi_id': moiId,
+          'event_id': eventId,
+          'operator_id': operatorId,
+          ...denomData,
+        });
+      }
+    } catch (e) {
+      print('Error updating denomination: $e');
+    }
+  }
+
   Future<void> _handleSaveAndPrint() async {
     if (_moiDetailsController.text.isNotEmpty) {
       // Show dialog if there are grouped entries
@@ -745,9 +959,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                               title: const Text('Cash'),
                               value: 'CASH',
                               groupValue: _paymentMethod,
+                              // For CASH option:
                               onChanged: (value) {
                                 setState(() {
                                   _paymentMethod = value!;
+                                  // Clear amount field when switching to CASH
+                                  _amountController.clear();
+                                  _totalAmount = 0.0;
+                                  _totalCount = 0;
                                 });
                               },
                               contentPadding: EdgeInsets.zero,
@@ -759,11 +978,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                               title: const Text('Check/Advance/UPI'),
                               value: 'OTHERS',
                               groupValue: _paymentMethod,
-                              onChanged: (value) {
-                                setState(() {
-                                  _paymentMethod = value!;
-                                });
-                              },
+                                // For OTHERS option:
+                                onChanged: (value) {
+                          setState(() {
+                          _paymentMethod = value!;
+                          // Clear denomination fields when switching to OTHERS
+                          _denom500Controller.clear();
+                          _denom200Controller.clear();
+                          _denom100Controller.clear();
+                          _denom50Controller.clear();
+                          _denom20Controller.clear();
+                          _denom10Controller.clear();
+                          _denom5Controller.clear();
+                          _denom1Controller.clear();
+                          _totalAmount = 0.0;
+                          _totalCount = 0;
+                          });
+                          },
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),
@@ -774,64 +1005,65 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 16),
-
-                // Amount Section
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Amount',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        height: 50,
-                        decoration: BoxDecoration(
-                          border: Border.all(color: Colors.black, width: 2),
-                        ),
-                        child: TextField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
+                // Amount Section - Only show if payment method is NOT CASH
+                if (_paymentMethod != 'CASH') ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.black, width: 2),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Amount',
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          height: 50,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.black, width: 2),
+                          ),
+                          child: TextField(
+                            controller: _amountController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _isUncle,
-                            onChanged: (value) {
-                              setState(() {
-                                _isUncle = value ?? false;
-                              });
-                            },
-                          ),
-                          const Text('Uncle'),
-                        ],
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _isUncle,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isUncle = value ?? false;
+                                });
+                              },
+                            ),
+                            const Text('Uncle'),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
 
-                // Denomination Table (Only show if payment method is CASH)
+                // Denomination Table - Only show if payment method is CASH
                 if (_paymentMethod == 'CASH') ...[
                   const SizedBox(height: 16),
                   Container(
@@ -912,6 +1144,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                               ),
                             ],
                           ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _isUncle,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isUncle = value ?? false;
+                                });
+                              },
+                            ),
+                            const Text('Uncle'),
+                          ],
                         ),
                       ],
                     ),
@@ -1039,6 +1285,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 Navigator.pushNamed(
                   context,
                   '/operator/exchange-denomination',
+                  arguments: eventData,
+                );
+              } else if (label == 'Collection Details') {  // ADD THIS
+                Navigator.pushNamed(
+                  context,
+                  '/operator/collection-details',
                   arguments: eventData,
                 );
               } else {
