@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'collect_moi_screen.dart';
-import 'correct_village_name.dart'; // Add this import
+import 'correct_village_name.dart';
 import 'uncle_reorder_screen.dart';
 import 'denomination_screen.dart';
 import 'user_wise_collection.dart';
 import 'similar_entries_screen.dart';
+import 'modified_report_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -240,7 +241,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Modified Report', () {
-                    // Navigate to Modified Report screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ModifiedReportScreen(
+                          eventId: eventData!['id'],
+                        ),
+                      ),
+                    );
                   }),
                   const SizedBox(height: 12),
                   _buildActionButton('Export Receipts', () {
