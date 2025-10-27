@@ -19,16 +19,20 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
   final _auth = AuthService();
   List<Map<String, dynamic>> _allEntries = [];
   List<Map<String, dynamic>> similarEntries = [];
-  Map<String, List<String>> nameMatchGroups = {}; // Track which names match
+  Map<String, List<String>> nameMatchGroups = {};
   bool _isLoading = true;
-
-  bool _showFirstNameMatches = true;
-  bool _showSecondNameMatches = true;
+  final ScrollController _horizontalController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadSimilarEntries();
+  }
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSimilarEntries() async {
@@ -61,14 +65,12 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
   }
 
   void _filterSimilarEntries() {
-    // Collect all names from all entries
     Map<String, List<Map<String, dynamic>>> allNameGroups = {};
 
     for (var entry in _allEntries) {
       final persons = entry['persons'] as List<dynamic>?;
       if (persons == null || persons.isEmpty) continue;
 
-      // Process all persons in the entry
       for (var person in persons) {
         final name = person['name']?.toString().trim().toLowerCase() ?? '';
         if (name.isNotEmpty) {
@@ -80,14 +82,12 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       }
     }
 
-    // Find which names appear in multiple entries
     Map<String, List<String>> matchGroups = {};
     Set<String> processedIds = {};
     List<Map<String, dynamic>> duplicates = [];
 
     allNameGroups.forEach((name, entries) {
       if (entries.length > 1) {
-        // This name appears in multiple entries
         for (var entry in entries) {
           final entryId = entry['id'];
           if (!processedIds.contains(entryId)) {
@@ -95,7 +95,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
             processedIds.add(entryId);
           }
 
-          // Track which names in this entry match
           if (!matchGroups.containsKey(entryId)) {
             matchGroups[entryId] = [];
           }
@@ -104,7 +103,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       }
     });
 
-    // Sort by serial number
     duplicates.sort((a, b) {
       final aSerial = a['serial_no'] ?? 0;
       final bSerial = b['serial_no'] ?? 0;
@@ -132,31 +130,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     return matchingNames.contains(normalizedName);
   }
 
-  Widget _buildNameCell(String entryId, String name, {required int flex}) {
-    final isMatch = _isNameMatching(entryId, name);
-
-    return Expanded(
-      flex: flex,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.grey[300]!, width: 1),
-          ),
-        ),
-        child: Text(
-          name,
-          style: TextStyle(
-            fontSize: 12,
-            color: isMatch ? Colors.red : Colors.black,
-            fontWeight: isMatch ? FontWeight.bold : FontWeight.normal,
-          ),
-          textAlign: TextAlign.left,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,7 +152,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       ),
       body: Column(
         children: [
-          // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
@@ -195,139 +167,142 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
             ),
           ),
 
-          // Table
           Expanded(
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
+              margin: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border.all(color: Colors.black, width: 2),
               ),
-              child: Column(
-                children: [
-                  // Table Header
-                  Container(
-                    color: const Color(0xFF6B4C9A),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Row(
+              child: _isLoading
+                  ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF6B4C9A)),
+              )
+                  : similarEntries.isEmpty
+                  ? const Center(
+                child: Text(
+                  'No similar entries found',
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              )
+                  : SingleChildScrollView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
+                child: Column(
+                  children: [
+                    // HEADER
+                    Row(
                       children: [
-                        _buildHeaderCell('Serial.No', flex: 1),
-                        _buildHeaderCell('Name', flex: 2),
-                        _buildHeaderCell('Second Person', flex: 2),
-                        _buildHeaderCell('Village Name', flex: 2),
-                        _buildHeaderCell('Living Place', flex: 2),
-                        _buildHeaderCell('Amount', flex: 2),
+                        _buildHeaderCell('Serial.No', 70),
+                        _buildHeaderCell('Name', 100),
+                        _buildHeaderCell('Second Person', 120),
+                        _buildHeaderCell('Village Name', 130),
+                        _buildHeaderCell('Living Place', 130),
+                        _buildHeaderCell('Amount', 100),
                       ],
                     ),
-                  ),
 
-                  // Table Body
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF6B4C9A),
-                      ),
-                    )
-                        : similarEntries.isEmpty
-                        ? const Center(
-                      child: Text(
-                        'No similar entries found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    )
-                        : ListView.builder(
-                      itemCount: similarEntries.length,
-                      itemBuilder: (context, index) {
-                        final entry = similarEntries[index];
-                        final entryId = entry['id'];
-                        final persons = entry['persons'] as List<dynamic>?;
+                    // BODY
+                    Expanded(
+                      child: SizedBox(
+                        width: 650, // total width of all columns
+                        child: ListView.builder(
+                          itemCount: similarEntries.length,
+                          itemBuilder: (context, index) {
+                            final entry = similarEntries[index];
+                            final entryId = entry['id'];
+                            final persons =
+                            entry['persons'] as List<dynamic>?;
 
-                        String firstName = '';
-                        String secondPerson = '';
+                            String firstName = '';
+                            String secondPerson = '';
 
-                        if (persons != null && persons.isNotEmpty) {
-                          firstName = persons[0]['name']?.toString() ?? '';
-                          if (persons.length > 1) {
-                            secondPerson = persons[1]['name']?.toString() ?? '';
-                          }
-                        }
+                            if (persons != null && persons.isNotEmpty) {
+                              firstName =
+                                  persons[0]['name']?.toString() ?? '';
+                              if (persons.length > 1) {
+                                secondPerson =
+                                    persons[1]['name']?.toString() ??
+                                        '';
+                              }
+                            }
 
-                        return Container(
-                          decoration: BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(
-                                color: Colors.grey[300]!,
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              _buildDataCell(
-                                entry['serial_no']?.toString() ?? '',
-                                flex: 1,
-                              ),
-                              _buildNameCell(
-                                entryId,
-                                firstName,
-                                flex: 2,
-                              ),
-                              _buildNameCell(
-                                entryId,
-                                secondPerson,
-                                flex: 2,
-                              ),
-                              _buildDataCell(
-                                entry['village_name'] ?? '',
-                                flex: 2,
-                              ),
-                              _buildDataCell(
-                                entry['living_place'] ?? '',
-                                flex: 2,
-                              ),
-                              _buildDataCell(
-                                _formatAmount(
-                                  double.tryParse(entry['amount']?.toString() ?? '0') ?? 0.0,
+                            final isFirstMatch =
+                            _isNameMatching(entryId, firstName);
+                            final isSecondMatch =
+                            _isNameMatching(entryId, secondPerson);
+
+                            return Container(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Colors.grey[300]!,
+                                    width: 1,
+                                  ),
                                 ),
-                                flex: 2,
-                                align: TextAlign.right,
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // Footer with total count
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        top: BorderSide(color: Colors.grey[300]!, width: 1),
-                      ),
-                    ),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        'Total   ${similarEntries.length}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                              child: Row(
+                                children: [
+                                  _buildDataCell(
+                                      entry['serial_no']?.toString() ??
+                                          '',
+                                      70,
+                                      align: TextAlign.center),
+                                  _buildDataCell(firstName, 100,
+                                      isMatch: isFirstMatch),
+                                  _buildDataCell(secondPerson, 120,
+                                      isMatch: isSecondMatch),
+                                  _buildDataCell(
+                                      entry['village_name'] ?? '',
+                                      130),
+                                  _buildDataCell(
+                                      entry['living_place'] ?? '', 130),
+                                  _buildDataCell(
+                                    _formatAmount(
+                                      double.tryParse(entry['amount']
+                                          ?.toString() ??
+                                          '0') ??
+                                          0.0,
+                                    ),
+                                    100,
+                                    align: TextAlign.right,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
-                  ),
-                ],
+
+                    // FOOTER
+                    Container(
+                      width: 650,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(
+                              color: Colors.grey[300]!, width: 1),
+                        ),
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          'Total   ${similarEntries.length}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
 
-          // Exit Button
+          // EXIT BUTTON
           Padding(
             padding: const EdgeInsets.all(16),
             child: Align(
@@ -360,48 +335,56 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     );
   }
 
-  Widget _buildHeaderCell(String text, {required int flex}) {
-    return Expanded(
-      flex: flex,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.white.withOpacity(0.5), width: 1),
-          ),
+
+
+  Widget _buildHeaderCell(String text, double width) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6B4C9A),
+        border: Border(
+          right: BorderSide(color: Colors.white.withOpacity(0.5), width: 1),
         ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-          ),
-          textAlign: TextAlign.center,
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
         ),
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
 
   Widget _buildDataCell(
-      String text, {
-        required int flex,
+      String text,
+      double width, {
         TextAlign align = TextAlign.left,
+        bool isMatch = false,
       }) {
-    return Expanded(
-      flex: flex,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.grey[300]!, width: 1),
-          ),
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: Colors.grey[300]!, width: 1),
         ),
-        child: Text(
-          text,
-          style: const TextStyle(fontSize: 12),
-          textAlign: align,
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: isMatch ? Colors.red : Colors.black,
+          fontWeight: isMatch ? FontWeight.bold : FontWeight.normal,
         ),
+        textAlign: align,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

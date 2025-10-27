@@ -7,6 +7,7 @@ import 'denomination_screen.dart';
 import 'user_wise_collection.dart';
 import 'similar_entries_screen.dart';
 import 'modified_report_screen.dart';
+import 'cash_managements_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -187,7 +188,17 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     );
                   }),
                   const SizedBox(height: 12),
+                  _buildActionButton('Collection Details', () {
+                    final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                    eventDataWithOperator['operator_id'] = operatorId; // Add this line
 
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/collection-details',
+                      arguments: eventDataWithOperator,
+                    );
+                  }),
+                  const SizedBox(height: 12),
                   _buildActionButton('Correct Village Names', () {
                     Navigator.push(
                       context,
@@ -213,6 +224,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       MaterialPageRoute(
                         builder: (context) => DenominationScreen(
                           eventId: eventData!['id'],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  _buildActionButton('Cash Management', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CashManagementScreen(
+                          eventId: eventData!['id'],
+                          operatorId: operatorId,
                         ),
                       ),
                     );

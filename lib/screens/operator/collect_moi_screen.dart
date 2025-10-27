@@ -668,15 +668,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // For grouped entries, query DB with group_id = _currentGroupId
 
       // Navigate to collection details if in edit mode
+      // Navigate to collection details if in edit mode
       if (_isEditMode) {
         // Clear everything after successful save and print
         _clearAllFields();
+
+        final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+        eventDataWithOperator['operator_id'] = eventData!['operator_id'];
 
         // Navigate to collection details screen
         Navigator.pushReplacementNamed(
           context,
           '/operator/collection-details',
-          arguments: eventData,
+          arguments: eventDataWithOperator,
         );
       } else {
         // Clear everything for new entry mode
@@ -1309,11 +1313,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   '/operator/exchange-denomination',
                   arguments: eventData,
                 );
-              } else if (label == 'Collection Details') {  // ADD THIS
+              } else if (label == 'Collection Details') {
+                final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                eventDataWithOperator['operator_id'] = eventData!['operator_id']; // Ensure operator_id is included
+
                 Navigator.pushNamed(
                   context,
                   '/operator/collection-details',
-                  arguments: eventData,
+                  arguments: eventDataWithOperator,
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
