@@ -80,7 +80,10 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
       final eventIds = assignments.map((a) => a['event_id'] as String).toList();
       print('Event IDs assigned to operator: $eventIds');
 
-      // Get events that are assigned to this operator AND have today or future dates
+      // Get events that are:
+      // 1. Assigned to this operator
+      // 2. Have today or future dates
+      // 3. Have status = 'upcoming' (NEW FILTER ADDED)
       final events = await _auth.client
           .from('events')
           .select('''
@@ -89,6 +92,7 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
           ''')
           .inFilter('id', eventIds)
           .gte('event_date', todayStr)
+          .eq('status', 'upcoming')  // ⭐ NEW: Only show upcoming status
           .order('event_date', ascending: true)
           .order('event_time', ascending: true);
 
@@ -165,7 +169,7 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
     // Add operator name to the event data
     final eventWithOperator = Map<String, dynamic>.from(event);
     eventWithOperator['_operator_name'] = _operatorName;
-    eventWithOperator['_operator_id'] = _currentUserId; // Add this line
+    eventWithOperator['_operator_id'] = _currentUserId;
 
     Navigator.pushNamed(
       context,

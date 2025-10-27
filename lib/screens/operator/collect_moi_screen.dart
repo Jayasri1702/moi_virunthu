@@ -603,8 +603,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           'updated_at': DateTime.now().toIso8601String(),
         };
 
-        // In _saveAndPrint method, after UPDATE MODE section:
-
         if (_isEditMode && _editMoiId != null) {
           // UPDATE MODE
           // Store old data before updating
@@ -642,6 +640,24 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Moi updated successfully!'),
+            ),
+          );
+        } else {
+          // INSERT MODE (New entry)
+          final response = await _supabase.from('mois').insert(dataToSave).select();
+
+          if (response.isEmpty) {
+            throw Exception('Failed to save entry');
+          }
+
+          final moiId = response[0]['id'];
+          await _saveDenomination(moiId, eventId, operatorId);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isSingleReceipt
+                  ? 'Moi saved! Printing single receipts...'
+                  : 'Moi saved! Printing group receipt...'),
             ),
           );
         }
@@ -1672,5 +1688,4 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       ),
     );
   }
-
 }

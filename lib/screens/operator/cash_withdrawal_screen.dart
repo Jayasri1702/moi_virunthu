@@ -33,7 +33,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   // Event data
   Map<String, dynamic>? eventData;
 
-  // Available balances
+  // Available balances (TOTAL across all operators)
   Map<String, int> _availableBalance = {};
   bool _isLoadingBalance = false;
 
@@ -60,80 +60,129 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
 
     try {
       final eventId = eventData!['id'];
+      final List<int> denominations = [500, 200, 100, 50, 20, 10, 5, 1];
 
-      // Get total collected denominations
-      final collectedResponse = await _supabase
+      // Step 1: Get total collected denominations from MOI (CASH only)
+      final moiData = await _supabase
           .from('moi_denominations')
-          .select('denom_500, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1')
+          .select('''
+            denom_500,
+            denom_200,
+            denom_100,
+            denom_50,
+            denom_20,
+            denom_10,
+            denom_5,
+            denom_1,
+            mois!moi_denominations_moi_id_fkey (
+              payment_method
+            )
+          ''')
           .eq('event_id', eventId);
 
-      // Get total withdrawn denominations
-      final withdrawnResponse = await _supabase
-          .from('cash_withdrawal_denominations')
-          .select('denom_500, denom_200, denom_100, denom_50, denom_20, denom_10, denom_5, denom_1, withdrawal:cash_withdrawals!inner(event_id)')
-          .eq('withdrawal.event_id', eventId);
+      // Step 2: Get total withdrawn denominations
+      final withdrawalData = await _supabase
+          .from('cash_withdrawals')
+          .select('''
+            cash_withdrawal_denominations (
+              denom_500,
+              denom_200,
+              denom_100,
+              denom_50,
+              denom_20,
+              denom_10,
+              denom_5,
+              denom_1
+            )
+          ''')
+          .eq('event_id', eventId);
 
-      // Calculate totals
+      // Step 3: Get exchange denominations
+      final exchangeData = await _supabase
+          .from('cash_exchanges')
+          .select('''
+            cash_exchange_denominations (
+              denom_500,
+              denom_200,
+              denom_100,
+              denom_50,
+              denom_20,
+              denom_10,
+              denom_5,
+              denom_1
+            )
+          ''')
+          .eq('event_id', eventId);
+
+      // Initialize totals
       Map<String, int> collected = {
-        '500': 0,
-        '200': 0,
-        '100': 0,
-        '50': 0,
-        '20': 0,
-        '10': 0,
-        '5': 0,
-        '1': 0,
+        '500': 0, '200': 0, '100': 0, '50': 0,
+        '20': 0, '10': 0, '5': 0, '1': 0,
       };
 
       Map<String, int> withdrawn = {
-        '500': 0,
-        '200': 0,
-        '100': 0,
-        '50': 0,
-        '20': 0,
-        '10': 0,
-        '5': 0,
-        '1': 0,
+        '500': 0, '200': 0, '100': 0, '50': 0,
+        '20': 0, '10': 0, '5': 0, '1': 0,
       };
 
-      // Sum up collected
-      for (var record in collectedResponse) {
-        collected['500'] = (collected['500'] ?? 0) + ((record['denom_500'] ?? 0) as int);
-        collected['200'] = (collected['200'] ?? 0) + ((record['denom_200'] ?? 0) as int);
-        collected['100'] = (collected['100'] ?? 0) + ((record['denom_100'] ?? 0) as int);
-        collected['50'] = (collected['50'] ?? 0) + ((record['denom_50'] ?? 0) as int);
-        collected['20'] = (collected['20'] ?? 0) + ((record['denom_20'] ?? 0) as int);
-        collected['10'] = (collected['10'] ?? 0) + ((record['denom_10'] ?? 0) as int);
-        collected['5'] = (collected['5'] ?? 0) + ((record['denom_5'] ?? 0) as int);
-        collected['1'] = (collected['1'] ?? 0) + ((record['denom_1'] ?? 0) as int);
-      }
+      Map<String, int> exchanged = {
+        '500': 0, '200': 0, '100': 0, '50': 0,
+        '20': 0, '10': 0, '5': 0, '1': 0,
+      };
 
-      // Sum up withdrawn
-      for (var record in withdrawnResponse) {
-        withdrawn['500'] = (withdrawn['500'] ?? 0) + ((record['denom_500'] ?? 0) as int);
-        withdrawn['200'] = (withdrawn['200'] ?? 0) + ((record['denom_200'] ?? 0) as int);
-        withdrawn['100'] = (withdrawn['100'] ?? 0) + ((record['denom_100'] ?? 0) as int);
-        withdrawn['50'] = (withdrawn['50'] ?? 0) + ((record['denom_50'] ?? 0) as int);
-        withdrawn['20'] = (withdrawn['20'] ?? 0) + ((record['denom_20'] ?? 0) as int);
-        withdrawn['10'] = (withdrawn['10'] ?? 0) + ((record['denom_10'] ?? 0) as int);
-        withdrawn['5'] = (withdrawn['5'] ?? 0) + ((record['denom_5'] ?? 0) as int);
-        withdrawn['1'] = (withdrawn['1'] ?? 0) + ((record['denom_1'] ?? 0) as int);
-      }
+      // Calculate collected (CASH only, from ALL operators)
+      print('=== MOI Data Count: ${moiData.length} ===');
+      for (var entry in moiData) {
+        final paymentMethod = entry['mois']?['payment_method'];
+        if (paymentMethod != 'CASH') continue; // Only count CASH payments
 
-      // Calculate available = collected - withdrawn
+        for (var denom in denominations) {
+          collected['$denom'] = (collected['$denom'] ?? 0) + ((entry['denom_$denom'] ?? 0) as int);
+        }
+      }
+      print('Total Collected: $collected');
+
+      // Calculate withdrawn (from ALL operators)
+      print('=== Withdrawal Data Count: ${withdrawalData.length} ===');
+      for (var withdrawal in withdrawalData) {
+        final denomData = withdrawal['cash_withdrawal_denominations'];
+        if (denomData == null) continue;
+
+        for (var denom in denominations) {
+          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+        }
+      }
+      print('Total Withdrawn: $withdrawn');
+
+      // Calculate exchanged (from ALL operators)
+      print('=== Exchange Data Count: ${exchangeData.length} ===');
+      for (var exchange in exchangeData) {
+        final denomData = exchange['cash_exchange_denominations'];
+        if (denomData == null) continue;
+
+        for (var denom in denominations) {
+          exchanged['$denom'] = (exchanged['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+        }
+      }
+      print('Total Exchanged (Net): $exchanged');
+
+      // Calculate available = collected - withdrawn + exchanged
       setState(() {
         _availableBalance = {
-          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0),
-          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0),
-          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0),
-          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0),
-          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0),
-          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0),
-          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0),
-          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0),
+          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) + (exchanged['500'] ?? 0),
+          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) + (exchanged['200'] ?? 0),
+          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) + (exchanged['100'] ?? 0),
+          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) + (exchanged['50'] ?? 0),
+          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) + (exchanged['20'] ?? 0),
+          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) + (exchanged['10'] ?? 0),
+          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) + (exchanged['5'] ?? 0),
+          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) + (exchanged['1'] ?? 0),
         };
         _isLoadingBalance = false;
       });
+
+      print('=== FINAL AVAILABLE BALANCE (TOTAL) ===');
+      print(_availableBalance);
     } catch (e) {
       print('Error loading balance: $e');
       setState(() {
@@ -225,7 +274,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       if (requestedCount > 0) {
         int available = _availableBalance[denom] ?? 0;
         if (requestedCount > available) {
-          errors.add('₹$denom: Requested $requestedCount but only $available available');
+          errors.add('₹$denom: Requested $requestedCount but only $available available (total for event)');
         }
       }
     });
@@ -248,6 +297,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
               const Text(
                 'The following denominations are not available:',
                 style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '(Based on total collected by all operators)',
+                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
               ),
               const SizedBox(height: 12),
               ...errors.map((error) => Padding(
@@ -449,6 +503,15 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Total available across all operators for this event',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -724,13 +787,13 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
             ),
           ],
         ),
-        // Available balance indicator
+        // Available balance indicator (TOTAL for event)
         Padding(
           padding: const EdgeInsets.only(top: 2, left: 90),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Available: $available',
+              'Available (Total): $available',
               style: TextStyle(
                 fontSize: 11,
                 color: available > 0 ? Colors.green[700] : Colors.red[700],

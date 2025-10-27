@@ -6,7 +6,6 @@ import '../../models/user.dart';
 class CreateOperatorScreen extends StatefulWidget {
   final UserModel? userToEdit;
 
-
   const CreateOperatorScreen({super.key, this.userToEdit});
 
   @override
@@ -20,7 +19,8 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
   final _password = TextEditingController();
   final _contactNumber = TextEditingController();
   final _auth = AuthService();
-  bool _passwordVisible = false; // ← ADD THIS LINE
+  bool _passwordVisible = false;
+  bool _resetPassword = false; // NEW: Track if user wants to reset password
 
   String _selectedUserType = 'Operator';
   bool _loading = false;
@@ -51,13 +51,13 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
       // Update existing user
       result = await _updateUser();
     } else {
-      // Create new user - ADD role parameter
+      // Create new user
       result = await _auth.createOperator(
         fullName: _name.text.trim(),
         password: _password.text,
         phone: _contactNumber.text.trim(),
         email: _email.text.trim().isEmpty ? null : _email.text.trim(),
-        role: _selectedUserType == 'Administrator' ? 'admin' : 'operator', // ← ADD THIS LINE
+        role: _selectedUserType == 'Administrator' ? 'admin' : 'operator',
       );
     }
 
@@ -97,13 +97,20 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
         updateData['email'] = _email.text.trim();
       }
 
-      // Note: Password updates should be handled through Supabase Auth API
-      // Direct password_hash updates are not recommended
-      if (_password.text.isNotEmpty) {
-        return {
-          'success': false,
-          'message': 'Password updates must be handled through the authentication system',
-        };
+      // Handle password update if user wants to reset it
+      if (_resetPassword && _password.text.isNotEmpty) {
+        // Validate the new password
+        final validationError = _auth.validatePassword(_password.text);
+        if (validationError != null) {
+          return {
+            'success': false,
+            'message': validationError,
+          };
+        }
+
+        // Hash the new password
+        final newPasswordHash = await _auth.hashPassword(_password.text);
+        updateData['password_hash'] = newPasswordHash;
       }
 
       await _auth.client
@@ -128,7 +135,10 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
     _email.clear();
     _password.clear();
     _contactNumber.clear();
-    setState(() => _selectedUserType = 'Operator');
+    setState(() {
+      _selectedUserType = 'Operator';
+      _resetPassword = false;
+    });
   }
 
   @override
@@ -287,49 +297,78 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                               ),
                               const SizedBox(height: 16),
 
-                              // Password
-                              _buildFormRow(
-                                label: 'Password',
-                                required: !isEditing,
-                                isMobile: isMobile,
-                                child: TextFormField(
-                                  controller: _password,
-                                  decoration: InputDecoration(
-                                    border: const OutlineInputBorder(),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    hintText: isEditing ? 'Leave blank to keep current password' : null,
-                                    hintStyle: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                                    suffixIcon: IconButton(  // ← ADD THIS
-                                      icon: Icon(
-                                        _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                                        color: Colors.grey[600],
-                                      ),
-                                      onPressed: () {
+                              // Reset Password Checkbox (only when editing)
+                              if (isEditing) ...[
+                                Row(
+                                  children: [
+                                    if (!isMobile) const SizedBox(width: 138),
+                                    Checkbox(
+                                      value: _resetPassword,
+                                      onChanged: (value) {
                                         setState(() {
-                                          _passwordVisible = !_passwordVisible;
+                                          _resetPassword = value ?? false;
+                                          if (!_resetPassword) {
+                                            _password.clear();
+                                          }
                                         });
                                       },
                                     ),
-                                  ),
-                                  obscureText: !_passwordVisible, // ← CHANGE THIS LINE
-                                  validator: (value) {
-                                    // Password not required when editing (unless they want to change it)
-                                    if (isEditing && (value == null || value.isEmpty)) {
-                                      return null;
-                                    }
-                                    if (!isEditing && (value == null || value.isEmpty)) {
-                                      return 'Password is required';
-                                    }
-                                    if (value != null && value.isNotEmpty) {
-                                      final validationError = _auth.validatePassword(value);
-                                      return validationError;
-                                    }
-                                    return null;
-                                  },
+                                    const Text(
+                                      'Reset Password',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
+                                const SizedBox(height: 8),
+                              ],
 
-                              const SizedBox(height: 16),
+                              // Password (only show when creating new user OR when reset checkbox is checked)
+                              if (!isEditing || _resetPassword) ...[
+                                _buildFormRow(
+                                  label: 'Password',
+                                  required: !isEditing || _resetPassword,
+                                  isMobile: isMobile,
+                                  child: TextFormField(
+                                    controller: _password,
+                                    decoration: InputDecoration(
+                                      border: const OutlineInputBorder(),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                      hintText: isEditing ? 'Enter new password' : null,
+                                      hintStyle: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                                          color: Colors.grey[600],
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            _passwordVisible = !_passwordVisible;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    obscureText: !_passwordVisible,
+                                    validator: (value) {
+                                      // If resetting password, new password is required
+                                      if (isEditing && _resetPassword && (value == null || value.isEmpty)) {
+                                        return 'New password is required';
+                                      }
+                                      if (!isEditing && (value == null || value.isEmpty)) {
+                                        return 'Password is required';
+                                      }
+                                      if (value != null && value.isNotEmpty) {
+                                        final validationError = _auth.validatePassword(value);
+                                        return validationError;
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
 
                               // Contact Number
                               _buildFormRow(

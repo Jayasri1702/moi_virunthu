@@ -43,18 +43,17 @@ class AuthService {
   }
 
   /// Hash password to match backend format
-  Future<String> _hashPassword(String password) async {
+  /// Made public so it can be used for password resets
+  Future<String> hashPassword(String password) async {
     _argon2.init(_params);
     final Uint8List passwordBytes = _params.converter.convert(password);
     final Uint8List out = Uint8List(_hashLength);
     _argon2.generateBytes(passwordBytes, out, 0, out.length);
 
-    final saltBase64 = base64Encode(utf8.encode(_fixedSalt)).replaceAll(
-        '=', '');
+    final saltBase64 = base64Encode(utf8.encode(_fixedSalt)).replaceAll('=', '');
     final hashBase64 = base64Encode(out).replaceAll('=', '');
 
-    return '\$argon2id\$v=19\$m=65536,t=2,p=1\$' + saltBase64 + '\$' +
-        hashBase64;
+    return '\$argon2id\$v=19\$m=65536,t=2,p=1\$' + saltBase64 + '\$' + hashBase64;
   }
 
   /// Verify password against stored hash
@@ -124,8 +123,6 @@ class AuthService {
     print('Logout successful');
   }
 
-  /// Creates a new operator
-  /// Returns a Map with 'success' (bool) and 'message' (String)
   /// Creates a new operator or admin
   /// Returns a Map with 'success' (bool) and 'message' (String)
   Future<Map<String, dynamic>> createOperator({
@@ -133,7 +130,7 @@ class AuthService {
     required String password,
     required String phone,
     String? email,
-    String role = 'operator', // ← ADD THIS PARAMETER
+    String role = 'operator',
   }) async {
     try {
       // Validate password before creating operator
@@ -146,9 +143,7 @@ class AuthService {
       }
 
       // Validate phone number is not empty
-      if (phone
-          .trim()
-          .isEmpty) {
+      if (phone.trim().isEmpty) {
         return {
           'success': false,
           'message': 'Phone number is required',
@@ -156,22 +151,20 @@ class AuthService {
       }
 
       // Validate full name is not empty
-      if (fullName
-          .trim()
-          .isEmpty) {
+      if (fullName.trim().isEmpty) {
         return {
           'success': false,
           'message': 'Full name is required',
         };
       }
 
-      final hash = await _hashPassword(password);
+      final hash = await hashPassword(password);
 
       final insert = {
         'full_name': fullName,
         'password_hash': hash,
         'phone': phone,
-        'role': role, // ← CHANGE THIS FROM 'operator' to role parameter
+        'role': role,
         'is_active': true,
         'email': email,
       };
@@ -179,9 +172,7 @@ class AuthService {
       await client.from('users').insert([insert]);
       return {
         'success': true,
-        'message': '${role == 'admin'
-            ? 'Administrator'
-            : 'Operator'} created successfully',
+        'message': '${role == 'admin' ? 'Administrator' : 'Operator'} created successfully',
       };
     } catch (e) {
       return {

@@ -18,75 +18,62 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   bool _loading = true;
 
   // Filter controllers
-  String _dateRange = 'This Month';
-  DateTime? _fromDate;
-  DateTime? _toDate;
+  String _dateFilter = 'All'; // Today, Upcoming, Past, All
   String? _selectedEventType;
   String? _selectedStatus;
 
   @override
   void initState() {
     super.initState();
-    _initializeFilters();
     _loadEventTypes();
     _loadEvents();
   }
 
-  void _initializeFilters() {
-    final now = DateTime.now();
-    _fromDate = DateTime(now.year, now.month, 1);
-    _toDate = DateTime(now.year, now.month + 1, 0);
-  }
   void _editEvent(Map<String, dynamic> event) async {
     final result = await Navigator.pushNamed(
       context,
       '/admin/create-event',
-      arguments: event, // Pass the event data
+      arguments: event,
     );
 
-    // Reload events if changes were saved
     if (result == true) {
       _loadEvents();
     }
   }
 
   Future<void> _deleteEvent(Map<String, dynamic> event) async {
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) =>
-          AlertDialog(
-            title: const Text('Delete Event'),
-            content: Text(
-              'Are you sure you want to delete the event for "${event['customer_name']}"?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Delete'),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Event'),
+        content: Text(
+          'Are you sure you want to delete the event for "${event['customer_name']}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
 
     if (confirmed != true) return;
 
     try {
-      // Delete event assignments first (foreign key constraint)
       await _auth.client
           .from('event_assignments')
           .delete()
           .eq('event_id', event['id']);
 
-      // Delete the event
       await _auth.client
           .from('events')
           .delete()
@@ -99,7 +86,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        _loadEvents(); // Reload the list
+        _loadEvents();
       }
     } catch (e) {
       if (mounted) {
@@ -110,7 +97,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
           ),
         );
       }
-    }}
+    }
+  }
 
   Future<void> _loadEventTypes() async {
     try {
@@ -144,9 +132,33 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
             *,
             event_types!inner(id, name)
           ''')
-          .order('event_date', ascending: false);
+          .order('event_date', ascending: false)
+          .order('event_time', ascending: true);
 
       final data = await query;
+
+      // Update status based on event date
+      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final todayDate = DateTime.parse(today);
+
+      for (var event in data) {
+        if (event['event_date'] != null) {
+          final eventDate = DateTime.parse(event['event_date']);
+
+          // If event date is in the past and status is still 'upcoming', update it to 'completed'
+          if (eventDate.isBefore(todayDate) && event['status']?.toString().toLowerCase() == 'upcoming') {
+            try {
+              await _auth.client
+                  .from('events')
+                  .update({'status': 'completed'})
+                  .eq('id', event['id']);
+              event['status'] = 'completed';
+            } catch (e) {
+              print('Error updating event status: $e');
+            }
+          }
+        }
+      }
 
       setState(() {
         _events = List<Map<String, dynamic>>.from(data);
@@ -167,12 +179,32 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   }
 
   void _applyFilters() {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final todayDate = DateTime.parse(today);
+
     var filtered = _events.where((event) {
-      // Date filter
-      if (_fromDate != null && _toDate != null && event['event_date'] != null) {
+      // Date filter (Today, Upcoming, Past, All)
+      if (_dateFilter != 'All' && event['event_date'] != null) {
         final eventDate = DateTime.parse(event['event_date']);
-        if (eventDate.isBefore(_fromDate!) || eventDate.isAfter(_toDate!)) {
-          return false;
+
+        switch (_dateFilter) {
+          case 'Today':
+            if (eventDate.year != todayDate.year ||
+                eventDate.month != todayDate.month ||
+                eventDate.day != todayDate.day) {
+              return false;
+            }
+            break;
+          case 'Upcoming':
+            if (!eventDate.isAfter(todayDate)) {
+              return false;
+            }
+            break;
+          case 'Past':
+            if (!eventDate.isBefore(todayDate)) {
+              return false;
+            }
+            break;
         }
       }
 
@@ -198,73 +230,9 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     });
   }
 
-  void _onDateRangeChanged(String? value) {
-    if (value == null) return;
-
-    setState(() {
-      _dateRange = value;
-      final now = DateTime.now();
-
-      switch (value) {
-        case 'This Month':
-          _fromDate = DateTime(now.year, now.month, 1);
-          _toDate = DateTime(now.year, now.month + 1, 0);
-          break;
-        case 'Last Month':
-          _fromDate = DateTime(now.year, now.month - 1, 1);
-          _toDate = DateTime(now.year, now.month, 0);
-          break;
-        case 'This Year':
-          _fromDate = DateTime(now.year, 1, 1);
-          _toDate = DateTime(now.year, 12, 31);
-          break;
-        case 'All':
-          _fromDate = null;
-          _toDate = null;
-          break;
-      }
-      _applyFilters();
-    });
-  }
-
-  Future<void> _selectFromDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _fromDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _fromDate = picked;
-        _dateRange = 'Custom';
-        _applyFilters();
-      });
-    }
-  }
-
-  Future<void> _selectToDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _toDate ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-
-    if (picked != null) {
-      setState(() {
-        _toDate = picked;
-        _dateRange = 'Custom';
-        _applyFilters();
-      });
-    }
-  }
-
   void _clearFilters() {
     setState(() {
-      _dateRange = 'This Month';
-      _initializeFilters();
+      _dateFilter = 'All';
       _selectedEventType = null;
       _selectedStatus = null;
       _applyFilters();
@@ -281,6 +249,19 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     }
   }
 
+  String _formatTime(String? timeStr) {
+    if (timeStr == null) return '';
+    try {
+      final time = TimeOfDay(
+        hour: int.parse(timeStr.split(':')[0]),
+        minute: int.parse(timeStr.split(':')[1]),
+      );
+      return time.format(context);
+    } catch (e) {
+      return timeStr;
+    }
+  }
+
   Color _getStatusColor(String? status) {
     switch (status?.toLowerCase()) {
       case 'upcoming':
@@ -292,6 +273,39 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       default:
         return Colors.grey;
     }
+  }
+
+  // Get count by date category
+  Map<String, int> _getEventCounts() {
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final todayDate = DateTime.parse(today);
+
+    int todayCount = 0;
+    int upcomingCount = 0;
+    int pastCount = 0;
+
+    for (var event in _events) {
+      if (event['event_date'] != null) {
+        final eventDate = DateTime.parse(event['event_date']);
+
+        if (eventDate.year == todayDate.year &&
+            eventDate.month == todayDate.month &&
+            eventDate.day == todayDate.day) {
+          todayCount++;
+        } else if (eventDate.isAfter(todayDate)) {
+          upcomingCount++;
+        } else {
+          pastCount++;
+        }
+      }
+    }
+
+    return {
+      'today': todayCount,
+      'upcoming': upcomingCount,
+      'past': pastCount,
+      'total': _events.length,
+    };
   }
 
   @override
@@ -313,7 +327,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                   color: Colors.white,
                 ),
                 child: const Text(
-                  'View Events',
+                  'All Events',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -345,7 +359,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                         children: [
                           Expanded(
                             child: Text(
-                              'FESTIVAL LIST',
+                              'ALL EVENTS',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: isSmallScreen ? 14 : 16,
@@ -372,198 +386,129 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                           bottom: BorderSide(color: Colors.grey[300]!),
                         ),
                       ),
-                      child: Column(
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.start,
                         children: [
-                          // First Row - Date Range
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.start,
-                            children: [
-                              // Date Range Label
-                              const SizedBox(
-                                width: 100,
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'Date Range',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
+                          // Date Filter Label
+                          const SizedBox(
+                            width: 100,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Show',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                               ),
-
-                              // Date Range Dropdown
-                              SizedBox(
-                                width: isSmallScreen ? double.infinity : 150,
-                                child: DropdownButtonFormField<String>(
-                                  value: _dateRange,
-                                  decoration: const InputDecoration(
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    isDense: true,
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(value: 'This Month', child: Text('This Month')),
-                                    DropdownMenuItem(value: 'Last Month', child: Text('Last Month')),
-                                    DropdownMenuItem(value: 'This Year', child: Text('This Year')),
-                                    DropdownMenuItem(value: 'All', child: Text('All')),
-                                    DropdownMenuItem(value: 'Custom', child: Text('Custom')),
-                                  ],
-                                  onChanged: _onDateRangeChanged,
-                                ),
-                              ),
-
-                              // From Date
-                              const SizedBox(
-                                width: 50,
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'From',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: isSmallScreen ? double.infinity : 150,
-                                child: InkWell(
-                                  onTap: _selectFromDate,
-                                  child: InputDecorator(
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      suffixIcon: Icon(Icons.calendar_today, size: 16),
-                                      isDense: true,
-                                    ),
-                                    child: Text(
-                                      _fromDate != null ? DateFormat('dd-MM-yyyy').format(_fromDate!) : '',
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ),
-                                ),
-                              ),
-
-                              // To Date
-                              const SizedBox(
-                                width: 30,
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'To',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: isSmallScreen ? double.infinity : 150,
-                                child: InkWell(
-                                  onTap: _selectToDate,
-                                  child: InputDecorator(
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      suffixIcon: Icon(Icons.calendar_today, size: 16),
-                                      isDense: true,
-                                    ),
-                                    child: Text(
-                                      _toDate != null ? DateFormat('dd-MM-yyyy').format(_toDate!) : '',
-                                      style: const TextStyle(fontSize: 14),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
 
-                          const SizedBox(height: 12),
-
-                          // Second Row - Event Type and Status
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            alignment: WrapAlignment.start,
-                            children: [
-                              // Event Label
-                              const SizedBox(
-                                width: 100,
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'Event',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
+                          // Date Filter Dropdown
+                          SizedBox(
+                            width: isSmallScreen ? double.infinity : 150,
+                            child: DropdownButtonFormField<String>(
+                              value: _dateFilter,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                isDense: true,
                               ),
+                              items: const [
+                                DropdownMenuItem(value: 'All', child: Text('All Events')),
+                                DropdownMenuItem(value: 'Today', child: Text('Today')),
+                                DropdownMenuItem(value: 'Upcoming', child: Text('Upcoming')),
+                                DropdownMenuItem(value: 'Past', child: Text('Past')),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _dateFilter = value!;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                          ),
 
-                              // Event Type Dropdown
-                              SizedBox(
-                                width: isSmallScreen ? double.infinity : 250,
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedEventType,
-                                  decoration: const InputDecoration(
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    isDense: true,
-                                    hintText: 'All Events',
-                                  ),
-                                  items: [
-                                    const DropdownMenuItem(value: null, child: Text('All Events')),
-                                    ..._eventTypes.map((type) {
-                                      return DropdownMenuItem<String>(
-                                        value: type['id'],
-                                        child: Text(type['name']),
-                                      );
-                                    }).toList(),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedEventType = value;
-                                      _applyFilters();
-                                    });
-                                  },
-                                ),
+                          const SizedBox(width: 20),
+
+                          // Event Label
+                          const SizedBox(
+                            width: 100,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Event Type',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                               ),
+                            ),
+                          ),
 
-                              const SizedBox(width: 20),
-
-                              // Status Label
-                              const SizedBox(
-                                width: 50,
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 12),
-                                  child: Text(
-                                    'Status',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                                  ),
-                                ),
+                          // Event Type Dropdown
+                          SizedBox(
+                            width: isSmallScreen ? double.infinity : 250,
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedEventType,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                isDense: true,
+                                hintText: 'All Events',
                               ),
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text('All Events')),
+                                ..._eventTypes.map((type) {
+                                  return DropdownMenuItem<String>(
+                                    value: type['id'],
+                                    child: Text(type['name']),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedEventType = value;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
+                          ),
 
-                              // Status Dropdown
-                              SizedBox(
-                                width: isSmallScreen ? double.infinity : 150,
-                                child: DropdownButtonFormField<String>(
-                                  value: _selectedStatus,
-                                  decoration: const InputDecoration(
-                                    border: OutlineInputBorder(),
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    isDense: true,
-                                    hintText: 'All Status',
-                                  ),
-                                  items: const [
-                                    DropdownMenuItem(value: null, child: Text('All Status')),
-                                    DropdownMenuItem(value: 'upcoming', child: Text('Upcoming')),
-                                    DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                                    DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                                  ],
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _selectedStatus = value;
-                                      _applyFilters();
-                                    });
-                                  },
-                                ),
+                          const SizedBox(width: 20),
+
+                          // Status Label
+                          const SizedBox(
+                            width: 50,
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Status',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                               ),
-                            ],
+                            ),
+                          ),
+
+                          // Status Dropdown
+                          SizedBox(
+                            width: isSmallScreen ? double.infinity : 150,
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedStatus,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                isDense: true,
+                                hintText: 'All Status',
+                              ),
+                              items: const [
+                                DropdownMenuItem(value: null, child: Text('All Status')),
+                                DropdownMenuItem(value: 'upcoming', child: Text('Upcoming')),
+                                DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                                DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                              ],
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedStatus = value;
+                                  _applyFilters();
+                                });
+                              },
+                            ),
                           ),
                         ],
                       ),
@@ -604,6 +549,12 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                             ),
                             DataColumn(
                               label: Text(
+                                'Time',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
                                 'Customer Name',
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
@@ -616,7 +567,19 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                             ),
                             DataColumn(
                               label: Text(
+                                'Venue',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
                                 'City',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            DataColumn(
+                              label: Text(
+                                'Computers',
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -626,12 +589,18 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ),
-                            DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataColumn(
+                              label: Text(
+                                'Actions',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ],
                           rows: _filteredEvents.map((event) {
                             return DataRow(
                               cells: [
                                 DataCell(Text(_formatDate(event['event_date']))),
+                                DataCell(Text(_formatTime(event['event_time']))),
                                 DataCell(
                                   SizedBox(
                                     width: 150,
@@ -644,7 +613,19 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                 DataCell(
                                   Text(event['event_types']?['name'] ?? ''),
                                 ),
+                                DataCell(
+                                  SizedBox(
+                                    width: 150,
+                                    child: Text(
+                                      event['venue'] ?? '',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
                                 DataCell(Text(event['city'] ?? '')),
+                                DataCell(
+                                  Text(event['total_computers']?.toString() ?? '0'),
+                                ),
                                 DataCell(
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -695,7 +676,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                       ),
                     ),
 
-                    // Footer (Fixed for mobile)
+                    // Footer
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -708,7 +689,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Total ${_filteredEvents.length}',
+                            'Showing ${_filteredEvents.length} event(s)',
                             style: const TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -747,7 +728,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                     style: OutlinedButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(horizontal: 8),
                                     ),
-                                    child: const Text('Show', style: TextStyle(fontSize: 13)),
+                                    child: const Text('Refresh', style: TextStyle(fontSize: 13)),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
@@ -786,6 +767,39 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, int count, Color color, bool isSmall) {
+    return Container(
+      width: isSmall ? double.infinity : 150,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        border: Border.all(color: color, width: 2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Text(
+            count.toString(),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
