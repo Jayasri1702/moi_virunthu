@@ -375,14 +375,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Also update the _handleGroup method to prevent grouping in edit mode:
   Future<void> _handleGroup() async {
     // Prevent grouping in edit mode
-    if (_isEditMode) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot group entries in edit mode. Please save changes first.'),
-        ),
-      );
-      return;
-    }
+    // if (_isEditMode) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(
+    //       content: Text('Cannot group entries in edit mode. Please save changes first.'),
+    //     ),
+    //   );
+    //   return;
+    // }
 
     // Validation
     if (_amountController.text.isEmpty) {
@@ -456,6 +456,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           'name': _name2Controller.text,
           'qualification': _qualification2Controller.text,
           'job': _job2Controller.text,
+        });
+      }
+
+      if (_isEditMode) {
+        setState(() {
+          _isEditMode = false;
         });
       }
 
@@ -1004,23 +1010,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                               title: const Text('Check/Advance/UPI'),
                               value: 'OTHERS',
                               groupValue: _paymentMethod,
-                                // For OTHERS option:
-                                onChanged: (value) {
-                          setState(() {
-                          _paymentMethod = value!;
-                          // Clear denomination fields when switching to OTHERS
-                          _denom500Controller.clear();
-                          _denom200Controller.clear();
-                          _denom100Controller.clear();
-                          _denom50Controller.clear();
-                          _denom20Controller.clear();
-                          _denom10Controller.clear();
-                          _denom5Controller.clear();
-                          _denom1Controller.clear();
-                          _totalAmount = 0.0;
-                          _totalCount = 0;
-                          });
-                          },
+                              // For OTHERS option:
+                              onChanged: (value) {
+                                setState(() {
+                                  _paymentMethod = value!;
+                                  // Clear denomination fields when switching to OTHERS
+                                  _denom500Controller.clear();
+                                  _denom200Controller.clear();
+                                  _denom100Controller.clear();
+                                  _denom50Controller.clear();
+                                  _denom20Controller.clear();
+                                  _denom10Controller.clear();
+                                  _denom5Controller.clear();
+                                  _denom1Controller.clear();
+                                  _totalAmount = 0.0;
+                                  _totalCount = 0;
+                                });
+                              },
                               contentPadding: EdgeInsets.zero,
                               dense: true,
                             ),

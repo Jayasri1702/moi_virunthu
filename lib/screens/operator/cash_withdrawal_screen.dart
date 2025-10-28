@@ -483,8 +483,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
 
                 const SizedBox(height: 16),
 
-                // Phone Number
-                _buildInputField('Phone Number', _phoneController, keyboardType: TextInputType.phone),
+                /// Phone Number
+                _buildInputField('Phone Number', _phoneController, keyboardType: TextInputType.phone, required: true),
 
                 const SizedBox(height: 16),
 
