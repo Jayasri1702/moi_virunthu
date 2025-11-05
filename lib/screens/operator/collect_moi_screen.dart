@@ -43,6 +43,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String? _editingMoiId;
   int? _currentGroupId;
   List<Map<String, dynamic>> _groupedMois = [];
+  Map<String, dynamic>? _originalData; // Store original data before editing
 
   // Person 1 controllers
   final _init1Controller = TextEditingController();
@@ -73,7 +74,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   void _setupDenomListeners() {
     _denomControllers.forEach((denom, controller) {
       controller.addListener(() {
-        // Only calculate if payment method is CASH
         if (_paymentMethod == 'CASH') {
           _calculateTotal();
         }
@@ -103,6 +103,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _loadEditData(Map<String, dynamic> moiData) async {
+    // Store original data for old_data field
+    _originalData = Map<String, dynamic>.from(moiData);
+
     // Remove all listeners temporarily
     _denomControllers.forEach((_, controller) {
       controller.removeListener(_calculateTotal);
@@ -138,15 +141,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // ALWAYS load the amount regardless of payment method
       _amountController.text = moiData['amount']?.toString() ?? '0';
     });
+
+    // REQUIREMENT 1: Load all grouped entries immediately when editing
+    if (_currentGroupId != null) {
+      await _loadGroupedMois();
+    }
 
     // Load denominations only if payment method is CASH
     if (_paymentMethod == 'CASH') {
       await _loadDenominations(moiData['id']);
     } else {
-      // Clear denominations without triggering calculation
       _denomControllers.forEach((_, controller) {
         controller.clear();
       });
@@ -204,6 +210,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<void> _loadGroupedEntryForEdit(Map<String, dynamic> moiData) async {
     print('Loading entry for edit - Payment: ${moiData['payment_method']}, Amount: ${moiData['amount']}');
 
+    // Store original data for old_data field
+    _originalData = Map<String, dynamic>.from(moiData);
+
     // Remove all listeners temporarily
     _denomControllers.forEach((_, controller) {
       controller.removeListener(_calculateTotal);
@@ -250,7 +259,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // ALWAYS load the amount regardless of payment method
       var amountValue = moiData['amount']?.toString() ?? '0';
       _amountController.text = amountValue;
       print('Amount controller set to: $amountValue');
@@ -260,7 +268,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (_paymentMethod == 'CASH') {
       await _loadDenominations(moiData['id']);
     } else {
-      // Clear denominations without triggering calculation
       _denomControllers.forEach((_, controller) {
         controller.clear();
       });
@@ -283,7 +290,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // FIXED: Get next serial number from DB (highest + 1)
   Future<void> _loadNextSerialNo() async {
     if (_eventId == null || _operatorId == null) return;
 
@@ -312,7 +318,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   void _calculateTotal() {
-    // Only for CASH payment method
     if (_paymentMethod == 'CASH') {
       setState(() {
         int total = 0;
@@ -325,7 +330,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // FIXED: Get total amount - preserve existing amount for OTHERS payment method
   int _getTotalAmount() {
     if (_paymentMethod == 'CASH') {
       int total = 0;
@@ -335,12 +339,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       });
       return total;
     } else {
-      // For OTHERS payment method, get amount from text field
-      // Return the current amount or 0 if parsing fails
       String amountText = _amountController.text.trim();
       if (amountText.isEmpty) return 0;
-
-      // Try to parse as double first, then convert to int
       double? doubleValue = double.tryParse(amountText);
       if (doubleValue != null) {
         return doubleValue.round();
@@ -357,7 +357,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return count;
   }
 
-  // FIXED: Get next group ID from DB (highest + 1)
   Future<int> _getNextGroupId() async {
     try {
       final maxGroupResponse = await _supabase
@@ -383,10 +382,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (!_validateForm()) return;
 
     try {
-      // CRITICAL: Refresh serial number and group ID from DB before saving
       await _loadNextSerialNo();
 
-      // Generate or use existing group_id
       int groupId;
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
@@ -394,19 +391,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         groupId = await _getNextGroupId();
       }
 
-      // If in edit mode, update the existing entry with group_id
       final moiId = await _saveMoi(groupId, forceUpdate: _isEditMode);
 
       if (moiId != null) {
-        // Update state
         setState(() {
           _currentGroupId = groupId;
         });
 
-        // Reload grouped MOIs
         await _loadGroupedMois();
-
-        // Clear form for next entry (but keep group context)
         await _clearFormForNextEntry();
 
         if (mounted) {
@@ -433,7 +425,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
     List<Map<String, dynamic>> personsData = [];
 
-    // Add Person 1 if has data
     if (_name1Controller.text.trim().isNotEmpty) {
       personsData.add({
         'init': _init1Controller.text,
@@ -443,7 +434,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       });
     }
 
-    // Add Person 2 if has data
     if (_name2Controller.text.trim().isNotEmpty) {
       personsData.add({
         'init': _init2Controller.text,
@@ -473,9 +463,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       dynamic response;
       String moiId;
 
-      // Update if we're editing an existing MOI or if forceUpdate is true
       if ((_isEditMode || forceUpdate) && _editingMoiId != null) {
-        // Update existing MOI
+        // UPDATE MODE - Store old data
+        moiData['old_data'] = _originalData;
+
         response = await _supabase
             .from('mois')
             .update(moiData)
@@ -484,7 +475,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             .single();
         moiId = _editingMoiId!;
       } else {
-        // Insert new MOI
+        // INSERT NEW MOI
         moiData['created_at'] = DateTime.now().toIso8601String();
         response = await _supabase
             .from('mois')
@@ -494,7 +485,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         moiId = response['id'];
       }
 
-      // Save denominations
       await _saveDenominations(moiId);
 
       return moiId;
@@ -505,7 +495,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _saveDenominations(String moiId) async {
-    // Only save denomination if payment method is CASH
     if (_paymentMethod != 'CASH') return;
 
     final denomData = {
@@ -527,23 +516,81 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         .upsert(denomData);
   }
 
-  // FIXED: Stay on same page after save & print
+  Future<void> _updateDenomination(String moiId, String eventId, String operatorId) async {
+    final denomData = {
+      'moi_id': moiId,
+      'event_id': eventId,
+      'operator_id': operatorId,
+      'denom_500': int.tryParse(_denomControllers[500]!.text) ?? 0,
+      'denom_200': int.tryParse(_denomControllers[200]!.text) ?? 0,
+      'denom_100': int.tryParse(_denomControllers[100]!.text) ?? 0,
+      'denom_50': int.tryParse(_denomControllers[50]!.text) ?? 0,
+      'denom_20': int.tryParse(_denomControllers[20]!.text) ?? 0,
+      'denom_10': int.tryParse(_denomControllers[10]!.text) ?? 0,
+      'denom_5': int.tryParse(_denomControllers[5]!.text) ?? 0,
+      'denom_1': int.tryParse(_denomControllers[1]!.text) ?? 0,
+    };
+
+    try {
+      await _supabase
+          .from('moi_denominations')
+          .upsert(denomData);
+      print('Denomination updated successfully');
+    } catch (e) {
+      print('Error updating denomination: $e');
+    }
+  }
+
+  // REQUIREMENT 2: Auto-add to group on Save & Print
   Future<void> _handleSaveAndPrint() async {
-    // CRITICAL: Refresh serial number from DB before saving to prevent duplicates
     if (!_isEditMode) {
       await _loadNextSerialNo();
     }
 
-    // If we have grouped entries, validate and save/update the current form
+    // REQUIREMENT 2: Check if we have a current group and form has data
+    if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
+      // User filled form and has active group but forgot to click Group button
+      // Auto-add to group before saving
+      if (!_validateForm()) return;
+
+      try {
+        await _saveMoi(_currentGroupId);
+        await _loadGroupedMois();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Entry automatically added to group and saved!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Navigate to collection details
+          Navigator.pushReplacementNamed(
+            context,
+            '/operator/collection-details',
+            arguments: {'id': _eventId, 'operator_id': _operatorId},
+          );
+        }
+        return;
+      } catch (e) {
+        print('Error auto-saving to group: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          );
+        }
+        return;
+      }
+    }
+
+    // Handle grouped entries
     if (_groupedMois.isNotEmpty) {
-      // If we're editing an entry, validate and update it
       if (_isEditMode && _editingMoiId != null) {
         if (!_validateForm()) return;
 
         try {
           await _saveMoi(_currentGroupId);
-
-          // Reload the grouped list to show updated data
           await _loadGroupedMois();
 
           if (mounted) {
@@ -554,7 +601,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             );
 
-            // FIXED: Navigate to collection details in edit mode
             Navigator.pushReplacementNamed(
               context,
               '/operator/collection-details',
@@ -573,7 +619,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // If not editing, just show success message (all entries already saved)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -581,12 +626,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // Stay on the same page - don't navigate back
       }
       return;
     }
 
-    // Otherwise, validate and save the current form
+    // Regular save for single entry
     if (!_validateForm()) return;
 
     try {
@@ -600,7 +644,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
         );
 
-        // FIXED: Navigate to collection details in edit mode, stay on page in non-edit mode
         if (_isEditMode) {
           Navigator.pushReplacementNamed(
             context,
@@ -608,7 +651,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             arguments: {'id': _eventId, 'operator_id': _operatorId},
           );
         } else {
-          // Non-edit mode: stay on the page, just clear the form
           await _clearFormForNextEntry();
         }
       }
@@ -622,9 +664,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  // Helper method to check if form has any data
+  bool _hasFormData() {
+    return _name1Controller.text.trim().isNotEmpty ||
+        _name2Controller.text.trim().isNotEmpty ||
+        _getTotalAmount() > 0;
+  }
 
   bool _validateForm() {
-    // Check if at least one person has a name
     bool hasValidPerson = _name1Controller.text.trim().isNotEmpty ||
         _name2Controller.text.trim().isNotEmpty;
 
@@ -635,9 +682,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return false;
     }
 
-    // Validate amount based on payment method
     if (_paymentMethod == 'CASH') {
-      // For CASH, check denomination total
       if (_getTotalAmount() == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter denomination details')),
@@ -645,7 +690,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return false;
       }
     } else {
-      // For OTHERS, check amount field
       if (_amountController.text.trim().isEmpty || _getTotalAmount() == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter amount')),
@@ -657,19 +701,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return true;
   }
 
-  // FIXED: Load next serial number when clearing form
   Future<void> _clearFormForNextEntry() async {
-    // Increment serial number for next entry
     await _loadNextSerialNo();
 
-    // Clear all form fields except group context
     _phoneController.clear();
     _villageController.clear();
     _livingPlaceController.clear();
     _notesController.clear();
     _amountController.clear();
 
-    // Clear person controllers
     _init1Controller.clear();
     _name1Controller.clear();
     _qualification1Controller.clear();
@@ -679,7 +719,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _qualification2Controller.clear();
     _job2Controller.clear();
 
-    // Reset denominations
     _denomControllers.forEach((_, controller) {
       controller.clear();
     });
@@ -689,11 +728,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = false;
       _isEditMode = false;
       _editingMoiId = null;
+      _originalData = null;
     });
   }
 
   void _handleAddEntry() {
-    // This button allows adding another entry to existing group
     _clearFormForNextEntry();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -726,6 +765,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _groupedMois.clear();
       _isEditMode = false;
       _editingMoiId = null;
+      _originalData = null;
     });
     await _loadNextSerialNo();
   }
@@ -819,8 +859,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  // Find this method in your code and replace the condition:
-
   Widget _buildSerialAndActions() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -853,36 +891,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             ],
           ),
-          // FIXED: Hide action buttons when in edit mode OR when a group is active
           if (!_isEditMode && _currentGroupId == null) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(child: _buildActionButton('Sample Receipt', () {})),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildActionButton('Cash Drawing', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/cash_withdrawal',
-                      arguments: {'id': _eventId, 'operator_id': _operatorId},
-                    );
-                  }),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton('Exchange\nDenomination', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/exchange-denomination',
-                      arguments: {'id': _eventId, 'operator_id': _operatorId},
-                    );
-                  }),
-                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _buildActionButton('Collection Details', () {
@@ -1063,7 +1076,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   onChanged: (value) {
                     setState(() {
                       _paymentMethod = value!;
-                      // Only clear amount if switching from OTHERS to CASH
                       if (_amountController.text.isNotEmpty) {
                         _amountController.clear();
                       }
@@ -1081,7 +1093,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   onChanged: (value) {
                     setState(() {
                       _paymentMethod = value!;
-                      // Only clear denominations if switching from CASH to OTHERS
                       _denomControllers.forEach((_, controller) => controller.clear());
                     });
                   },
