@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CollectMoiScreen extends StatefulWidget {
@@ -8,789 +7,756 @@ class CollectMoiScreen extends StatefulWidget {
   @override
   State<CollectMoiScreen> createState() => _CollectMoiScreenState();
 }
-// Edit mode variables
-bool _isEditMode = false;
-String? _editMoiId;
-Map<String, dynamic>? _originalData;
 
 class _CollectMoiScreenState extends State<CollectMoiScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _supabase = Supabase.instance.client;
 
   // Controllers
-  final _serialNoController = TextEditingController();
-  final _mobileController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _villageController = TextEditingController();
   final _livingPlaceController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _amountController = TextEditingController();
+
+  // Denomination controllers
+  final Map<int, TextEditingController> _denomControllers = {
+    500: TextEditingController(),
+    200: TextEditingController(),
+    100: TextEditingController(),
+    50: TextEditingController(),
+    20: TextEditingController(),
+    10: TextEditingController(),
+    5: TextEditingController(),
+    1: TextEditingController(),
+  };
+
+  // State variables
+  String? _eventId;
+  String? _operatorId;
+  int? _serialNo;
+  String _paymentMethod = 'CASH';
+  bool _isUncle = false;
+  bool _isLoading = true;
+
+  // Edit mode variables
+  bool _isEditMode = false;
+  String? _editingMoiId;
+  int? _currentGroupId;
+  List<Map<String, dynamic>> _groupedMois = [];
+
+  // Person 1 controllers
   final _init1Controller = TextEditingController();
   final _name1Controller = TextEditingController();
   final _qualification1Controller = TextEditingController();
   final _job1Controller = TextEditingController();
+
+  // Person 2 controllers
   final _init2Controller = TextEditingController();
   final _name2Controller = TextEditingController();
   final _qualification2Controller = TextEditingController();
   final _job2Controller = TextEditingController();
-  final _notesController = TextEditingController();
-  final _amountController = TextEditingController();
-  final _moiDetailsController = TextEditingController();
 
-  // Denomination controllers
-  final _denom500Controller = TextEditingController();
-  final _denom200Controller = TextEditingController();
-  final _denom100Controller = TextEditingController();
-  final _denom50Controller = TextEditingController();
-  final _denom20Controller = TextEditingController();
-  final _denom10Controller = TextEditingController();
-  final _denom5Controller = TextEditingController();
-  final _denom1Controller = TextEditingController();
-
-  int _totalCount = 0;
-  double _totalAmount = 0.0;
-
-  // Payment method - CASH or OTHERS
-  String _paymentMethod = 'CASH';
-  bool _isUncle = false;
-
-  // Event data
-  Map<String, dynamic>? eventData;
-
-  // Current group_id for grouped entries
-  int? _currentGroupId;
-
-  // Update didChangeDependencies method:
+  @override
+  void initState() {
+    super.initState();
+    _setupDenomListeners();
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
-    if (args != null && args is Map<String, dynamic>) {
-      setState(() {
-        eventData = args;
-
-        // Check if it's edit mode
-        _isEditMode = args['edit_mode'] == true;
-
-        if (_isEditMode && args['moi_data'] != null) {
-          _loadEditData(args['moi_data']);
-        } else {
-          _loadNextSerialNumber();
-        }
-      });
-      print('Event data received: ${eventData?['id']}');
-      print('Operator ID received: ${eventData?['operator_id']}');
+    if (_isLoading) {
+      _loadArguments();
     }
   }
 
-  // Add this new method to load edit data:
+  void _setupDenomListeners() {
+    _denomControllers.forEach((denom, controller) {
+      controller.addListener(() {
+        // Only calculate if payment method is CASH
+        if (_paymentMethod == 'CASH') {
+          _calculateTotal();
+        }
+      });
+    });
+  }
 
-  void _loadEditData(Map<String, dynamic> moiData) {
-    _editMoiId = moiData['id'];
-    _originalData = Map<String, dynamic>.from(moiData);
+  Future<void> _loadArguments() async {
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null && args is Map<String, dynamic>) {
+      _eventId = args['id'];
+      _operatorId = args['operator_id'];
+
+      // Check if edit mode
+      if (args['edit_mode'] == true && args['moi_data'] != null) {
+        _isEditMode = true;
+        final moiData = args['moi_data'] as Map<String, dynamic>;
+        await _loadEditData(moiData);
+      } else {
+        await _loadNextSerialNo();
+      }
+    }
 
     setState(() {
-      // Load serial number
-      _serialNoController.text = 'O${moiData['serial_no'] ?? ''}';
+      _isLoading = false;
+    });
+  }
 
-      // Load basic fields
-      _mobileController.text = moiData['phone'] ?? '';
+  Future<void> _loadEditData(Map<String, dynamic> moiData) async {
+    // Remove all listeners temporarily
+    _denomControllers.forEach((_, controller) {
+      controller.removeListener(_calculateTotal);
+    });
+
+    setState(() {
+      _editingMoiId = moiData['id'];
+      _serialNo = moiData['serial_no'];
+      _phoneController.text = moiData['phone'] ?? '';
       _villageController.text = moiData['village_name'] ?? '';
       _livingPlaceController.text = moiData['living_place'] ?? '';
       _notesController.text = moiData['notes'] ?? '';
-      _amountController.text = moiData['amount']?.toString() ?? '';
-
-      // Load payment method
       _paymentMethod = moiData['payment_method'] ?? 'CASH';
+      _isUncle = moiData['is_uncle'] ?? false;
+      _currentGroupId = moiData['group_id'];
 
-      // Load uncle status
-      _isUncle = moiData['is_uncle'] == true;
-
-      // Load persons data
+      // Load persons
       if (moiData['persons'] != null) {
-        try {
-          List<dynamic> persons = moiData['persons'] is String
-              ? []
-              : (moiData['persons'] as List);
-
-          if (persons.isNotEmpty) {
-            var person1 = persons[0];
-            _init1Controller.text = person1['init'] ?? '';
-            _name1Controller.text = person1['name'] ?? '';
-            _qualification1Controller.text = person1['qualification'] ?? '';
-            _job1Controller.text = person1['job'] ?? '';
-          }
-
-          if (persons.length > 1) {
-            var person2 = persons[1];
-            _init2Controller.text = person2['init'] ?? '';
-            _name2Controller.text = person2['name'] ?? '';
-            _qualification2Controller.text = person2['qualification'] ?? '';
-            _job2Controller.text = person2['job'] ?? '';
-          }
-        } catch (e) {
-          print('Error loading persons: $e');
+        List<dynamic> personsList = moiData['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var person1 = personsList[0];
+          _init1Controller.text = person1['init'] ?? '';
+          _name1Controller.text = person1['name'] ?? '';
+          _qualification1Controller.text = person1['qualification'] ?? '';
+          _job1Controller.text = person1['job'] ?? '';
+        }
+        if (personsList.length > 1) {
+          var person2 = personsList[1];
+          _init2Controller.text = person2['init'] ?? '';
+          _name2Controller.text = person2['name'] ?? '';
+          _qualification2Controller.text = person2['qualification'] ?? '';
+          _job2Controller.text = person2['job'] ?? '';
         }
       }
 
-      // Load group_id if exists
-      if (moiData['group_id'] != null) {
-        _currentGroupId = moiData['group_id'];
-      }
+      // ALWAYS load the amount regardless of payment method
+      _amountController.text = moiData['amount']?.toString() ?? '0';
     });
 
-    // Load denomination if payment method is CASH
+    // Load denominations only if payment method is CASH
     if (_paymentMethod == 'CASH') {
-      _loadDenomination(moiData['id']);
+      await _loadDenominations(moiData['id']);
+    } else {
+      // Clear denominations without triggering calculation
+      _denomControllers.forEach((_, controller) {
+        controller.clear();
+      });
     }
+
+    // Re-add listeners
+    _setupDenomListeners();
   }
 
-  // Add method to load denomination data:
-
-  Future<void> _loadDenomination(String moiId) async {
+  Future<void> _loadDenominations(String moiId) async {
     try {
       final response = await _supabase
           .from('moi_denominations')
           .select('*')
           .eq('moi_id', moiId)
-          .limit(1);
+          .maybeSingle();
 
-      if (response.isNotEmpty) {
-        final denom = response[0];
+      if (response != null) {
         setState(() {
-          _denom500Controller.text = (denom['denom_500'] ?? 0).toString();
-          _denom200Controller.text = (denom['denom_200'] ?? 0).toString();
-          _denom100Controller.text = (denom['denom_100'] ?? 0).toString();
-          _denom50Controller.text = (denom['denom_50'] ?? 0).toString();
-          _denom20Controller.text = (denom['denom_20'] ?? 0).toString();
-          _denom10Controller.text = (denom['denom_10'] ?? 0).toString();
-          _denom5Controller.text = (denom['denom_5'] ?? 0).toString();
-          _denom1Controller.text = (denom['denom_1'] ?? 0).toString();
+          _denomControllers[500]!.text = response['denom_500']?.toString() ?? '';
+          _denomControllers[200]!.text = response['denom_200']?.toString() ?? '';
+          _denomControllers[100]!.text = response['denom_100']?.toString() ?? '';
+          _denomControllers[50]!.text = response['denom_50']?.toString() ?? '';
+          _denomControllers[20]!.text = response['denom_20']?.toString() ?? '';
+          _denomControllers[10]!.text = response['denom_10']?.toString() ?? '';
+          _denomControllers[5]!.text = response['denom_5']?.toString() ?? '';
+          _denomControllers[1]!.text = response['denom_1']?.toString() ?? '';
         });
-        _calculateDenomination();
       }
     } catch (e) {
-      print('Error loading denomination: $e');
+      print('Error loading denominations: $e');
     }
   }
 
-
-  Future<void> _loadNextSerialNumber() async {
-    if (eventData == null) return;
+  Future<void> _loadGroupedMois() async {
+    if (_currentGroupId == null) return;
 
     try {
-      final eventId = eventData!['id'];
-
-      // Get the highest serial number for this event
       final response = await _supabase
           .from('mois')
-          .select('serial_no')
-          .eq('event_id', eventId)
-          .order('serial_no', ascending: false)
-          .limit(1);
-
-      int nextSerial = 1;
-      if (response.isNotEmpty && response[0]['serial_no'] != null) {
-        nextSerial = (response[0]['serial_no'] as int) + 1;
-      }
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('group_id', _currentGroupId!)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: true);
 
       setState(() {
-        _serialNoController.text = 'O$nextSerial';
+        _groupedMois = List<Map<String, dynamic>>.from(response);
       });
     } catch (e) {
-      print('Error loading serial number: $e');
-      setState(() {
-        _serialNoController.text = 'O1';
-      });
+      print('Error loading grouped MOIs: $e');
     }
   }
 
-  Future<int> _getNextGroupId() async {
-    if (eventData == null) return 1;
+  Future<void> _loadGroupedEntryForEdit(Map<String, dynamic> moiData) async {
+    print('Loading entry for edit - Payment: ${moiData['payment_method']}, Amount: ${moiData['amount']}');
 
-    try {
-      final eventId = eventData!['id'];
-
-      // Get the highest group_id for this event
-      final response = await _supabase
-          .from('mois')
-          .select('group_id')
-          .eq('event_id', eventId)
-          .not('group_id', 'is', null)
-          .order('group_id', ascending: false)
-          .limit(1);
-
-      int nextGroupId = 1;
-      if (response.isNotEmpty && response[0]['group_id'] != null) {
-        nextGroupId = (response[0]['group_id'] as int) + 1;
-      }
-
-      return nextGroupId;
-    } catch (e) {
-      print('Error loading group_id: $e');
-      return 1;
-    }
-  }
-
-  @override
-  void dispose() {
-    _serialNoController.dispose();
-    _mobileController.dispose();
-    _villageController.dispose();
-    _livingPlaceController.dispose();
-    _init1Controller.dispose();
-    _name1Controller.dispose();
-    _qualification1Controller.dispose();
-    _job1Controller.dispose();
-    _init2Controller.dispose();
-    _name2Controller.dispose();
-    _qualification2Controller.dispose();
-    _job2Controller.dispose();
-    _notesController.dispose();
-    _amountController.dispose();
-    _moiDetailsController.dispose();
-    _denom500Controller.dispose();
-    _denom200Controller.dispose();
-    _denom100Controller.dispose();
-    _denom50Controller.dispose();
-    _denom20Controller.dispose();
-    _denom10Controller.dispose();
-    _denom5Controller.dispose();
-    _denom1Controller.dispose();
-    super.dispose();
-  }
-
-  void _calculateDenomination() {
-    int count500 = int.tryParse(_denom500Controller.text) ?? 0;
-    int count200 = int.tryParse(_denom200Controller.text) ?? 0;
-    int count100 = int.tryParse(_denom100Controller.text) ?? 0;
-    int count50 = int.tryParse(_denom50Controller.text) ?? 0;
-    int count20 = int.tryParse(_denom20Controller.text) ?? 0;
-    int count10 = int.tryParse(_denom10Controller.text) ?? 0;
-    int count1 = int.tryParse(_denom1Controller.text) ?? 0;
-    int count5 = int.tryParse(_denom5Controller.text) ?? 0;
-
-    setState(() {
-      // Update totalCount to include count5:
-      _totalCount = count500 + count200 + count100 + count50 + count20 + count10 + count5 + count1;
-
-// Update totalAmount to include count5:
-      _totalAmount = (count500 * 500) + (count200 * 200) + (count100 * 100) +
-          (count50 * 50) + (count20 * 20) + (count10 * 10) + (count5 * 5) + (count1 * 1);
-
-      _amountController.text = _totalAmount.toStringAsFixed(0);
-    });
-  }
-
-  // Update the _clearAllFields to also reset edit mode variables:
-  void _clearAllFields() {
-    setState(() {
-      _mobileController.clear();
-      _villageController.clear();
-      _livingPlaceController.clear();
-      _init1Controller.clear();
-      _name1Controller.clear();
-      _qualification1Controller.clear();
-      _job1Controller.clear();
-      _init2Controller.clear();
-      _name2Controller.clear();
-      _qualification2Controller.clear();
-      _job2Controller.clear();
-      _notesController.clear();
-      _amountController.clear();
-      _moiDetailsController.clear();
-      _denom500Controller.clear();
-      _denom200Controller.clear();
-      _denom100Controller.clear();
-      _denom50Controller.clear();
-      _denom20Controller.clear();
-      _denom10Controller.clear();
-      _denom5Controller.clear();
-      _denom1Controller.clear();
-      _paymentMethod = 'CASH';
-      _isUncle = false;
-      _totalCount = 0;
-      _totalAmount = 0.0;
-      _currentGroupId = null;
-
-      // Reset edit mode variables
-      _isEditMode = false;
-      _editMoiId = null;
-      _originalData = null;
+    // Remove all listeners temporarily
+    _denomControllers.forEach((_, controller) {
+      controller.removeListener(_calculateTotal);
     });
 
-    // Reload next serial number
-    _loadNextSerialNumber();
-  }
-
-  void _clearFieldsExceptMoiDetails() {
+    // Load the selected entry for editing
     setState(() {
-      _mobileController.clear();
-      _villageController.clear();
-      _livingPlaceController.clear();
-      _init1Controller.clear();
-      _name1Controller.clear();
-      _qualification1Controller.clear();
-      _job1Controller.clear();
-      _init2Controller.clear();
-      _name2Controller.clear();
-      _qualification2Controller.clear();
-      _job2Controller.clear();
-      _notesController.clear();
-      _amountController.clear();
-      _denom500Controller.clear();
-      _denom200Controller.clear();
-      _denom100Controller.clear();
-      _denom50Controller.clear();
-      _denom20Controller.clear();
-      _denom10Controller.clear();
-      _denom5Controller.clear();
-      _denom1Controller.clear();
-      _paymentMethod = 'CASH';
-      _isUncle = false;
-      _totalCount = 0;
-      _totalAmount = 0.0;
-      // Keep _currentGroupId as is for grouping
-    });
-  }
+      _editingMoiId = moiData['id'];
+      _serialNo = moiData['serial_no'];
+      _phoneController.text = moiData['phone'] ?? '';
+      _villageController.text = moiData['village_name'] ?? '';
+      _livingPlaceController.text = moiData['living_place'] ?? '';
+      _notesController.text = moiData['notes'] ?? '';
+      _paymentMethod = moiData['payment_method'] ?? 'CASH';
+      _isUncle = moiData['is_uncle'] ?? false;
+      _isEditMode = true;
 
-  String _generatePersonSummary() {
-    List<String> summaries = [];
-    double currentAmount = double.tryParse(_amountController.text) ?? 0.0;
-
-    // Add Person 1 if has data
-    if (_name1Controller.text.isNotEmpty) {
-      String person1 = '${_init1Controller.text} ${_name1Controller.text}';
-      summaries.add(person1);
-    }
-
-    // Add Person 2 if has data
-    if (_name2Controller.text.isNotEmpty) {
-      String person2 = '${_init2Controller.text} ${_name2Controller.text}';
-      summaries.add(person2);
-    }
-
-    return summaries.join(', ') +
-        (currentAmount > 0 ? ' - ₹${currentAmount.toStringAsFixed(0)}' : '');
-  }
-
-  // Also update the _handleGroup method to prevent grouping in edit mode:
-  Future<void> _handleGroup() async {
-    // Prevent grouping in edit mode
-    // if (_isEditMode) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //       content: Text('Cannot group entries in edit mode. Please save changes first.'),
-    //     ),
-    //   );
-    //   return;
-    // }
-
-    // Validation
-    if (_amountController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter amount')),
-      );
-      return;
-    }
-
-    if (_name1Controller.text.isEmpty && _name2Controller.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter at least one person details')),
-      );
-      return;
-    }
-
-    String summary = _generatePersonSummary();
-
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Add to Group'),
-          content: Text('Save this entry to group?\n\n$summary'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Add & Save'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      final eventId = eventData?['id'];
-      final operatorId = eventData?['operator_id'];
-
-      if (eventId == null || operatorId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event or Operator ID not found')),
-        );
-        return;
-      }
-
-      // Get or create group_id
-      if (_currentGroupId == null) {
-        _currentGroupId = await _getNextGroupId();
-      }
-
-      // Prepare persons data for current entry
-      List<Map<String, dynamic>> personsData = [];
-      if (_name1Controller.text.isNotEmpty) {
-        personsData.add({
-          'init': _init1Controller.text,
-          'name': _name1Controller.text,
-          'qualification': _qualification1Controller.text,
-          'job': _job1Controller.text,
-        });
-      }
-      if (_name2Controller.text.isNotEmpty) {
-        personsData.add({
-          'init': _init2Controller.text,
-          'name': _name2Controller.text,
-          'qualification': _qualification2Controller.text,
-          'job': _job2Controller.text,
-        });
-      }
-
-      if (_isEditMode) {
-        setState(() {
-          _isEditMode = false;
-        });
-      }
-
-      // Save to database immediately
-      final response = await _supabase.from('mois').insert({
-        'event_id': eventId,
-        'operator_id': operatorId,
-        'serial_no': int.tryParse(_serialNoController.text.replaceAll('O', '')),
-        'amount': double.parse(_amountController.text),
-        'payment_method': _paymentMethod,
-        'persons': personsData,
-        'village_name': _villageController.text.trim(),
-        'living_place': _livingPlaceController.text.trim(),
-        'phone': _mobileController.text.trim(),
-        'notes': _notesController.text.trim(),
-        'is_uncle': _isUncle,
-        'group_id': _currentGroupId,
-      }).select();
-
-      if (response.isNotEmpty) {
-        final moiId = response[0]['id'];
-        await _saveDenomination(moiId, eventId, operatorId);
-
-        // Update Moi Details display
-        setState(() {
-          if (_moiDetailsController.text.isNotEmpty) {
-            _moiDetailsController.text += '\n$summary';
-          } else {
-            _moiDetailsController.text = summary;
-          }
-        });
-
-        _clearFieldsExceptMoiDetails();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Entry saved to group. Add more or Save & Print for receipt.'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-
-        // Increment serial number for next entry
-        await _loadNextSerialNumber();
-      }
-    } catch (e) {
-      print('Error saving grouped entry: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving: $e')),
-      );
-    }
-  }
-
-  Future<void> _showReceiptTypeDialog() async {
-    return showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Select Receipt Type'),
-          content: const Text('How would you like to print the receipts?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _saveAndPrint(isSingleReceipt: true);
-              },
-              child: const Text('Single Receipt'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _saveAndPrint(isSingleReceipt: false);
-              },
-              child: const Text('Group Receipt'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _saveAndPrint({required bool isSingleReceipt}) async {
-    if (_amountController.text.isEmpty && _moiDetailsController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter amount or create group entries')),
-      );
-      return;
-    }
-
-    try {
-      final eventId = eventData?['id'];
-      final operatorId = eventData?['operator_id'];
-
-      if (eventId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event ID not found')),
-        );
-        return;
-      }
-
-      if (operatorId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Operator ID not found. Please go back and try again.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-        return;
-      }
-
-      // If there's current form data, save it
-      if (_amountController.text.isNotEmpty) {
-        // Prepare persons data
-        List<Map<String, dynamic>> personsData = [];
-        if (_name1Controller.text.isNotEmpty) {
-          personsData.add({
-            'init': _init1Controller.text,
-            'name': _name1Controller.text,
-            'qualification': _qualification1Controller.text,
-            'job': _job1Controller.text,
-          });
-        }
-        if (_name2Controller.text.isNotEmpty) {
-          personsData.add({
-            'init': _init2Controller.text,
-            'name': _name2Controller.text,
-            'qualification': _qualification2Controller.text,
-            'job': _job2Controller.text,
-          });
-        }
-
-        // Prepare the data to save
-        final dataToSave = {
-          'event_id': eventId,
-          'operator_id': operatorId,
-          'serial_no': int.tryParse(_serialNoController.text.replaceAll('O', '')),
-          'amount': double.parse(_amountController.text),
-          'payment_method': _paymentMethod,
-          'persons': personsData,
-          'village_name': _villageController.text.trim(),
-          'living_place': _livingPlaceController.text.trim(),
-          'phone': _mobileController.text.trim(),
-          'notes': _notesController.text.trim(),
-          'is_uncle': _isUncle,
-          'group_id': _currentGroupId,
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        if (_isEditMode && _editMoiId != null) {
-          // UPDATE MODE
-          // Store old data before updating
-          dataToSave['old_data'] = _originalData;
-
-          final response = await _supabase
-              .from('mois')
-              .update(dataToSave)
-              .eq('id', _editMoiId!)
-              .select();
-
-          if (response.isEmpty) {
-            throw Exception('Failed to update entry');
-          }
-
-          final moiId = response[0]['id'];
-
-          // Handle denomination based on payment method
-          if (_paymentMethod == 'CASH') {
-            // Update or insert denomination
-            await _updateDenomination(moiId, eventId, operatorId);
-          } else {
-            // Delete denomination if exists (switched from CASH to OTHERS)
-            try {
-              await _supabase
-                  .from('moi_denominations')
-                  .delete()
-                  .eq('moi_id', moiId);
-              print('Denomination deleted for payment method: $_paymentMethod');
-            } catch (e) {
-              print('Error deleting denomination: $e');
-            }
-          }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Moi updated successfully!'),
-            ),
-          );
+      // Load persons
+      if (moiData['persons'] != null) {
+        List<dynamic> personsList = moiData['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var person1 = personsList[0];
+          _init1Controller.text = person1['init'] ?? '';
+          _name1Controller.text = person1['name'] ?? '';
+          _qualification1Controller.text = person1['qualification'] ?? '';
+          _job1Controller.text = person1['job'] ?? '';
         } else {
-          // INSERT MODE (New entry)
-          final response = await _supabase.from('mois').insert(dataToSave).select();
-
-          if (response.isEmpty) {
-            throw Exception('Failed to save entry');
-          }
-
-          final moiId = response[0]['id'];
-          await _saveDenomination(moiId, eventId, operatorId);
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(isSingleReceipt
-                  ? 'Moi saved! Printing single receipts...'
-                  : 'Moi saved! Printing group receipt...'),
-            ),
-          );
+          _init1Controller.clear();
+          _name1Controller.clear();
+          _qualification1Controller.clear();
+          _job1Controller.clear();
+        }
+        if (personsList.length > 1) {
+          var person2 = personsList[1];
+          _init2Controller.text = person2['init'] ?? '';
+          _name2Controller.text = person2['name'] ?? '';
+          _qualification2Controller.text = person2['qualification'] ?? '';
+          _job2Controller.text = person2['job'] ?? '';
+        } else {
+          _init2Controller.clear();
+          _name2Controller.clear();
+          _qualification2Controller.clear();
+          _job2Controller.clear();
         }
       }
 
-      // TODO: Implement actual printing logic here
-      // You can call a print function based on isSingleReceipt flag
-      // For grouped entries, query DB with group_id = _currentGroupId
+      // ALWAYS load the amount regardless of payment method
+      var amountValue = moiData['amount']?.toString() ?? '0';
+      _amountController.text = amountValue;
+      print('Amount controller set to: $amountValue');
+    });
 
-      // Navigate to collection details if in edit mode
-      // Navigate to collection details if in edit mode
-      if (_isEditMode) {
-        // Clear everything after successful save and print
-        _clearAllFields();
+    // Load denominations only if payment method is CASH
+    if (_paymentMethod == 'CASH') {
+      await _loadDenominations(moiData['id']);
+    } else {
+      // Clear denominations without triggering calculation
+      _denomControllers.forEach((_, controller) {
+        controller.clear();
+      });
+    }
 
-        final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
-        eventDataWithOperator['operator_id'] = eventData!['operator_id'];
+    // Re-add listeners
+    _setupDenomListeners();
 
-        // Navigate to collection details screen
-        Navigator.pushReplacementNamed(
-          context,
-          '/operator/collection-details',
-          arguments: eventDataWithOperator,
-        );
-      } else {
-        // Clear everything for new entry mode
-        _clearAllFields();
-      }
-    } catch (e) {
-      print('Error saving moi: $e');
+    print('After loading - Amount controller: ${_amountController.text}, Payment: $_paymentMethod');
+
+    // Show a snackbar to indicate editing mode
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving moi: $e'),
-          duration: const Duration(seconds: 4),
+        const SnackBar(
+          content: Text('Entry loaded for editing. Make changes and click "Save & Print"'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 3),
         ),
       );
     }
   }
 
-  Future<void> _updateDenomination(String moiId, String eventId, String operatorId) async {
-    try {
-      final denomData = {
-        'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
-        'denom_200': int.tryParse(_denom200Controller.text) ?? 0,
-        'denom_100': int.tryParse(_denom100Controller.text) ?? 0,
-        'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
-        'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
-        'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
-        'denom_5': int.tryParse(_denom5Controller.text) ?? 0,
-        'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
-      };
+  // FIXED: Get next serial number from DB (highest + 1)
+  Future<void> _loadNextSerialNo() async {
+    if (_eventId == null || _operatorId == null) return;
 
-      // Check if denomination exists for this moi_id
-      final existing = await _supabase
-          .from('moi_denominations')
-          .select('moi_id')
-          .eq('moi_id', moiId)
+    try {
+      final response = await _supabase
+          .from('mois')
+          .select('serial_no')
+          .eq('event_id', _eventId!)
+          .eq('operator_id', _operatorId!)
+          .eq('is_deleted', false)
+          .order('serial_no', ascending: false)
+          .limit(1)
           .maybeSingle();
 
-      if (existing != null) {
-        // Update existing denomination
-        print('Updating existing denomination for moi_id: $moiId');
-        await _supabase
-            .from('moi_denominations')
-            .update(denomData)
-            .eq('moi_id', moiId);
-        print('Denomination updated successfully');
-      } else {
-        // Insert new denomination
-        print('Inserting new denomination for moi_id: $moiId');
-        await _supabase.from('moi_denominations').insert({
-          'moi_id': moiId,
-          'event_id': eventId,
-          'operator_id': operatorId,
-          ...denomData,
+      setState(() {
+        _serialNo = (response != null && response['serial_no'] != null)
+            ? (response['serial_no'] as int) + 1
+            : 1;
+      });
+    } catch (e) {
+      print('Error loading serial number: $e');
+      setState(() {
+        _serialNo = 1;
+      });
+    }
+  }
+
+  void _calculateTotal() {
+    // Only for CASH payment method
+    if (_paymentMethod == 'CASH') {
+      setState(() {
+        int total = 0;
+        _denomControllers.forEach((denom, controller) {
+          int count = int.tryParse(controller.text) ?? 0;
+          total += denom * count;
         });
-        print('Denomination inserted successfully');
+        _amountController.text = total > 0 ? total.toString() : '';
+      });
+    }
+  }
+
+  // FIXED: Get total amount - preserve existing amount for OTHERS payment method
+  int _getTotalAmount() {
+    if (_paymentMethod == 'CASH') {
+      int total = 0;
+      _denomControllers.forEach((denom, controller) {
+        int count = int.tryParse(controller.text) ?? 0;
+        total += denom * count;
+      });
+      return total;
+    } else {
+      // For OTHERS payment method, get amount from text field
+      // Return the current amount or 0 if parsing fails
+      String amountText = _amountController.text.trim();
+      if (amountText.isEmpty) return 0;
+
+      // Try to parse as double first, then convert to int
+      double? doubleValue = double.tryParse(amountText);
+      if (doubleValue != null) {
+        return doubleValue.round();
+      }
+      return 0;
+    }
+  }
+
+  int _getTotalCount() {
+    int count = 0;
+    _denomControllers.forEach((_, controller) {
+      count += int.tryParse(controller.text) ?? 0;
+    });
+    return count;
+  }
+
+  // FIXED: Get next group ID from DB (highest + 1)
+  Future<int> _getNextGroupId() async {
+    try {
+      final maxGroupResponse = await _supabase
+          .from('mois')
+          .select('group_id')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false)
+          .not('group_id', 'is', null)
+          .order('group_id', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      return (maxGroupResponse != null && maxGroupResponse['group_id'] != null)
+          ? (maxGroupResponse['group_id'] as int) + 1
+          : 1;
+    } catch (e) {
+      print('Error getting next group ID: $e');
+      return 1;
+    }
+  }
+
+  Future<void> _handleGroup() async {
+    if (!_validateForm()) return;
+
+    try {
+      // CRITICAL: Refresh serial number and group ID from DB before saving
+      await _loadNextSerialNo();
+
+      // Generate or use existing group_id
+      int groupId;
+      if (_currentGroupId != null) {
+        groupId = _currentGroupId!;
+      } else {
+        groupId = await _getNextGroupId();
+      }
+
+      // If in edit mode, update the existing entry with group_id
+      final moiId = await _saveMoi(groupId, forceUpdate: _isEditMode);
+
+      if (moiId != null) {
+        // Update state
+        setState(() {
+          _currentGroupId = groupId;
+        });
+
+        // Reload grouped MOIs
+        await _loadGroupedMois();
+
+        // Clear form for next entry (but keep group context)
+        await _clearFormForNextEntry();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isEditMode
+                  ? 'Entry updated and added to group successfully!'
+                  : 'Entry added to group successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e) {
-      print('Error updating denomination: $e');
-      // Show error to user
+      print('Error in group operation: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating denomination: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     }
   }
 
-  Future<void> _handleSaveAndPrint() async {
-    if (_moiDetailsController.text.isNotEmpty) {
-      // Show dialog if there are grouped entries
-      await _showReceiptTypeDialog();
-    } else {
-      // Direct save for single entry
-      await _saveAndPrint(isSingleReceipt: true);
+  Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
+    List<Map<String, dynamic>> personsData = [];
+
+    // Add Person 1 if has data
+    if (_name1Controller.text.trim().isNotEmpty) {
+      personsData.add({
+        'init': _init1Controller.text,
+        'name': _name1Controller.text,
+        'qualification': _qualification1Controller.text,
+        'job': _job1Controller.text,
+      });
+    }
+
+    // Add Person 2 if has data
+    if (_name2Controller.text.trim().isNotEmpty) {
+      personsData.add({
+        'init': _init2Controller.text,
+        'name': _name2Controller.text,
+        'qualification': _qualification2Controller.text,
+        'job': _job2Controller.text,
+      });
+    }
+
+    final moiData = {
+      'event_id': _eventId,
+      'operator_id': _operatorId,
+      'serial_no': _serialNo,
+      'amount': _getTotalAmount(),
+      'payment_method': _paymentMethod,
+      'persons': personsData,
+      'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
+      'living_place': _livingPlaceController.text.trim().isEmpty ? null : _livingPlaceController.text.trim(),
+      'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      'is_uncle': _isUncle,
+      'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'group_id': groupId,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      dynamic response;
+      String moiId;
+
+      // Update if we're editing an existing MOI or if forceUpdate is true
+      if ((_isEditMode || forceUpdate) && _editingMoiId != null) {
+        // Update existing MOI
+        response = await _supabase
+            .from('mois')
+            .update(moiData)
+            .eq('id', _editingMoiId!)
+            .select()
+            .single();
+        moiId = _editingMoiId!;
+      } else {
+        // Insert new MOI
+        moiData['created_at'] = DateTime.now().toIso8601String();
+        response = await _supabase
+            .from('mois')
+            .insert(moiData)
+            .select()
+            .single();
+        moiId = response['id'];
+      }
+
+      // Save denominations
+      await _saveDenominations(moiId);
+
+      return moiId;
+    } catch (e) {
+      print('Error saving MOI: $e');
+      rethrow;
     }
   }
 
-  Future<void> _saveDenomination(String moiId, String eventId, String operatorId) async {
+  Future<void> _saveDenominations(String moiId) async {
     // Only save denomination if payment method is CASH
     if (_paymentMethod != 'CASH') return;
 
+    final denomData = {
+      'moi_id': moiId,
+      'event_id': _eventId,
+      'operator_id': _operatorId,
+      'denom_500': int.tryParse(_denomControllers[500]!.text) ?? 0,
+      'denom_200': int.tryParse(_denomControllers[200]!.text) ?? 0,
+      'denom_100': int.tryParse(_denomControllers[100]!.text) ?? 0,
+      'denom_50': int.tryParse(_denomControllers[50]!.text) ?? 0,
+      'denom_20': int.tryParse(_denomControllers[20]!.text) ?? 0,
+      'denom_10': int.tryParse(_denomControllers[10]!.text) ?? 0,
+      'denom_5': int.tryParse(_denomControllers[5]!.text) ?? 0,
+      'denom_1': int.tryParse(_denomControllers[1]!.text) ?? 0,
+    };
+
+    await _supabase
+        .from('moi_denominations')
+        .upsert(denomData);
+  }
+
+  // FIXED: Stay on same page after save & print
+  Future<void> _handleSaveAndPrint() async {
+    // CRITICAL: Refresh serial number from DB before saving to prevent duplicates
+    if (!_isEditMode) {
+      await _loadNextSerialNo();
+    }
+
+    // If we have grouped entries, validate and save/update the current form
+    if (_groupedMois.isNotEmpty) {
+      // If we're editing an entry, validate and update it
+      if (_isEditMode && _editingMoiId != null) {
+        if (!_validateForm()) return;
+
+        try {
+          await _saveMoi(_currentGroupId);
+
+          // Reload the grouped list to show updated data
+          await _loadGroupedMois();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Entry updated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            // FIXED: Navigate to collection details in edit mode
+            Navigator.pushReplacementNamed(
+              context,
+              '/operator/collection-details',
+              arguments: {'id': _eventId, 'operator_id': _operatorId},
+            );
+          }
+          return;
+        } catch (e) {
+          print('Error updating: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error: $e')),
+            );
+          }
+          return;
+        }
+      }
+
+      // If not editing, just show success message (all entries already saved)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All grouped entries saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Stay on the same page - don't navigate back
+      }
+      return;
+    }
+
+    // Otherwise, validate and save the current form
+    if (!_validateForm()) return;
+
     try {
-      await _supabase.from('moi_denominations').insert({
-        'moi_id': moiId,
-        'event_id': eventId,
-        'operator_id': operatorId,
-        'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
-        'denom_200': int.tryParse(_denom200Controller.text) ?? 0,
-        'denom_100': int.tryParse(_denom100Controller.text) ?? 0,
-        'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
-        'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
-        'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
-        'denom_5': int.tryParse(_denom5Controller.text) ?? 0,
-        'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
-      });
+      await _saveMoi(_currentGroupId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isEditMode ? 'MOI updated successfully!' : 'MOI saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // FIXED: Navigate to collection details in edit mode, stay on page in non-edit mode
+        if (_isEditMode) {
+          Navigator.pushReplacementNamed(
+            context,
+            '/operator/collection-details',
+            arguments: {'id': _eventId, 'operator_id': _operatorId},
+          );
+        } else {
+          // Non-edit mode: stay on the page, just clear the form
+          await _clearFormForNextEntry();
+        }
+      }
     } catch (e) {
-      print('Error saving denomination: $e');
+      print('Error saving: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+
+  bool _validateForm() {
+    // Check if at least one person has a name
+    bool hasValidPerson = _name1Controller.text.trim().isNotEmpty ||
+        _name2Controller.text.trim().isNotEmpty;
+
+    if (!hasValidPerson) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one person with a name')),
+      );
+      return false;
+    }
+
+    // Validate amount based on payment method
+    if (_paymentMethod == 'CASH') {
+      // For CASH, check denomination total
+      if (_getTotalAmount() == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter denomination details')),
+        );
+        return false;
+      }
+    } else {
+      // For OTHERS, check amount field
+      if (_amountController.text.trim().isEmpty || _getTotalAmount() == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter amount')),
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // FIXED: Load next serial number when clearing form
+  Future<void> _clearFormForNextEntry() async {
+    // Increment serial number for next entry
+    await _loadNextSerialNo();
+
+    // Clear all form fields except group context
+    _phoneController.clear();
+    _villageController.clear();
+    _livingPlaceController.clear();
+    _notesController.clear();
+    _amountController.clear();
+
+    // Clear person controllers
+    _init1Controller.clear();
+    _name1Controller.clear();
+    _qualification1Controller.clear();
+    _job1Controller.clear();
+    _init2Controller.clear();
+    _name2Controller.clear();
+    _qualification2Controller.clear();
+    _job2Controller.clear();
+
+    // Reset denominations
+    _denomControllers.forEach((_, controller) {
+      controller.clear();
+    });
+
+    setState(() {
+      _paymentMethod = 'CASH';
+      _isUncle = false;
+      _isEditMode = false;
+      _editingMoiId = null;
+    });
+  }
+
+  void _handleAddEntry() {
+    // This button allows adding another entry to existing group
+    _clearFormForNextEntry();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Ready to add new entry to group'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _handleClear() async {
+    setState(() {
+      _phoneController.clear();
+      _villageController.clear();
+      _livingPlaceController.clear();
+      _notesController.clear();
+      _amountController.clear();
+      _init1Controller.clear();
+      _name1Controller.clear();
+      _qualification1Controller.clear();
+      _job1Controller.clear();
+      _init2Controller.clear();
+      _name2Controller.clear();
+      _qualification2Controller.clear();
+      _job2Controller.clear();
+      _denomControllers.forEach((_, controller) => controller.clear());
+      _paymentMethod = 'CASH';
+      _isUncle = false;
+      _currentGroupId = null;
+      _groupedMois.clear();
+      _isEditMode = false;
+      _editingMoiId = null;
+    });
+    await _loadNextSerialNo();
+  }
+
+  String _getPersonsDisplay(dynamic persons) {
+    if (persons == null) return 'No name';
+    try {
+      List<dynamic> personsList = persons as List;
+      if (personsList.isEmpty) return 'No name';
+
+      List<String> names = [];
+      for (var person in personsList) {
+        String name = person['name'] ?? '';
+        if (name.isNotEmpty) {
+          names.add(name);
+        }
+      }
+      return names.isEmpty ? 'No name' : names.join(', ');
+    } catch (e) {
+      return 'No name';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -800,9 +766,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Collect Moi',
-          style: TextStyle(
+        title: Text(
+          _isEditMode ? 'Edit MOI' : 'Collect Moi',
+          style: const TextStyle(
             color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -810,539 +776,147 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildSerialAndActions(),
+            const SizedBox(height: 16),
+            _buildTextField('Mobile Number', _phoneController),
+            const SizedBox(height: 16),
+            _buildVillageAndLivingPlace(),
+            const SizedBox(height: 16),
+            _buildPersonVertical(
+              'Person 1',
+              _init1Controller,
+              _name1Controller,
+              _qualification1Controller,
+              _job1Controller,
+            ),
+            const SizedBox(height: 16),
+            _buildPersonVertical(
+              'Person 2',
+              _init2Controller,
+              _name2Controller,
+              _qualification2Controller,
+              _job2Controller,
+            ),
+            const SizedBox(height: 16),
+            _buildTextField('Notes', _notesController, maxLines: 3),
+            const SizedBox(height: 16),
+            _buildPaymentMethod(),
+            const SizedBox(height: 16),
+            if (_paymentMethod == 'CASH')
+              _buildDenominations()
+            else
+              _buildAmountField(),
+            const SizedBox(height: 16),
+            if (_groupedMois.isNotEmpty) _buildMoiDetails(),
+            const SizedBox(height: 16),
+            _buildActionButtons(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Find this method in your code and replace the condition:
+
+  Widget _buildSerialAndActions() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Text(
+                'Serial No.',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+                child: Text(
+                  'O${_serialNo?.toString() ?? '0'}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // FIXED: Hide action buttons when in edit mode OR when a group is active
+          if (!_isEditMode && _currentGroupId == null) ...[
+            const SizedBox(height: 12),
+            Row(
               children: [
-                // Header with Serial No and Action Buttons
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          const Text(
-                            'Serial No.',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Container(
-                            width: 100,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.black, width: 2),
-                              color: Colors.grey[200],
-                            ),
-                            child: Center(
-                              child: Text(
-                                _serialNoController.text,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildTopButton('Sample Receipt'),
-                          _buildTopButton('Cash Drawing'),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildTopButton('Exchange Denomination'),
-                          _buildTopButton('Collection Details'),
-                        ],
-                      ),
-                    ],
-                  ),
+                Expanded(child: _buildActionButton('Sample Receipt', () {})),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildActionButton('Cash Drawing', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/cash_withdrawal',
+                      arguments: {'id': _eventId, 'operator_id': _operatorId},
+                    );
+                  }),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Mobile Number
-                _buildInputField('Mobile Number', _mobileController,
-                    keyboardType: TextInputType.phone),
-
-                const SizedBox(height: 16),
-
-                // Village Name and Living Place
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Village Name',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            TextField(
-                              controller: _villageController,
-                              decoration: const InputDecoration(
-                                border: InputBorder.none,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 2,
-                        height: 60,
-                        color: Colors.black,
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Living Place',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              TextField(
-                                controller: _livingPlaceController,
-                                decoration: const InputDecoration(
-                                  border: InputBorder.none,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Person 1 Details (Vertical Layout)
-                _buildPersonVertical(
-                  'Person 1',
-                  _init1Controller,
-                  _name1Controller,
-                  _qualification1Controller,
-                  _job1Controller,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Person 2 Details (Vertical Layout)
-                _buildPersonVertical(
-                  'Person 2',
-                  _init2Controller,
-                  _name2Controller,
-                  _qualification2Controller,
-                  _job2Controller,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Notes
-                _buildNotesField(),
-
-                const SizedBox(height: 16),
-
-                // Payment Method Selection
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Payment Method',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('Cash'),
-                              value: 'CASH',
-                              groupValue: _paymentMethod,
-                              // For CASH option:
-                              onChanged: (value) {
-                                setState(() {
-                                  _paymentMethod = value!;
-                                  // Clear amount field when switching to CASH
-                                  _amountController.clear();
-                                  _totalAmount = 0.0;
-                                  _totalCount = 0;
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                            ),
-                          ),
-                          Expanded(
-                            child: RadioListTile<String>(
-                              title: const Text('Check/Advance/UPI'),
-                              value: 'OTHERS',
-                              groupValue: _paymentMethod,
-                              // For OTHERS option:
-                              onChanged: (value) {
-                                setState(() {
-                                  _paymentMethod = value!;
-                                  // Clear denomination fields when switching to OTHERS
-                                  _denom500Controller.clear();
-                                  _denom200Controller.clear();
-                                  _denom100Controller.clear();
-                                  _denom50Controller.clear();
-                                  _denom20Controller.clear();
-                                  _denom10Controller.clear();
-                                  _denom5Controller.clear();
-                                  _denom1Controller.clear();
-                                  _totalAmount = 0.0;
-                                  _totalCount = 0;
-                                });
-                              },
-                              contentPadding: EdgeInsets.zero,
-                              dense: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Amount Section - Only show if payment method is NOT CASH
-                if (_paymentMethod != 'CASH') ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.black, width: 2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Amount',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          height: 50,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black, width: 2),
-                          ),
-                          child: TextField(
-                            controller: _amountController,
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _isUncle,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isUncle = value ?? false;
-                                });
-                              },
-                            ),
-                            const Text('Uncle'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                // Denomination Table - Only show if payment method is CASH
-                if (_paymentMethod == 'CASH') ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.black, width: 2),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Denomination',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDenomRow('500', _denom500Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('200', _denom200Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('100', _denom100Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('50', _denom50Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('20', _denom20Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('10', _denom10Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('5', _denom5Controller),
-                        const SizedBox(height: 8),
-                        _buildDenomRow('1', _denom1Controller),
-                        const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            border: Border.all(color: Colors.black, width: 2),
-                          ),
-                          child: Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Total Count: $_totalCount',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'Total Amount:',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  Flexible(
-                                    child: Text(
-                                      '₹${_totalAmount.toStringAsFixed(0)}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _isUncle,
-                              onChanged: (value) {
-                                setState(() {
-                                  _isUncle = value ?? false;
-                                });
-                              },
-                            ),
-                            const Text('Uncle'),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // Moi Details - REPLACE THE ENTIRE CONTAINER WITH THIS:
-                _buildMoiDetailsSection(),
-
-                const SizedBox(height: 20),
-
-                // Action Buttons - Updated with 3 buttons
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _handleSaveAndPrint,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.zero,
-                                  side: const BorderSide(
-                                      color: Colors.black, width: 2),
-                                ),
-                              ),
-                              child: const Text(
-                                'Save & Print',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _handleGroup,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.zero,
-                                  side: const BorderSide(
-                                      color: Colors.black, width: 2),
-                                ),
-                              ),
-                              child: const Text(
-                                'Group',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _clearAllFields,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.zero,
-                            side: const BorderSide(
-                                color: Colors.black, width: 2),
-                          ),
-                        ),
-                        child: const Text(
-                          'Clear',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
               ],
             ),
-          ),
-        ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton('Exchange\nDenomination', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/exchange-denomination',
+                      arguments: {'id': _eventId, 'operator_id': _operatorId},
+                    );
+                  }),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildActionButton('Collection Details', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/collection-details',
+                      arguments: {'id': _eventId, 'operator_id': _operatorId},
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
 
-  Widget _buildTopButton(String label) {
-    return Expanded(
-      child: Container(
-        height: 40,
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.black, width: 2),
-        ),
-        child: Material(
-          color: Colors.white,
-          child: InkWell(
-            onTap: () {
-              if (label == 'Cash Drawing') {
-                Navigator.pushNamed(
-                  context,
-                  '/operator/cash_withdrawal',
-                  arguments: eventData,
-                );
-              } else if (label == 'Exchange Denomination') {
-                Navigator.pushNamed(
-                  context,
-                  '/operator/exchange-denomination',
-                  arguments: eventData,
-                );
-              } else if (label == 'Collection Details') {
-                final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
-                eventDataWithOperator['operator_id'] = eventData!['operator_id']; // Ensure operator_id is included
-
-                Navigator.pushNamed(
-                  context,
-                  '/operator/collection-details',
-                  arguments: eventDataWithOperator,
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$label clicked')),
-                );
-              }
-            },
-            child: Center(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-              ),
+  Widget _buildActionButton(String label, VoidCallback onPressed) {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black, width: 2),
+        color: Colors.white,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          child: Center(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ),
@@ -1350,8 +924,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller,
-      {TextInputType? keyboardType}) {
+  Widget _buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1361,18 +934,52 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
           TextField(
             controller: controller,
-            keyboardType: keyboardType,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
+            maxLines: maxLines,
+            decoration: const InputDecoration(border: InputBorder.none),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVillageAndLivingPlace() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Village Name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _villageController,
+                  decoration: const InputDecoration(border: InputBorder.none),
+                ),
+              ],
+            ),
+          ),
+          Container(width: 2, height: 60, color: Colors.black, margin: const EdgeInsets.symmetric(horizontal: 16)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Living Place', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _livingPlaceController,
+                  decoration: const InputDecoration(border: InputBorder.none),
+                ),
+              ],
             ),
           ),
         ],
@@ -1396,133 +1003,46 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          // Init
-          Row(
-            children: [
-              const SizedBox(
-                width: 100,
-                child: Text(
-                  'Init',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: TextField(
-                    controller: initController,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildPersonField('Init', initController),
           const SizedBox(height: 12),
-          // Name
-          Row(
-            children: [
-              const SizedBox(
-                width: 100,
-                child: Text(
-                  'Name',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildPersonField('Name', nameController),
           const SizedBox(height: 12),
-          // Qualification
-          Row(
-            children: [
-              const SizedBox(
-                width: 100,
-                child: Text(
-                  'Qualification',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: TextField(
-                    controller: qualificationController,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildPersonField('Qualification', qualificationController),
           const SizedBox(height: 12),
-          // Job
-          Row(
-            children: [
-              const SizedBox(
-                width: 100,
-                child: Text(
-                  'Job',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black, width: 1),
-                  ),
-                  child: TextField(
-                    controller: jobController,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildPersonField('Job', jobController),
         ],
       ),
     );
   }
 
-  Widget _buildNotesField() {
+  Widget _buildPersonField(String label, TextEditingController controller) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+        ),
+        Expanded(
+          child: Container(
+            height: 40,
+            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 1)),
+            child: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentMethod() {
     return Container(
-      height: 100,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1531,28 +1051,167 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Notes',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          Expanded(
-            child: TextField(
-              controller: _notesController,
-              maxLines: null,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
+          const Text('Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: RadioListTile<String>(
+                  title: const Text('Cash'),
+                  value: 'CASH',
+                  groupValue: _paymentMethod,
+                  onChanged: (value) {
+                    setState(() {
+                      _paymentMethod = value!;
+                      // Only clear amount if switching from OTHERS to CASH
+                      if (_amountController.text.isNotEmpty) {
+                        _amountController.clear();
+                      }
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
               ),
-            ),
+              Expanded(
+                child: RadioListTile<String>(
+                  title: const Text('Check/\nAdvance/UPI'),
+                  value: 'OTHERS',
+                  groupValue: _paymentMethod,
+                  onChanged: (value) {
+                    setState(() {
+                      _paymentMethod = value!;
+                      // Only clear denominations if switching from CASH to OTHERS
+                      _denomControllers.forEach((_, controller) => controller.clear());
+                    });
+                  },
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDenomRow(String denomination, TextEditingController controller) {
+  Widget _buildAmountField() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Amount', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Container(
+            height: 50,
+            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
+            child: TextField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          CheckboxListTile(
+            title: const Text('Uncle'),
+            value: _isUncle,
+            onChanged: (value) {
+              setState(() {
+                _isUncle = value ?? false;
+              });
+            },
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDenominations() {
+    final denoms = [500, 200, 100, 50, 20, 10, 5, 1];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Denomination', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+          ...denoms.map((denom) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _buildDenomRow(denom),
+          )),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total Count:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('${_getTotalCount()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Total Amount:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    Flexible(
+                      child: Text(
+                        '₹${_getTotalAmount()}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          CheckboxListTile(
+            title: const Text('Uncle'),
+            value: _isUncle,
+            onChanged: (value) {
+              setState(() {
+                _isUncle = value ?? false;
+              });
+            },
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDenomRow(int denom) {
+    final controller = _denomControllers[denom]!;
+    int count = int.tryParse(controller.text) ?? 0;
+    int total = denom * count;
+
     return Row(
       children: [
         Container(
@@ -1563,27 +1222,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             color: Colors.grey[300],
           ),
           child: Center(
-            child: Text(
-              '₹ $denomination',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
+            child: Text('₹ $denom', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ),
         const SizedBox(width: 8),
-        const Text(
-          'x',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        const Text('x', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
             height: 40,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black, width: 2),
-            ),
+            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: controller,
               keyboardType: TextInputType.number,
@@ -1593,16 +1241,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
                 hintText: '0',
+                hintStyle: TextStyle(color: Colors.grey),
               ),
-              onChanged: (value) => _calculateDenomination(),
             ),
           ),
         ),
         const SizedBox(width: 8),
-        const Text(
-          '=',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        const Text('=', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(width: 8),
         Container(
           width: 100,
@@ -1617,13 +1262,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
-                  ((int.tryParse(controller.text) ?? 0) *
-                      int.parse(denomination))
-                      .toString(),
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  total.toString(),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               ),
             ),
@@ -1633,33 +1273,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildMoiDetailsSection() {
+  Widget _buildMoiDetails() {
     return Container(
-      height: 200,
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.black, width: 2),
-              ),
+              border: Border(bottom: BorderSide(color: Colors.black, width: 2)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Moi Details',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                const Text('Moi Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 if (_currentGroupId != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -1670,35 +1303,197 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     ),
                     child: Text(
                       'Group ID - $_currentGroupId',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue,
-                      ),
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                   ),
               ],
             ),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextField(
-                controller: _moiDetailsController,
-                maxLines: null,
-                expands: true,
-                readOnly: true,
-                style: const TextStyle(fontSize: 13),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Grouped entries will appear here...',
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-              ),
+          Container(
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: _groupedMois.isEmpty
+                ? const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Grouped entries will appear here...', style: TextStyle(color: Colors.grey)),
+            )
+                : ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(12),
+              itemCount: _groupedMois.length,
+              separatorBuilder: (context, index) => const Divider(color: Colors.black, thickness: 1, height: 16),
+              itemBuilder: (context, index) {
+                final moi = _groupedMois[index];
+                final isCurrentlyEditing = _editingMoiId == moi['id'];
+
+                return InkWell(
+                  onTap: () => _loadGroupedEntryForEdit(moi),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: isCurrentlyEditing ? Colors.blue.shade50 : Colors.transparent,
+                      border: isCurrentlyEditing ? Border.all(color: Colors.blue, width: 2) : null,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _getPersonsDisplay(moi['persons']),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: isCurrentlyEditing ? Colors.blue : Colors.black,
+                                ),
+                              ),
+                              if (moi['village_name'] != null)
+                                Text(
+                                  moi['village_name'],
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        if (isCurrentlyEditing)
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'EDITING',
+                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        Text(
+                          '₹${moi['amount']}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: isCurrentlyEditing ? Colors.blue : Colors.green,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(color: Colors.green, border: Border.all(color: Colors.black, width: 2)),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _handleSaveAndPrint,
+                    child: const Center(
+                      child: Text(
+                        'Save & Print',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(color: Colors.blue, border: Border.all(color: Colors.black, width: 2)),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _handleGroup,
+                    child: const Center(
+                      child: Text(
+                        'Group',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_currentGroupId != null) ...[
+          Container(
+            width: double.infinity,
+            height: 50,
+            decoration: BoxDecoration(color: Colors.purple, border: Border.all(color: Colors.black, width: 2)),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleAddEntry,
+                child: const Center(
+                  child: Text(
+                    'ADD ENTRY',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Container(
+          width: double.infinity,
+          height: 50,
+          decoration: BoxDecoration(color: Colors.orange, border: Border.all(color: Colors.black, width: 2)),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _handleClear,
+              child: const Center(
+                child: Text(
+                  'Clear',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _villageController.dispose();
+    _livingPlaceController.dispose();
+    _notesController.dispose();
+    _amountController.dispose();
+    _init1Controller.dispose();
+    _name1Controller.dispose();
+    _qualification1Controller.dispose();
+    _job1Controller.dispose();
+    _init2Controller.dispose();
+    _name2Controller.dispose();
+    _qualification2Controller.dispose();
+    _job2Controller.dispose();
+    _denomControllers.forEach((_, controller) => controller.dispose());
+    super.dispose();
   }
 }

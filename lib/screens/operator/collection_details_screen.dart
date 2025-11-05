@@ -53,7 +53,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           .eq('event_id', _eventId!)
           .eq('operator_id', _operatorId!)
           .eq('is_deleted', false)
-          .order('serial_no', ascending: true);
+          .order('created_at', ascending: false);
 
       double total = 0.0;
       for (var moi in response) {
