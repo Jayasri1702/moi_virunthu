@@ -378,20 +378,89 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  // Replace the _handleGroup method in your collect_moi_screen.dart with this:
+
+  // Replace the _handleGroup method in your collect_moi_screen.dart with this:
+
   Future<void> _handleGroup() async {
     if (!_validateForm()) return;
 
+    // CASE 1: Editing an existing entry that's ALREADY in a group
+    if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
+      // User is editing an existing grouped entry and clicked Group button
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This entry is already in a group! Use "Save & Print" to update it, or click "Add Entry" to add a new entry to the group.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+      return; // Don't proceed
+    }
+
+    // CASE 2: Editing an existing standalone entry (not in group) - Convert to group
+    if (_isEditMode && _editingMoiId != null && _currentGroupId == null) {
+      try {
+        // Assign a new group ID to this existing entry
+        int groupId = await _getNextGroupId();
+
+        // Update the existing entry with group_id (no new serial number)
+        final moiData = {
+          'group_id': groupId,
+          'updated_at': DateTime.now().toIso8601String(),
+          'old_data': _originalData, // Store old data for audit
+        };
+
+        await _supabase
+            .from('mois')
+            .update(moiData)
+            .eq('id', _editingMoiId!);
+
+        setState(() {
+          _currentGroupId = groupId;
+        });
+
+        await _loadGroupedMois();
+        await _clearFormForNextEntry();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Entry converted to group successfully! Add more entries to this group.'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        print('Error converting to group: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+    }
+
+    // CASE 3: Adding a NEW entry to an existing or new group
     try {
+      // Load next serial for NEW entries only
       await _loadNextSerialNo();
 
       int groupId;
       if (_currentGroupId != null) {
+        // Use existing group
         groupId = _currentGroupId!;
       } else {
+        // Create new group
         groupId = await _getNextGroupId();
       }
 
-      final moiId = await _saveMoi(groupId, forceUpdate: _isEditMode);
+      final moiId = await _saveMoi(groupId, forceUpdate: false); // Never force update in group
 
       if (moiId != null) {
         setState(() {
@@ -403,10 +472,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_isEditMode
-                  ? 'Entry updated and added to group successfully!'
-                  : 'Entry added to group successfully!'),
+            const SnackBar(
+              content: Text('Entry added to group successfully!'),
               backgroundColor: Colors.green,
             ),
           );
@@ -416,12 +483,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       print('Error in group operation: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
+  // Also update _saveMoi to be more explicit:
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
     List<Map<String, dynamic>> personsData = [];
 
@@ -463,8 +531,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       dynamic response;
       String moiId;
 
-      if ((_isEditMode || forceUpdate) && _editingMoiId != null) {
-        // REQUIREMENT 3: UPDATE MODE - Store old data
+      // Only update if explicitly in edit mode with an existing ID AND forceUpdate is true
+      if (forceUpdate && _editingMoiId != null) {
+        // UPDATE MODE - Store old data
         moiData['old_data'] = _originalData;
 
         response = await _supabase
@@ -474,6 +543,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             .select()
             .single();
         moiId = _editingMoiId!;
+
+        print('Updated existing MOI: $moiId with serial_no: $_serialNo');
       } else {
         // INSERT NEW MOI
         moiData['created_at'] = DateTime.now().toIso8601String();
@@ -483,6 +554,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             .select()
             .single();
         moiId = response['id'];
+
+        print('Inserted new MOI: $moiId with serial_no: $_serialNo');
       }
 
       await _saveDenominations(moiId);
@@ -516,16 +589,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         .upsert(denomData);
   }
 
-  // REQUIREMENT 2: Auto-add to group on Save & Print
   Future<void> _handleSaveAndPrint() async {
+    // Don't load next serial if we're editing
     if (!_isEditMode) {
       await _loadNextSerialNo();
     }
 
-    // REQUIREMENT 2: Check if we have a current group and form has data
+    // Auto-add to group if user forgot to click Group button
     if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
-      // User filled form and has active group but forgot to click Group button
-      // Auto-add to group before saving
       if (!_validateForm()) return;
 
       try {
@@ -540,7 +611,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           );
 
-          // Navigate to collection details
           Navigator.pushReplacementNamed(
             context,
             '/operator/collection-details',
@@ -552,20 +622,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         print('Error auto-saving to group: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
         return;
       }
     }
 
-    // Handle grouped entries
+    // Handle grouped entries - UPDATE MODE
     if (_groupedMois.isNotEmpty) {
       if (_isEditMode && _editingMoiId != null) {
         if (!_validateForm()) return;
 
         try {
-          await _saveMoi(_currentGroupId);
+          // Pass forceUpdate=true to update the existing entry
+          await _saveMoi(_currentGroupId, forceUpdate: true);
           await _loadGroupedMois();
 
           if (mounted) {
@@ -587,19 +658,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           print('Error updating: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e')),
+              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
             );
           }
           return;
         }
       }
 
+      // All grouped entries saved
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('All grouped entries saved successfully!'),
             backgroundColor: Colors.green,
           ),
+        );
+
+        Navigator.pushReplacementNamed(
+          context,
+          '/operator/collection-details',
+          arguments: {'id': _eventId, 'operator_id': _operatorId},
         );
       }
       return;
@@ -609,7 +687,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (!_validateForm()) return;
 
     try {
-      await _saveMoi(_currentGroupId);
+      // Pass forceUpdate based on edit mode
+      await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -633,13 +712,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       print('Error saving: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  // Helper method to check if form has any data
+// Helper method to check if form has any data
   bool _hasFormData() {
     return _name1Controller.text.trim().isNotEmpty ||
         _name2Controller.text.trim().isNotEmpty ||

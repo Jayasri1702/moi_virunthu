@@ -158,6 +158,7 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
         'note1_cost': int.tryParse(_note1Controller.text) ?? 0,
         'note2_cost': int.tryParse(_note2Controller.text) ?? 0,
         'updated_at': DateTime.now().toIso8601String(),
+        'net_profit': _calculateNetProfit().toInt(),  // Add this line
       })
           .eq('id', _event!['id']);
 
