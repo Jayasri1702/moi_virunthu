@@ -719,7 +719,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final booked = double.tryParse(_bookedAmount.text) ?? 0;
     final advance = double.tryParse(_advanceAmount.text) ?? 0;
     final discount = double.tryParse(_discountAmount.text) ?? 0;
-    return booked - advance - discount;
+    final balanceLive = _editingEvent?['balance_live_amount'] != null
+        ? double.tryParse(_editingEvent!['balance_live_amount'].toString()) ?? 0
+        : 0;
+
+    return booked - advance - discount - balanceLive;
   }
 
   Future<void> _selectDate() async {
@@ -1334,6 +1338,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
                             const SizedBox(height: 16),
 
+
+// Replace the amount field sections in your create_event_screen.dart with these:
+
+// Around line 1240-1280, replace the Booked Amount field:
                             _buildFormRow(
                               label: 'Booked Amount',
                               required: true,
@@ -1344,7 +1352,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   border: OutlineInputBorder(),
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   isDense: true,
-                                  hintText: '0.00', // ADD THIS LINE to each amount field
+                                  hintText: '0.00',
                                 ),
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 inputFormatters: [
@@ -1361,6 +1369,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             const SizedBox(height: 16),
 
+                            // Replace Advance Amount field:
                             _buildFormRow(
                               label: 'Advance Amount',
                               required: false,
@@ -1371,7 +1380,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   border: OutlineInputBorder(),
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   isDense: true,
-                                  hintText: '0.00', // ADD THIS LINE to each amount field
+                                  hintText: '0.00',
                                 ),
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 inputFormatters: [
@@ -1382,6 +1391,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             const SizedBox(height: 16),
 
+                            // Replace Discount Amount field:
                             _buildFormRow(
                               label: 'Discount Amount',
                               required: false,
@@ -1390,9 +1400,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 controller: _discountAmount,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
-                                  hintText: '0.00', // ADD THIS LINE to each amount field
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   isDense: true,
+                                  hintText: '0.00',
                                 ),
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 inputFormatters: [
@@ -1403,6 +1413,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             const SizedBox(height: 16),
 
+                            // The Balance Amount field remains the same (read-only calculated field)
                             _buildFormRow(
                               label: 'Balance Amount',
                               required: false,
@@ -1410,7 +1421,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               child: InputDecorator(
                                 decoration: InputDecoration(
                                   border: const OutlineInputBorder(),
-                                  hintText: '0.00', // ADD THIS LINE to each amount field
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   fillColor: Colors.grey[200],
                                   filled: true,

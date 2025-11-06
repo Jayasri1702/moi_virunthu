@@ -41,6 +41,16 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     }
   }
 
+  void _manageExpenses(Map<String, dynamic> event) async {
+    await Navigator.pushNamed(
+      context,
+      '/admin/event-expenses',
+      arguments: event,
+    );
+    // Refresh events when returning from expenses page
+    _loadEvents();
+  }
+
   Future<void> _deleteEvent(Map<String, dynamic> event) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -663,6 +673,14 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                         icon: const Icon(Icons.delete, size: 18, color: Colors.red),
                                         onPressed: () => _deleteEvent(event),
                                         tooltip: 'Delete',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: const Icon(Icons.currency_rupee, size: 18, color: Colors.green),
+                                        onPressed: () => _manageExpenses(event),
+                                        tooltip: 'Manage Expenses',
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                       ),

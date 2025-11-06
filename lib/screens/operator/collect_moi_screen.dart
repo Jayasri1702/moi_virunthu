@@ -464,7 +464,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       String moiId;
 
       if ((_isEditMode || forceUpdate) && _editingMoiId != null) {
-        // UPDATE MODE - Store old data
+        // REQUIREMENT 3: UPDATE MODE - Store old data
         moiData['old_data'] = _originalData;
 
         response = await _supabase
@@ -514,31 +514,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     await _supabase
         .from('moi_denominations')
         .upsert(denomData);
-  }
-
-  Future<void> _updateDenomination(String moiId, String eventId, String operatorId) async {
-    final denomData = {
-      'moi_id': moiId,
-      'event_id': eventId,
-      'operator_id': operatorId,
-      'denom_500': int.tryParse(_denomControllers[500]!.text) ?? 0,
-      'denom_200': int.tryParse(_denomControllers[200]!.text) ?? 0,
-      'denom_100': int.tryParse(_denomControllers[100]!.text) ?? 0,
-      'denom_50': int.tryParse(_denomControllers[50]!.text) ?? 0,
-      'denom_20': int.tryParse(_denomControllers[20]!.text) ?? 0,
-      'denom_10': int.tryParse(_denomControllers[10]!.text) ?? 0,
-      'denom_5': int.tryParse(_denomControllers[5]!.text) ?? 0,
-      'denom_1': int.tryParse(_denomControllers[1]!.text) ?? 0,
-    };
-
-    try {
-      await _supabase
-          .from('moi_denominations')
-          .upsert(denomData);
-      print('Denomination updated successfully');
-    } catch (e) {
-      print('Error updating denomination: $e');
-    }
   }
 
   // REQUIREMENT 2: Auto-add to group on Save & Print
@@ -891,11 +866,36 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             ],
           ),
+          // Hide action buttons when in edit mode OR when a group is active
           if (!_isEditMode && _currentGroupId == null) ...[
             const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(child: _buildActionButton('Sample Receipt', () {})),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildActionButton('Cash Drawing', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/cash_withdrawal',
+                      arguments: {'id': _eventId, 'operator_id': _operatorId},
+                    );
+                  }),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionButton('Exchange\nDenomination', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/exchange-denomination',
+                      arguments: {'id': _eventId, 'operator_id': _operatorId},
+                    );
+                  }),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _buildActionButton('Collection Details', () {

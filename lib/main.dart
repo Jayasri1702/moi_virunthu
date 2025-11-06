@@ -8,6 +8,7 @@ import 'screens/admin/user_list_screen.dart';
 import 'screens/admin/create_event_screen.dart';
 import 'screens/admin/all_events_screen.dart';
 import 'screens/admin/todays_events_screen.dart';
+import 'screens/admin/event_expenses_screen.dart';
 import 'screens/operator/home_screen.dart';
 import 'screens/operator/event_dashboard_screen.dart'; // Add this import
 import 'screens/operator/collect_moi_screen.dart';
@@ -52,6 +53,7 @@ class MyApp extends StatelessWidget {
         '/operator/cash_withdrawal': (context) => const CashWithdrawalScreen(),
         '/operator/exchange-denomination': (context) => const ExchangeDenominationScreen(),
         '/operator/collection-details': (context) => const CollectionDetailsScreen(),
+        '/admin/event-expenses': (context) => const EventExpensesScreen(),
       },
     );
   }
