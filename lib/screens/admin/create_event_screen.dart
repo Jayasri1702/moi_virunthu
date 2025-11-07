@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:printing/printing.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
+import '../../services/receipt_generator.dart';
 import '../../services/auth_service.dart';
 
 class CreateEventScreen extends StatefulWidget {
@@ -197,7 +196,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     setState(() => _loading = true);
 
     try {
-      // First, save the event to database if not already saved or if modified
+      // First, save the event to database
       final currentUser = _auth.client.auth.currentUser;
 
       final eventData = {
@@ -231,7 +230,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             .eq('id', _editingEvent!['id']);
 
         eventId = _editingEvent!['id'];
-
         await _updateOperatorAssignment(eventId);
       } else {
         eventData['created_by'] = currentUser?.id;
@@ -253,7 +251,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           await _auth.client.from('event_assignments').insert(assignments);
         }
 
-        // Update state to edit mode after first save
         setState(() {
           _isEditMode = true;
           _editingEvent = {'id': eventId};
@@ -270,21 +267,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         );
       }
 
-      // Now generate and send receipt
-      // Get admin/operator name
-      String typerName = 'Admin';
-      if (currentUser != null) {
-        final userData = await _auth.client
-            .from('users')
-            .select('full_name')
-            .eq('id', currentUser.id)
-            .maybeSingle();
-
-        if (userData != null && userData['full_name'] != null) {
-          typerName = userData['full_name'];
-        }
-      }
-
       // Get event type name
       String eventTypeName = 'Event';
       if (_selectedEventType != null) {
@@ -295,183 +277,36 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         eventTypeName = eventType['name'];
       }
 
-      // Generate receipt number (you can customize this logic)
-      final receiptNo = '00';
+      // Generate PDF using WebView
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Generating receipt...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
 
-      // Generate PDF
-      final pdf = pw.Document();
-
-      // Load Tamil font for proper rendering
-      final tamilFont = await PdfGoogleFonts.notoSansTamilRegular();
-      final tamilFontBold = await PdfGoogleFonts.notoSansTamilBold();
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.roll80,
-          build: (pw.Context context) {
-            return pw.Container(
-              padding: const pw.EdgeInsets.all(10),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  // Header - Hitech Moi (without phone numbers)
-                  pw.Text(
-                    'ஹைடெக் மொய்',
-                    style: pw.TextStyle(
-                      font: tamilFontBold,
-                      fontSize: 18,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Divider(),
-                  pw.SizedBox(height: 8),
-
-                  // Date, Time, Admin
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Text(
-                            DateFormat('dd-MM-yyyy').format(_selectedDate),
-                            style: pw.TextStyle(font: tamilFont, fontSize: 11),
-                          ),
-                          pw.SizedBox(height: 2),
-                          pw.Text(
-                            _selectedTime != null
-                                ? '${_selectedTime!.hour.toString().padLeft(2, '0')}.${_selectedTime!.minute.toString().padLeft(2, '0')} ${_selectedTime!.hour < 12 ? 'am' : 'pm'}'
-                                : '10.30 am',
-                            style: pw.TextStyle(font: tamilFont, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                      pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.end,
-                        children: [
-                          pw.Text(
-                            'Admin',
-                            style: pw.TextStyle(
-                              font: tamilFont,
-                              fontSize: 11,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  pw.SizedBox(height: 12),
-
-                  // Center content
-                  pw.Text(
-                    'வ.எண் : $receiptNo',
-                    style: pw.TextStyle(
-                      font: tamilFontBold,
-                      fontSize: 12,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    _customerName.text,
-                    style: pw.TextStyle(
-                      font: tamilFontBold,
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    _venue.text.isNotEmpty ? _venue.text : 'தொழை',
-                    style: pw.TextStyle(
-                      font: tamilFont,
-                      fontSize: 12,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    eventTypeName,
-                    style: pw.TextStyle(
-                      font: tamilFontBold,
-                      fontSize: 16,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 12),
-                  pw.Divider(),
-                  pw.SizedBox(height: 12),
-
-                  // Footer
-                  pw.Text(
-                    'தங்கள் வருகைக்கு நன்றி!',
-                    style: pw.TextStyle(
-                      font: tamilFont,
-                      fontSize: 12,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'அன்புடன்',
-                    style: pw.TextStyle(
-                      font: tamilFont,
-                      fontSize: 11,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    _customerName.text,
-                    style: pw.TextStyle(
-                      font: tamilFontBold,
-                      fontSize: 12,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    _city.text.isNotEmpty ? _city.text : '',
-                    style: pw.TextStyle(
-                      font: tamilFont,
-                      fontSize: 12,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                  pw.SizedBox(height: 2),
-                  pw.Text(
-                    _contactNumber.text,
-                    style: pw.TextStyle(
-                      font: tamilFont,
-                      fontSize: 12,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+      final file = await ReceiptGenerator.generateReceiptPDF(
+        context: context,
+        customerName: _customerName.text,
+        venue: _venue.text,
+        city: _city.text,
+        contactNumber: _contactNumber.text,
+        eventTypeName: eventTypeName,
+        selectedDate: _selectedDate,
+        selectedTime: _selectedTime,
       );
 
-      // Save PDF to a temporary file
-      final output = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'receipt_${_customerName.text.replaceAll(' ', '_')}_$timestamp.pdf';
-      final file = File('${output.path}/$fileName');
-      await file.writeAsBytes(await pdf.save());
+      if (file == null) {
+        throw Exception('Failed to generate PDF');
+      }
 
-      // Get phone number and format it for WhatsApp
+      // Format phone number for WhatsApp
       String phoneNumber = _contactNumber.text.trim();
-
-      // Remove any non-digit characters
       phoneNumber = phoneNumber.replaceAll(RegExp(r'\D'), '');
 
-      // Add country code if not present (assuming India +91)
       if (phoneNumber.length == 10) {
         phoneNumber = '91$phoneNumber';
       } else if (phoneNumber.startsWith('+')) {
@@ -479,7 +314,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
 
       // Create WhatsApp message
-      final message = 'வணக்கம் ${_customerName.text}!\n\n'
+      final whatsappMessage = 'வணக்கம் ${_customerName.text}!\n\n'
           'உங்கள் $eventTypeName பதிவு உறுதி செய்யப்பட்டது.\n\n'
           '📅 தேதி: ${DateFormat('dd-MM-yyyy').format(_selectedDate)}\n'
           '🏛️ இடம்: ${_venue.text}\n'
@@ -488,11 +323,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'நன்றி!\n'
           'பேச்சி மொபைல் டெக்';
 
-      // Use platform channel to send via WhatsApp
+      // Send via WhatsApp
       try {
         final result = await platform.invokeMethod('sendToWhatsApp', {
           'phone': phoneNumber,
-          'message': message,
+          'message': whatsappMessage,
           'filePath': file.path,
         });
 
