@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/moi_receipt_generator.dart';
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -843,6 +844,327 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+
+  // Add after existing methods, before the build method
+
+  Future<String> _getOperatorName() async {
+    try {
+      final response = await _supabase
+          .from('users')
+          .select('full_name')
+          .eq('id', _operatorId!)
+          .single();
+
+      return response['full_name'] ?? 'Operator';
+    } catch (e) {
+      print('Error fetching operator name: $e');
+      return 'Operator';
+    }
+  }
+
+  Future<Map<String, dynamic>> _getEventDetails() async {
+    try {
+      final response = await _supabase
+          .from('events')
+          .select('event_date, event_time')
+          .eq('id', _eventId!)
+          .single();
+
+      DateTime eventDate = DateTime.parse(response['event_date']);
+
+      TimeOfDay eventTime = TimeOfDay.now();
+      if (response['event_time'] != null) {
+        final timeParts = response['event_time'].split(':');
+        eventTime = TimeOfDay(
+          hour: int.parse(timeParts[0]),
+          minute: int.parse(timeParts[1]),
+        );
+      }
+
+      return {
+        'event_date': eventDate,
+        'event_time': eventTime,
+      };
+    } catch (e) {
+      print('Error fetching event details: $e');
+      return {
+        'event_date': DateTime.now(),
+        'event_time': TimeOfDay.now(),
+      };
+    }
+  }
+
+  Future<Map<int, int>?> _getDenominations(String moiId) async {
+    try {
+      final response = await _supabase
+          .from('moi_denominations')
+          .select('*')
+          .eq('moi_id', moiId)
+          .maybeSingle();
+
+      if (response != null) {
+        return {
+          500: response['denom_500'] ?? 0,
+          200: response['denom_200'] ?? 0,
+          100: response['denom_100'] ?? 0,
+          50: response['denom_50'] ?? 0,
+          20: response['denom_20'] ?? 0,
+          10: response['denom_10'] ?? 0,
+          5: response['denom_5'] ?? 0,
+          1: response['denom_1'] ?? 0,
+        };
+      }
+      return null;
+    } catch (e) {
+      print('Error loading denominations: $e');
+      return null;
+    }
+  }
+
+  Future<void> _handleGenerateSingleReceipt() async {
+    if (!_validateForm()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Save MOI first if not saved
+      String? moiId = _editingMoiId;
+      if (moiId == null) {
+        moiId = await _saveMoi(_currentGroupId, forceUpdate: false);
+        if (moiId == null) {
+          throw Exception('Failed to save MOI');
+        }
+      }
+
+      // Get operator name and event details
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      // Get denominations if CASH payment
+      Map<int, int>? denominations;
+      if (_paymentMethod == 'CASH') {
+        denominations = await _getDenominations(moiId);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Generating receipt...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      // Generate receipt
+      final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
+        context: context,
+        serialNo: _serialNo!,
+        operatorName: operatorName,
+        eventDate: eventDetails['event_date'],
+        eventTime: eventDetails['event_time'],
+        villageName: _villageController.text.trim(),
+        livingPlace: _livingPlaceController.text.trim(),
+        person1Init: _init1Controller.text.trim(),
+        person1Name: _name1Controller.text.trim(),
+        person2Init: _init2Controller.text.trim().isNotEmpty ? _init2Controller.text.trim() : null,
+        person2Name: _name2Controller.text.trim().isNotEmpty ? _name2Controller.text.trim() : null,
+        phone: _phoneController.text.trim(),
+        amount: _getTotalAmount(),
+        paymentMethod: _paymentMethod,
+        denominations: denominations,
+      );
+
+      if (file != null && mounted) {
+        Navigator.pushNamed(
+          context,
+          '/operator/moi-receipt-preview',
+          arguments: {
+            'receipt_type': 'single',
+            'receipt_file': file,
+          },
+        );
+      } else {
+        throw Exception('Failed to generate receipt');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // In your collect_moi_screen.dart, replace the _handleGenerateGroupReceipt method:
+
+  Future<void> _handleGenerateGroupReceipt() async {
+    if (_groupedMois.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No grouped entries to generate receipt'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show dialog to choose receipt type
+    final receiptType = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Generate Group Receipt'),
+        content: const Text('How would you like to generate the receipts?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'consolidated'),
+            child: const Text('One Group Receipt'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'split'),
+            child: const Text('Individual Receipts'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (receiptType == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      if (receiptType == 'consolidated') {
+        // Generate consolidated group receipt
+        double totalAmount = 0.0;  // CHANGED to double
+        Map<int, int> totalDenominations = {
+          500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+        };
+
+        // Load denominations for all entries
+        for (var entry in _groupedMois) {
+          // Handle amount as dynamic type and convert safely
+          var amountValue = entry['amount'];
+          if (amountValue is int) {
+            totalAmount += amountValue.toDouble();
+          } else if (amountValue is double) {
+            totalAmount += amountValue;
+          } else if (amountValue is num) {
+            totalAmount += amountValue.toDouble();
+          }
+
+          if (entry['payment_method'] == 'CASH') {
+            final denoms = await _getDenominations(entry['id']);
+            if (denoms != null) {
+              denoms.forEach((denom, count) {
+                totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+              });
+            }
+          }
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Generating group receipt...'),
+              backgroundColor: Colors.blue,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        final file = await MoiReceiptGenerator.generateGroupMoiReceipt(
+          context: context,
+          groupId: _currentGroupId!,
+          operatorName: operatorName,
+          eventDate: eventDetails['event_date'],
+          eventTime: eventDetails['event_time'],
+          groupEntries: _groupedMois,
+          totalAmount: totalAmount,  // Now passing double
+          totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+        );
+
+        if (file != null && mounted) {
+          Navigator.pushNamed(
+            context,
+            '/operator/moi-receipt-preview',
+            arguments: {
+              'receipt_type': 'group',
+              'receipt_file': file,
+            },
+          );
+        } else {
+          throw Exception('Failed to generate group receipt');
+        }
+      } else {
+        // Generate individual receipts for each entry
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Generating ${_groupedMois.length} receipts...'),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+
+        // Load denominations for all entries first
+        List<Map<String, dynamic>> entriesWithDenoms = [];
+        for (var entry in _groupedMois) {
+          Map<String, dynamic> entryData = Map.from(entry);
+          if (entry['payment_method'] == 'CASH') {
+            entryData['denominations'] = await _getDenominations(entry['id']);
+          }
+          entriesWithDenoms.add(entryData);
+        }
+
+        final files = await MoiReceiptGenerator.generateSplitGroupReceipts(
+          context: context,
+          operatorName: operatorName,
+          eventDate: eventDetails['event_date'],
+          eventTime: eventDetails['event_time'],
+          groupEntries: entriesWithDenoms,
+        );
+
+        if (files.isNotEmpty && mounted) {
+          Navigator.pushNamed(
+            context,
+            '/operator/moi-receipt-preview',
+            arguments: {
+              'receipt_type': 'split',
+              'receipt_files': files,
+            },
+          );
+        } else {
+          throw Exception('Failed to generate receipts');
+        }
+      }
+    } catch (e) {
+      print('Error in _handleGenerateGroupReceipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1527,6 +1849,50 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ],
         ),
         const SizedBox(height: 8),
+
+        // Receipt generation buttons
+        if (_currentGroupId != null && _groupedMois.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            height: 50,
+            decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleGenerateGroupReceipt,
+                child: const Center(
+                  child: Text(
+                    'Generate Group Receipt',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+
+        if (_currentGroupId == null && (_isEditMode || _hasFormData())) ...[
+          Container(
+            width: double.infinity,
+            height: 50,
+            decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleGenerateSingleReceipt,
+                child: const Center(
+                  child: Text(
+                    'Generate Single Receipt',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+
         if (_currentGroupId != null) ...[
           Container(
             width: double.infinity,
@@ -1547,6 +1913,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
           const SizedBox(height: 8),
         ],
+
         Container(
           width: double.infinity,
           height: 50,

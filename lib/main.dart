@@ -17,7 +17,7 @@ import 'screens/operator/uncle_reorder_screen.dart'; // Add this line
 import 'screens/operator/cash_withdrawal_screen.dart';
 import 'screens/operator/exchange_denomination_screen.dart';
 import 'screens/operator/collection_details_screen.dart';
-
+import 'screens/operator/moi_receipt_preview_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +45,7 @@ class MyApp extends StatelessWidget {
         '/admin/create-event': (context) => const CreateEventScreen(),
         '/admin/all-events': (context) => const AllEventsScreen(),
         '/admin/todays-event': (context) => const TodaysEventsScreen(),
+        '/admin/event-expenses': (context) => const EventExpensesScreen(),
         '/operator/home': (context) => const OperatorHomeScreen(),
         '/operator/event-dashboard': (context) => const EventDashboardScreen(), // Add this route
         '/operator/collect-moi': (context) => const CollectMoiScreen(),
@@ -53,7 +54,7 @@ class MyApp extends StatelessWidget {
         '/operator/cash_withdrawal': (context) => const CashWithdrawalScreen(),
         '/operator/exchange-denomination': (context) => const ExchangeDenominationScreen(),
         '/operator/collection-details': (context) => const CollectionDetailsScreen(),
-        '/admin/event-expenses': (context) => const EventExpensesScreen(),
+        '/operator/moi-receipt-preview': (context) => const MoiReceiptPreviewScreen(),
       },
     );
   }

@@ -6,7 +6,7 @@
 
     <application
         android:usesCleartextTraffic="true"
-        android:label="moi_virunthu"
+        android:label="HiTechMoi"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

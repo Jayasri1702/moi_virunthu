@@ -24,14 +24,23 @@ dependencies:
   flutter_dotenv: ^5.1.0
   cupertino_icons: ^1.0.8
 
-  # Add these for WebView-based PDF generation
+  # For WebView-based PDF generation
   flutter_inappwebview: ^6.1.5
   permission_handler: ^12.0.1
+
+  # ADD THIS: For PDF viewing in preview screen
+  flutter_pdfview: ^1.4.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/money_transfer.png"
 
 flutter:
   uses-material-design: true
