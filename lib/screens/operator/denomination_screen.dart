@@ -17,6 +17,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
   final _auth = AuthService();
   List<Map<String, dynamic>> userDenominations = [];
   bool _isLoading = true;
+
+  // NEW: Summary data
   Map<String, dynamic> _summaryData = {};
   bool _isLoadingSummary = false;
 
@@ -198,6 +200,9 @@ class _DenominationScreenState extends State<DenominationScreen> {
       setState(() {
         userDenominations = denoms;
       });
+
+      // NEW: Calculate summary data
+      await _calculateSummary();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -207,12 +212,12 @@ class _DenominationScreenState extends State<DenominationScreen> {
           ),
         );
       }
-    }
-    finally {
+    } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  // NEW: Calculate summary method
   Future<void> _calculateSummary() async {
     setState(() => _isLoadingSummary = true);
 
@@ -220,13 +225,22 @@ class _DenominationScreenState extends State<DenominationScreen> {
       // Get total denomination amounts (CASH only)
       final moiTotal = await _auth.client
           .from('moi_denominations')
-          .select('total_amount, mois!moi_denominations_moi_id_fkey(payment_method)')
+          .select('''
+            total_amount,
+            mois!moi_denominations_moi_id_fkey (
+              payment_method,
+              is_deleted
+            )
+          ''')
           .eq('event_id', widget.eventId);
 
       double totalCashCollected = 0;
       for (var entry in moiTotal) {
-        if (entry['mois']['payment_method'] == 'CASH') {
-          totalCashCollected += (entry['total_amount'] ?? 0);
+        final moi = entry['mois'];
+        if (moi != null &&
+            moi['payment_method'] == 'CASH' &&
+            moi['is_deleted'] == false) {
+          totalCashCollected += ((entry['total_amount'] ?? 0) as num).toDouble();
         }
       }
 
@@ -236,8 +250,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
           .select('amount')
           .eq('event_id', widget.eventId);
 
-      double totalWithdrawals = withdrawalData.fold(0.0,
-              (sum, item) => sum + (item['amount'] ?? 0));
+      double totalWithdrawals = 0;
+      for (var item in withdrawalData) {
+        totalWithdrawals += ((item['amount'] ?? 0) as num).toDouble();
+      }
 
       // Get OTHERS payment total
       final othersData = await _auth.client
@@ -247,8 +263,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
           .neq('payment_method', 'CASH')
           .eq('is_deleted', false);
 
-      double totalOthers = othersData.fold(0.0,
-              (sum, item) => sum + (item['amount'] ?? 0));
+      double totalOthers = 0;
+      for (var item in othersData) {
+        totalOthers += ((item['amount'] ?? 0) as num).toDouble();
+      }
 
       // Get total people count
       final peopleCount = await _auth.client
@@ -606,6 +624,61 @@ class _DenominationScreenState extends State<DenominationScreen> {
             ),
           ),
 
+          const SizedBox(height: 16),
+
+          // NEW: Summary Section
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Summary',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Divider(thickness: 2, color: Colors.black),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Total Cash Collected',
+                  '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}',
+                  Colors.green,
+                ),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Computed Total Matches',
+                  '₹${_formatAmount((_summaryData['computedTotal'] ?? 0).round())}',
+                  Colors.blue,
+                ),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Total Withdrawals',
+                  '₹${_formatAmount((_summaryData['totalWithdrawals'] ?? 0).round())}',
+                  Colors.red,
+                ),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Check/Advance/UPI',
+                  '₹${_formatAmount((_summaryData['totalOthers'] ?? 0).round())}',
+                  Colors.orange,
+                ),
+                const SizedBox(height: 8),
+                _buildSummaryRow(
+                  'Total People',
+                  '${_summaryData['peopleCount'] ?? 0}',
+                  Colors.purple,
+                ),
+              ],
+            ),
+          ),
+
           // Action Buttons
           Padding(
             padding: const EdgeInsets.all(16),
@@ -728,6 +801,30 @@ class _DenominationScreenState extends State<DenominationScreen> {
         textAlign: TextAlign.center,
         overflow: TextOverflow.ellipsis,
       ),
+    );
+  }
+
+  // NEW: Summary row builder
+  Widget _buildSummaryRow(String label, String value, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 }
