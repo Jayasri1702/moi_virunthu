@@ -208,7 +208,6 @@ class _DenominationScreenState extends State<DenominationScreen> {
         );
       }
     }
-    await _calculateSummary();
     finally {
       setState(() => _isLoading = false);
     }
