@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../services/exchange_receipt_generator.dart'; // Add this import
 
 class ExchangeDenominationScreen extends StatefulWidget {
   const ExchangeDenominationScreen({super.key});
@@ -407,6 +408,7 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     try {
       final eventId = eventData?['id'];
       final operatorId = eventData?['operator_id'];
+      final operatorName = eventData?['operator_name'] ?? 'Unknown';
 
       if (eventId == null || operatorId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -414,6 +416,29 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         );
         return;
       }
+
+      // Prepare denomination maps
+      Map<int, int> receivedDenominations = {
+        500: int.tryParse(_received500Controller.text) ?? 0,
+        200: int.tryParse(_received200Controller.text) ?? 0,
+        100: int.tryParse(_received100Controller.text) ?? 0,
+        50: int.tryParse(_received50Controller.text) ?? 0,
+        20: int.tryParse(_received20Controller.text) ?? 0,
+        10: int.tryParse(_received10Controller.text) ?? 0,
+        5: int.tryParse(_received5Controller.text) ?? 0,
+        1: int.tryParse(_received1Controller.text) ?? 0,
+      };
+
+      Map<int, int> returnedDenominations = {
+        500: int.tryParse(_returned500Controller.text) ?? 0,
+        200: int.tryParse(_returned200Controller.text) ?? 0,
+        100: int.tryParse(_returned100Controller.text) ?? 0,
+        50: int.tryParse(_returned50Controller.text) ?? 0,
+        20: int.tryParse(_returned20Controller.text) ?? 0,
+        10: int.tryParse(_returned10Controller.text) ?? 0,
+        5: int.tryParse(_returned5Controller.text) ?? 0,
+        1: int.tryParse(_returned1Controller.text) ?? 0,
+      };
 
       // Insert exchange record
       final response = await _supabase.from('cash_exchanges').insert({
@@ -429,23 +454,14 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       final exchangeId = response[0]['id'];
 
       // Calculate net denominations (received - returned)
-      // Positive values = received, Negative values = returned
-      int net500 = (int.tryParse(_received500Controller.text) ?? 0) -
-          (int.tryParse(_returned500Controller.text) ?? 0);
-      int net200 = (int.tryParse(_received200Controller.text) ?? 0) -
-          (int.tryParse(_returned200Controller.text) ?? 0);
-      int net100 = (int.tryParse(_received100Controller.text) ?? 0) -
-          (int.tryParse(_returned100Controller.text) ?? 0);
-      int net50 = (int.tryParse(_received50Controller.text) ?? 0) -
-          (int.tryParse(_returned50Controller.text) ?? 0);
-      int net20 = (int.tryParse(_received20Controller.text) ?? 0) -
-          (int.tryParse(_returned20Controller.text) ?? 0);
-      int net10 = (int.tryParse(_received10Controller.text) ?? 0) -
-          (int.tryParse(_returned10Controller.text) ?? 0);
-      int net5 = (int.tryParse(_received5Controller.text) ?? 0) -
-          (int.tryParse(_returned5Controller.text) ?? 0);
-      int net1 = (int.tryParse(_received1Controller.text) ?? 0) -
-          (int.tryParse(_returned1Controller.text) ?? 0);
+      int net500 = receivedDenominations[500]! - returnedDenominations[500]!;
+      int net200 = receivedDenominations[200]! - returnedDenominations[200]!;
+      int net100 = receivedDenominations[100]! - returnedDenominations[100]!;
+      int net50 = receivedDenominations[50]! - returnedDenominations[50]!;
+      int net20 = receivedDenominations[20]! - returnedDenominations[20]!;
+      int net10 = receivedDenominations[10]! - returnedDenominations[10]!;
+      int net5 = receivedDenominations[5]! - returnedDenominations[5]!;
+      int net1 = receivedDenominations[1]! - returnedDenominations[1]!;
 
       // Save net denomination breakdown in single table
       await _supabase.from('cash_exchange_denominations').insert({
@@ -460,24 +476,42 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         'denom_1': net1,
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Exchange of ₹${_receivedTotalAmount.toStringAsFixed(0)} saved successfully!'),
-          backgroundColor: Colors.green,
-        ),
+      // Generate exchange receipt
+      final receiptFile = await ExchangeReceiptGenerator.generateExchangeReceipt(
+        context: context,
+        operatorName: operatorName,
+        exchangeDate: DateTime.now(),
+        exchangeTime: TimeOfDay.now(),
+        receivedDenominations: receivedDenominations,
+        returnedDenominations: returnedDenominations,
       );
+
+      if (receiptFile != null) {
+        print('Exchange receipt generated: ${receiptFile.path}');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exchange of ₹${_receivedTotalAmount.toStringAsFixed(0)} saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
 
       _clearAllFields();
       // Reload balance after successful exchange
       await _loadAvailableBalance();
     } catch (e) {
       print('Error saving exchange: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving exchange: $e'),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving exchange: $e'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 

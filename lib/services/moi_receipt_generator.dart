@@ -23,10 +23,12 @@ class MoiReceiptGenerator {
     String? phone,
     required num amount,
     required String paymentMethod,
-    Map<int, int>? denominations, // denomination -> count
+    Map<int, int>? denominations,
   }) async {
     try {
-      final htmlContent = _generateSingleMoiHtml(
+      // Use different template based on payment method
+      final htmlContent = paymentMethod == 'CASH'
+          ? _generateSingleMoiHtml(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -41,12 +43,25 @@ class MoiReceiptGenerator {
         amount: amount,
         paymentMethod: paymentMethod,
         denominations: denominations,
+      )
+          : _generateSingleMoiHtmlOthers(
+        serialNo: serialNo,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: villageName,
+        livingPlace: livingPlace,
+        person1Init: person1Init,
+        person1Name: person1Name,
+        person2Init: person2Init,
+        person2Name: person2Name,
+        phone: phone,
+        amount: amount,
+        paymentMethod: paymentMethod,
       );
 
       final output = await getTemporaryDirectory();
-      final timestamp = DateTime
-          .now()
-          .millisecondsSinceEpoch;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'moi_single_${serialNo}_$timestamp.pdf';
       final filePath = '${output.path}/$fileName';
 
@@ -139,7 +154,19 @@ class MoiReceiptGenerator {
     Map<int, int>? totalDenominations,
   }) async {
     try {
-      final htmlContent = _generateGroupMoiHtml(
+      // Check if any entry has OTHERS payment method
+      bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
+
+      final htmlContent = hasOthersPayment
+          ? _generateGroupMoiHtmlOthers(
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        groupEntries: groupEntries,
+        totalAmount: totalAmount,
+      )
+          : _generateGroupMoiHtml(
         groupId: groupId,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -150,9 +177,7 @@ class MoiReceiptGenerator {
       );
 
       final output = await getTemporaryDirectory();
-      final timestamp = DateTime
-          .now()
-          .millisecondsSinceEpoch;
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'moi_group_${groupId}_$timestamp.pdf';
       final filePath = '${output.path}/$fileName';
 
@@ -909,4 +934,482 @@ class MoiReceiptGenerator {
 </html>
 ''';
   }
+
+
+  // Add this method to moi_receipt_generator.dart after _generateSingleMoiHtml
+
+  static String _generateSingleMoiHtmlOthers({
+    required int serialNo,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    String? villageName,
+    String? livingPlace,
+    String? person1Init,
+    String? person1Name,
+    String? person2Init,
+    String? person2Name,
+    String? phone,
+    required num amount,
+    required String paymentMethod,
+  }) {
+    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
+    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime.minute.toString().padLeft(2, '0')} ${eventTime.hour < 12 ? 'am' : 'pm'}';
+
+    // Build person display
+    String personDisplay = '';
+    if (person1Name != null && person1Name.isNotEmpty) {
+      personDisplay += '${person1Init ?? ''}.${person1Name ?? ''}\n';
+    }
+    if (person2Name != null && person2Name.isNotEmpty) {
+      personDisplay += '${person2Init ?? ''}.${person2Name ?? ''}';
+    }
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Noto Sans Tamil', sans-serif;
+      width: 302px;
+      padding: 10px;
+      text-align: center;
+      background: white;
+    }
+    
+    .header {
+      background-color: #1976D2;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .company-name {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #000;
+    }
+    
+    .company-phone {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #000;
+    }
+    
+    .divider {
+      border-top: 2px solid black;
+      margin: 10px 0;
+    }
+    
+    .date-time-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 14px;
+      border: 2px solid black;
+      padding: 8px;
+    }
+    
+    .left-section {
+      text-align: left;
+    }
+    
+    .right-section {
+      text-align: right;
+      font-weight: bold;
+    }
+    
+    .serial-no {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 12px 0;
+      text-align: center;
+    }
+    
+    .person-details {
+      font-size: 16px;
+      margin: 8px 0;
+      white-space: pre-line;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+    
+    .village-info {
+      font-size: 15px;
+      margin: 6px 0;
+      font-weight: 500;
+    }
+    
+    .phone {
+      font-size: 16px;
+      margin: 8px 0;
+      font-weight: bold;
+    }
+    
+    .amount-label {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 12px;
+    }
+    
+    .amount {
+      font-size: 28px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: #000;
+    }
+    
+    .payment-method-box {
+      border: 2px solid black;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 16px;
+      font-weight: bold;
+      background-color: #f5f5f5;
+    }
+    
+    .footer {
+      margin-top: 15px;
+      font-size: 15px;
+      border-top: 2px solid black;
+      padding-top: 12px;
+    }
+    
+    .thanks {
+      margin: 8px 0;
+      font-weight: bold;
+    }
+    
+    .with-love {
+      font-size: 14px;
+      margin: 6px 0;
+    }
+    
+    .footer-person {
+      font-size: 16px;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">Check / Advance / UPI Receipt</div>
+  
+  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="company-phone">9043606296, 9047556443</div>
+  
+  <div class="divider"></div>
+  
+  <div class="date-time-row">
+    <div class="left-section">
+      <div>$dateStr</div>
+      <div>$timeStr</div>
+    </div>
+    <div class="right-section">
+      <div>Typer</div>
+      <div>$operatorName</div>
+    </div>
+  </div>
+  
+  <div class="serial-no">வ.எண் : $serialNo</div>
+  
+  <div class="person-details">$personDisplay</div>
+  
+  ${person1Init != null && person1Init.isNotEmpty ? '<div class="village-info">${person1Init}.${person1Name ?? ''}</div>' : ''}
+  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+  
+  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+  
+  <div class="amount-label">தொகை</div>
+  <div class="amount">₹${amount.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{2})+(\d)(?!\d))'), (Match m) => '${m[1]},')}}</div>
+  
+  <div class="payment-method-box">Check / Advance / UPI</div>
+  
+  <div class="footer">
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்...</div>
+    ${person1Name != null ? '<div class="footer-person">${person1Init ?? ''}.${person1Name}</div>' : ''}
+    ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+    ${phone != null && phone.isNotEmpty ? '<div class="phone">$phone</div>' : ''}
+  </div>
+</body>
+</html>
+''';
+  }
+
+  static String _generateGroupMoiHtmlOthers({
+    required int groupId,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    required List<Map<String, dynamic>> groupEntries,
+    required num totalAmount,
+  }) {
+    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
+    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime.minute.toString().padLeft(2, '0')} ${eventTime.hour < 12 ? 'am' : 'pm'}';
+
+    // Build entries list
+    String entriesHtml = '';
+    for (var entry in groupEntries) {
+      String personDisplay = '';
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        List<String> names = [];
+        for (var person in personsList) {
+          String name = person['name'] ?? '';
+          if (name.isNotEmpty) {
+            names.add(name);
+          }
+        }
+        personDisplay = names.join(', ');
+      }
+
+      String villageName = entry['village_name'] ?? '';
+      String livingPlace = entry['living_place'] ?? '';
+
+      var amountValue = entry['amount'];
+      int amount = 0;
+      if (amountValue is int) {
+        amount = amountValue;
+      } else if (amountValue is double) {
+        amount = amountValue.round();
+      } else if (amountValue is num) {
+        amount = amountValue.round();
+      }
+
+      entriesHtml += '''
+      <div class="entry-block">
+        <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
+        <div class="person-name">$personDisplay</div>
+        ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+        ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+        <div class="amount-label">தொகை</div>
+        <div class="entry-amount">₹$amount</div>
+      </div>
+      <div class="divider"></div>
+    ''';
+    }
+
+    // Get first entry's details for footer
+    String footerName = '';
+    String footerVillage = '';
+    String footerPhone = '';
+
+    if (groupEntries.isNotEmpty) {
+      var firstEntry = groupEntries.first;
+      if (firstEntry['persons'] != null && (firstEntry['persons'] as List).isNotEmpty) {
+        var person = (firstEntry['persons'] as List).first;
+        footerName = '${person['init'] ?? ''}.${person['name'] ?? ''}';
+      }
+      footerVillage = firstEntry['village_name'] ?? '';
+      footerPhone = firstEntry['phone'] ?? '';
+    }
+
+    int displayTotal = totalAmount.round();
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Noto Sans Tamil', sans-serif;
+      width: 302px;
+      padding: 10px;
+      text-align: center;
+      background: white;
+    }
+    
+    .header {
+      background-color: #1976D2;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .company-name {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #000;
+    }
+    
+    .company-phone {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #000;
+    }
+    
+    .divider {
+      border-top: 2px solid black;
+      margin: 10px 0;
+    }
+    
+    .date-time-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 14px;
+      border: 2px solid black;
+      padding: 8px;
+    }
+    
+    .left-section {
+      text-align: left;
+    }
+    
+    .right-section {
+      text-align: right;
+      font-weight: bold;
+    }
+    
+    .entry-block {
+      margin: 10px 0;
+    }
+    
+    .serial-no {
+      font-size: 16px;
+      font-weight: bold;
+      margin: 8px 0;
+    }
+    
+    .person-name {
+      font-size: 16px;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+    
+    .village-info {
+      font-size: 14px;
+      margin: 4px 0;
+    }
+    
+    .amount-label {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 6px;
+    }
+    
+    .entry-amount {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+    
+    .total-section {
+      background-color: #f5f5f5;
+      padding: 10px;
+      margin: 15px 0;
+      border: 2px solid black;
+    }
+    
+    .total-label {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    .total-amount {
+      font-size: 26px;
+      font-weight: bold;
+      color: #1976D2;
+      margin: 8px 0;
+    }
+    
+    .payment-method-box {
+      border: 2px solid black;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 16px;
+      font-weight: bold;
+      background-color: #f5f5f5;
+    }
+    
+    .footer {
+      margin-top: 15px;
+      font-size: 14px;
+    }
+    
+    .thanks {
+      margin: 6px 0;
+    }
+    
+    .with-love {
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    
+    .footer-name {
+      font-size: 16px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">Group Check / Advance / UPI Receipt</div>
+  
+  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="company-phone">9043606296, 9047556443</div>
+  
+  <div class="divider"></div>
+  
+  <div class="date-time-row">
+    <div class="left-section">
+      <div>$dateStr</div>
+      <div>$timeStr</div>
+    </div>
+    <div class="right-section">
+      <div>Typer</div>
+      <div>$operatorName</div>
+    </div>
+  </div>
+  
+  $entriesHtml
+  
+  <div class="total-section">
+    <div class="total-label">மொத்த தொகை</div>
+    <div class="total-amount">₹$displayTotal</div>
+  </div>
+  
+  <div class="payment-method-box">Check / Advance / UPI</div>
+  
+  <div class="divider"></div>
+  
+  <div class="footer">
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்...</div>
+    ${footerName.isNotEmpty ? '<div class="footer-name">$footerName</div>' : ''}
+    ${footerVillage.isNotEmpty ? '<div class="village-info">$footerVillage</div>' : ''}
+    ${footerPhone.isNotEmpty ? '<div class="village-info">$footerPhone</div>' : ''}
+  </div>
+</body>
+</html>
+''';
+  }
 }
+

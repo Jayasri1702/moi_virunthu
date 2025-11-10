@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+// Add this import at the top of your cash_withdrawal_screen.dart file
+import '../../services/withdrawal_receipt_generator.dart';
 
 class CashWithdrawalScreen extends StatefulWidget {
   const CashWithdrawalScreen({super.key});
@@ -335,6 +337,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     return true;
   }
 
+  // Replace your _saveWithdrawal method with this updated version:
   Future<void> _saveWithdrawal() async {
     if (_formKey.currentState?.validate() != true) {
       return;
@@ -362,6 +365,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     try {
       final eventId = eventData?['id'];
       final operatorId = eventData?['operator_id'];
+      final operatorName = eventData?['operator_name'] ?? 'Unknown';
 
       if (eventId == null || operatorId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -369,6 +373,18 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         );
         return;
       }
+
+      // Prepare denominations map
+      Map<int, int> denominations = {
+        500: int.tryParse(_denom500Controller.text) ?? 0,
+        200: int.tryParse(_denom200Controller.text) ?? 0,
+        100: int.tryParse(_denom100Controller.text) ?? 0,
+        50: int.tryParse(_denom50Controller.text) ?? 0,
+        20: int.tryParse(_denom20Controller.text) ?? 0,
+        10: int.tryParse(_denom10Controller.text) ?? 0,
+        5: int.tryParse(_denom5Controller.text) ?? 0,
+        1: int.tryParse(_denom1Controller.text) ?? 0,
+      };
 
       // Insert withdrawal record with calculated amount
       final response = await _supabase.from('cash_withdrawals').insert({
@@ -389,34 +405,54 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       // Save denomination breakdown
       await _supabase.from('cash_withdrawal_denominations').insert({
         'withdrawal_id': withdrawalId,
-        'denom_500': int.tryParse(_denom500Controller.text) ?? 0,
-        'denom_200': int.tryParse(_denom200Controller.text) ?? 0,
-        'denom_100': int.tryParse(_denom100Controller.text) ?? 0,
-        'denom_50': int.tryParse(_denom50Controller.text) ?? 0,
-        'denom_20': int.tryParse(_denom20Controller.text) ?? 0,
-        'denom_10': int.tryParse(_denom10Controller.text) ?? 0,
-        'denom_5': int.tryParse(_denom5Controller.text) ?? 0,
-        'denom_1': int.tryParse(_denom1Controller.text) ?? 0,
+        'denom_500': denominations[500],
+        'denom_200': denominations[200],
+        'denom_100': denominations[100],
+        'denom_50': denominations[50],
+        'denom_20': denominations[20],
+        'denom_10': denominations[10],
+        'denom_5': denominations[5],
+        'denom_1': denominations[1],
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(0)} saved successfully!'),
-          backgroundColor: Colors.green,
-        ),
+      // Generate withdrawal receipt
+      final receiptFile = await WithdrawalReceiptGenerator.generateWithdrawalReceipt(
+        context: context,
+        operatorName: operatorName,
+        withdrawalDate: DateTime.now(),
+        withdrawalTime: TimeOfDay.now(),
+        requestedBy: _requestedByController.text.trim(),
+        amount: _totalAmount,
+        denominations: denominations,
+        reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
       );
+
+      if (receiptFile != null) {
+        print('Withdrawal receipt generated: ${receiptFile.path}');
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(0)} saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
 
       _clearAllFields();
       // Reload balance after successful withdrawal
       await _loadAvailableBalance();
     } catch (e) {
       print('Error saving withdrawal: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving withdrawal: $e'),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving withdrawal: $e'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 

@@ -17,6 +17,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
   final _auth = AuthService();
   List<Map<String, dynamic>> userDenominations = [];
   bool _isLoading = true;
+  Map<String, dynamic> _summaryData = {};
+  bool _isLoadingSummary = false;
 
   final List<int> denominations = [500, 200, 100, 50, 20, 10, 5, 1];
 
@@ -205,8 +207,70 @@ class _DenominationScreenState extends State<DenominationScreen> {
           ),
         );
       }
-    } finally {
+    }
+    await _calculateSummary();
+    finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _calculateSummary() async {
+    setState(() => _isLoadingSummary = true);
+
+    try {
+      // Get total denomination amounts (CASH only)
+      final moiTotal = await _auth.client
+          .from('moi_denominations')
+          .select('total_amount, mois!moi_denominations_moi_id_fkey(payment_method)')
+          .eq('event_id', widget.eventId);
+
+      double totalCashCollected = 0;
+      for (var entry in moiTotal) {
+        if (entry['mois']['payment_method'] == 'CASH') {
+          totalCashCollected += (entry['total_amount'] ?? 0);
+        }
+      }
+
+      // Get total withdrawals
+      final withdrawalData = await _auth.client
+          .from('cash_withdrawals')
+          .select('amount')
+          .eq('event_id', widget.eventId);
+
+      double totalWithdrawals = withdrawalData.fold(0.0,
+              (sum, item) => sum + (item['amount'] ?? 0));
+
+      // Get OTHERS payment total
+      final othersData = await _auth.client
+          .from('mois')
+          .select('amount')
+          .eq('event_id', widget.eventId)
+          .neq('payment_method', 'CASH')
+          .eq('is_deleted', false);
+
+      double totalOthers = othersData.fold(0.0,
+              (sum, item) => sum + (item['amount'] ?? 0));
+
+      // Get total people count
+      final peopleCount = await _auth.client
+          .from('mois')
+          .select('id')
+          .eq('event_id', widget.eventId)
+          .eq('is_deleted', false);
+
+      setState(() {
+        _summaryData = {
+          'totalCashCollected': totalCashCollected - totalWithdrawals,
+          'computedTotal': totalCashCollected + totalOthers,
+          'totalWithdrawals': totalWithdrawals,
+          'totalOthers': totalOthers,
+          'peopleCount': peopleCount.length,
+        };
+      });
+    } catch (e) {
+      print('Error calculating summary: $e');
+    } finally {
+      setState(() => _isLoadingSummary = false);
     }
   }
 
