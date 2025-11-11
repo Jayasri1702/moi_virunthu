@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/denomination_receipt_generator.dart';
 
 class DenominationScreen extends StatefulWidget {
   final String eventId;
@@ -679,20 +680,107 @@ class _DenominationScreenState extends State<DenominationScreen> {
             ),
           ),
 
-          // Action Buttons
+          // Replace the entire Padding widget with action buttons (around line 530-580)
+// with this complete implementation:
+
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {
-                      // Print functionality
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Print functionality to be implemented'),
-                        ),
-                      );
+                    onPressed: _isLoading ? null : () async {
+                      try {
+                        // Get event details
+                        final eventData = await _auth.client
+                            .from('events')
+                            .select('''
+                    customer_name,
+                    customer_phone,
+                    venue,
+                    city,
+                    event_date,
+                    event_types!events_event_type_fkey (
+                      name
+                    )
+                  ''')
+                            .eq('id', widget.eventId)
+                            .single();
+
+                        if (eventData == null) {
+                          throw Exception('Event not found');
+                        }
+
+                        final customerName = eventData['customer_name'] ?? 'N/A';
+                        final eventTypeName = eventData['event_types']?['name'] ?? 'Event';
+                        final venue = eventData['venue'] ?? 'N/A';
+                        final city = eventData['city'] ?? 'N/A';
+                        final contactNumber = eventData['customer_phone'] ?? 'N/A';
+                        final eventDate = DateTime.parse(eventData['event_date']);
+
+                        // Calculate totals
+                        final totals = _calculateTotals();
+
+                        // Calculate verupaadu (difference)
+                        final verupaadu = (_summaryData['totalCashCollected'] ?? 0) -
+                            (_summaryData['computedTotal'] ?? 0);
+
+                        // Show loading
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Generating receipt...'),
+                              backgroundColor: Colors.blue,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+
+                        // Generate receipt
+                        final file = await DenominationReceiptGenerator.generateDenominationReceipt(
+                          context: context,
+                          customerName: customerName,
+                          eventTypeName: eventTypeName,
+                          venue: venue,
+                          city: city,
+                          contactNumber: contactNumber,
+                          eventDate: eventDate,
+                          denominationCounts: totals['counts'] as Map<int, int>,
+                          denominationAmounts: totals['amounts'] as Map<int, int>,
+                          grandTotal: totals['grandTotal'] as int,
+                          totalCashCollected: ((_summaryData['totalCashCollected'] ?? 0) as num).toDouble(),
+                          computedTotal: ((_summaryData['computedTotal'] ?? 0) as num).toDouble(),
+                          totalWithdrawals: ((_summaryData['totalWithdrawals'] ?? 0) as num).toDouble(),
+                          verupaadu: (verupaadu as num).toDouble(),
+                          peopleCount: _summaryData['peopleCount'] ?? 0,
+                          totalOthersAmount: ((_summaryData['totalOthers'] ?? 0) as num).toDouble(),
+                        );
+
+                        if (file == null) {
+                          throw Exception('Failed to generate receipt');
+                        }
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Receipt generated successfully!'),
+                              backgroundColor: Colors.green,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        print('Error generating receipt: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error generating receipt: ${e.toString()}'),
+                              backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      }
                     },
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
