@@ -1268,48 +1268,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ],
           ),
           // Hide action buttons when in edit mode OR when a group is active
-          if (!_isEditMode && _currentGroupId == null) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: _buildActionButton('Sample Receipt', () {})),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildActionButton('Cash Drawing', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/cash_withdrawal',
-                      arguments: {'id': _eventId, 'operator_id': _operatorId},
-                    );
-                  }),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton('Exchange\nDenomination', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/exchange-denomination',
-                      arguments: {'id': _eventId, 'operator_id': _operatorId},
-                    );
-                  }),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildActionButton('Collection Details', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/collection-details',
-                      arguments: {'id': _eventId, 'operator_id': _operatorId},
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );

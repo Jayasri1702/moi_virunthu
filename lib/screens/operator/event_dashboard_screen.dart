@@ -187,6 +187,24 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                     );
                   }),
+
+                  const SizedBox(height: 12),
+                  _buildActionButton('Cash Withdrawal', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/cash_withdrawal',
+                      arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  _buildActionButton('Exchange Denomination', () {
+                    Navigator.pushNamed(
+                      context,
+                      '/operator/exchange-denomination',
+                      arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                    );
+                  }),
+
                   const SizedBox(height: 12),
                   _buildActionButton('Collection Details', () {
                     final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
