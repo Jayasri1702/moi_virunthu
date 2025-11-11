@@ -456,6 +456,82 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     }
   }
 
+  // In your cash_withdrawal_screen.dart, update the _saveWithdrawal method and add WhatsApp button
+
+// Add this method after _saveWithdrawal
+  Future<void> _sendReceiptToWhatsApp() async {
+    if (_formKey.currentState?.validate() != true) {
+      return;
+    }
+
+    if (_totalAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter denomination details. Amount cannot be zero.')),
+      );
+      return;
+    }
+
+    if (_requestedByController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter who requested the withdrawal')),
+      );
+      return;
+    }
+
+    if (_phoneController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter phone number to send receipt')),
+      );
+      return;
+    }
+
+    // Validate denominations
+    if (!_validateDenominations()) {
+      return;
+    }
+
+    try {
+      final operatorName = eventData?['operator_name'] ?? 'Unknown';
+
+      // Prepare denominations map
+      Map<int, int> denominations = {
+        500: int.tryParse(_denom500Controller.text) ?? 0,
+        200: int.tryParse(_denom200Controller.text) ?? 0,
+        100: int.tryParse(_denom100Controller.text) ?? 0,
+        50: int.tryParse(_denom50Controller.text) ?? 0,
+        20: int.tryParse(_denom20Controller.text) ?? 0,
+        10: int.tryParse(_denom10Controller.text) ?? 0,
+        5: int.tryParse(_denom5Controller.text) ?? 0,
+        1: int.tryParse(_denom1Controller.text) ?? 0,
+      };
+
+      // Send receipt to WhatsApp
+      await WithdrawalReceiptGenerator.sendToWhatsApp(
+        context: context,
+        phoneNumber: _phoneController.text.trim(),
+        operatorName: operatorName,
+        withdrawalDate: DateTime.now(),
+        withdrawalTime: TimeOfDay.now(),
+        requestedBy: _requestedByController.text.trim(),
+        amount: _totalAmount,
+        denominations: denominations,
+        reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
+      );
+
+    } catch (e) {
+      print('Error sending receipt to WhatsApp: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -636,51 +712,84 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                 const SizedBox(height: 20),
 
                 // Action Buttons
-                Row(
+                // Action Buttons
+                Column(
                   children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _saveWithdrawal,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: const BorderSide(color: Colors.black, width: 2),
-                            ),
-                          ),
-                          child: const Text(
-                            'Save Withdrawal',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                    // Save and Clear buttons (existing)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _saveWithdrawal,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: const BorderSide(color: Colors.black, width: 2),
+                                ),
+                              ),
+                              child: const Text(
+                                'Save Withdrawal',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _clearAllFields,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: const BorderSide(color: Colors.black, width: 2),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _clearAllFields,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.zero,
+                                  side: const BorderSide(color: Colors.black, width: 2),
+                                ),
+                              ),
+                              child: const Text(
+                                'Clear',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                          child: const Text(
-                            'Clear',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // New WhatsApp button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _sendReceiptToWhatsApp,
+                        icon: const Icon(Icons.send, color: Colors.white),
+                        label: const Text(
+                          'Send Receipt to WhatsApp',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366), // WhatsApp green color
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.zero,
+                            side: const BorderSide(color: Colors.black, width: 2),
                           ),
                         ),
                       ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,8 @@ import 'package:pdf/pdf.dart';
 import 'package:share_plus/share_plus.dart';
 
 class WithdrawalReceiptGenerator {
+  static const platform = MethodChannel('com.example.moi_virunthu/whatsapp');
+
   // Generate cash withdrawal receipt
   static Future<File?> generateWithdrawalReceipt({
     required BuildContext context,
@@ -18,6 +21,7 @@ class WithdrawalReceiptGenerator {
     required num amount,
     required Map<int, int> denominations,
     String? reason,
+    bool showDialog = true,
   }) async {
     try {
       final htmlContent = _generateWithdrawalHtml(
@@ -105,9 +109,9 @@ class WithdrawalReceiptGenerator {
         attempts++;
       }
 
-      // Show share dialog if PDF was generated successfully
+      // Show share dialog if PDF was generated successfully and showDialog is true
       final finalFile = generatedFile;
-      if (finalFile != null && context.mounted) {
+      if (finalFile != null && context.mounted && showDialog) {
         _showShareDialog(context, finalFile);
       }
 
@@ -115,6 +119,139 @@ class WithdrawalReceiptGenerator {
     } catch (e) {
       print('Error in generateWithdrawalReceipt: $e');
       return null;
+    }
+  }
+
+  // Send withdrawal receipt to WhatsApp using MethodChannel
+  static Future<void> sendToWhatsApp({
+    required BuildContext context,
+    required String phoneNumber,
+    required String operatorName,
+    required DateTime withdrawalDate,
+    required TimeOfDay withdrawalTime,
+    required String requestedBy,
+    required num amount,
+    required Map<int, int> denominations,
+    String? reason,
+  }) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Generate the receipt PDF
+      final receiptFile = await generateWithdrawalReceipt(
+        context: context,
+        operatorName: operatorName,
+        withdrawalDate: withdrawalDate,
+        withdrawalTime: withdrawalTime,
+        requestedBy: requestedBy,
+        amount: amount,
+        denominations: denominations,
+        reason: reason,
+        showDialog: false,
+      );
+
+      // Close loading indicator
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+
+      if (receiptFile == null) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to generate receipt'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Format phone number for WhatsApp
+      String cleanPhone = phoneNumber.replaceAll(RegExp(r'\D'), '');
+
+      // Add country code if not present (assuming India +91)
+      if (cleanPhone.length == 10) {
+        cleanPhone = '91$cleanPhone';
+      } else if (cleanPhone.startsWith('+')) {
+        cleanPhone = cleanPhone.substring(1);
+      }
+
+      // Create WhatsApp message
+      final whatsappMessage = 'Cash Withdrawal Receipt\n\n'
+          '💰 Amount: ₹${amount.round()}\n'
+          '👤 Requested by: $requestedBy\n'
+          '📅 Date: ${DateFormat('dd-MM-yyyy').format(withdrawalDate)}\n'
+          '⏰ Time: ${withdrawalTime.hour.toString().padLeft(2, '0')}:${withdrawalTime.minute.toString().padLeft(2, '0')}\n\n'
+          '${reason != null && reason.isNotEmpty ? 'Reason: $reason\n\n' : ''}'
+          'Receipt attached below.\n\n'
+          'நன்றி!\n'
+          'பேச்சி மொய் டெக்';
+
+      // Send via WhatsApp using MethodChannel
+      try {
+        final result = await platform.invokeMethod('sendToWhatsApp', {
+          'phone': cleanPhone,
+          'message': whatsappMessage,
+          'filePath': receiptFile.path,
+        });
+
+        if (context.mounted) {
+          if (result == true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Opening WhatsApp for $requestedBy'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('WhatsApp not installed. Please install WhatsApp.'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        print('Error invoking platform method: $e');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error opening WhatsApp: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+
+    } catch (e) {
+      print('Error sending to WhatsApp: $e');
+
+      // Close loading indicator if still open
+      if (context.mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
