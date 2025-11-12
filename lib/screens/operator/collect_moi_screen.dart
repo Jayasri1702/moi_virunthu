@@ -19,17 +19,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _notesController = TextEditingController();
   final _amountController = TextEditingController();
 
-  // Denomination controllers
-  final Map<int, TextEditingController> _denomControllers = {
-    500: TextEditingController(),
-    200: TextEditingController(),
-    100: TextEditingController(),
-    50: TextEditingController(),
-    20: TextEditingController(),
-    10: TextEditingController(),
-    5: TextEditingController(),
-    1: TextEditingController(),
-  };
+  // Person 1 controllers (2 fields now)
+  final _person1Field1Controller = TextEditingController(); // Init + Name
+  final _person1Field2Controller = TextEditingController(); // Education + Job
+
+  // Person 2 controller (combined)
+  final _person2Controller = TextEditingController();
+
+  // Denomination controllers with dropdown support
+  final List<Map<String, dynamic>> _denomRows = [];
 
   // State variables
   String? _eventId;
@@ -44,24 +42,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String? _editingMoiId;
   int? _currentGroupId;
   List<Map<String, dynamic>> _groupedMois = [];
-  Map<String, dynamic>? _originalData; // Store original data before editing
-
-  // Person 1 controllers
-  final _init1Controller = TextEditingController();
-  final _name1Controller = TextEditingController();
-  final _qualification1Controller = TextEditingController();
-  final _job1Controller = TextEditingController();
-
-  // Person 2 controllers
-  final _init2Controller = TextEditingController();
-  final _name2Controller = TextEditingController();
-  final _qualification2Controller = TextEditingController();
-  final _job2Controller = TextEditingController();
+  Map<String, dynamic>? _originalData;
 
   @override
   void initState() {
     super.initState();
-    _setupDenomListeners();
+    _initializeDenominations();
   }
 
   @override
@@ -72,14 +58,71 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  void _setupDenomListeners() {
-    _denomControllers.forEach((denom, controller) {
-      controller.addListener(() {
-        if (_paymentMethod == 'CASH') {
-          _calculateTotal();
-        }
-      });
+  void _initializeDenominations() {
+    // Start with only the first row (500)
+    _denomRows.add({
+      'denomOptions': [500, 100, 10, 1],
+      'selectedDenom': 500,
+      'countController': TextEditingController(),
     });
+
+    _denomRows[0]['countController'].addListener(_onDenomCountChanged);
+  }
+
+  void _onDenomCountChanged() {
+    if (_paymentMethod == 'CASH') {
+      setState(() {
+        _updateDenominationRows();
+      });
+    }
+  }
+
+  void _updateDenominationRows() {
+    // Check each row if it has a count, then show next row
+    for (int i = 0; i < _denomRows.length; i++) {
+      final count = int.tryParse(_denomRows[i]['countController'].text) ?? 0;
+      final selectedDenom = _denomRows[i]['selectedDenom'];
+
+      if (count > 0 && selectedDenom < 500) {
+        // Show next row if it doesn't exist
+        if (i == _denomRows.length - 1) {
+          _addNextDenomRow(selectedDenom);
+        }
+      }
+    }
+  }
+
+  void _addNextDenomRow(int currentDenom) {
+    List<int> nextOptions = [];
+
+    if (currentDenom == 100) {
+      nextOptions = [50, 20, 10, 5, 1];
+    } else if (currentDenom == 50) {
+      nextOptions = [20, 10, 5, 1];
+    } else if (currentDenom == 20) {
+      nextOptions = [10, 5, 1];
+    } else if (currentDenom == 10) {
+      nextOptions = [5, 1];
+    } else if (currentDenom == 5) {
+      nextOptions = [1];
+    }
+
+    if (nextOptions.isNotEmpty && !_hasRowWithDenom(nextOptions[0])) {
+      final controller = TextEditingController();
+      controller.addListener(_onDenomCountChanged);
+
+      setState(() {
+        _denomRows.add({
+          'denomOptions': nextOptions,
+          'selectedDenom': nextOptions[0],
+          'countController': controller,
+        });
+      });
+    }
+  }
+
+  bool _hasRowWithDenom(int denom) {
+    return _denomRows.any((row) => row['selectedDenom'] == denom);
   }
 
   Future<void> _loadArguments() async {
@@ -88,7 +131,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _eventId = args['id'];
       _operatorId = args['operator_id'];
 
-      // Check if edit mode
       if (args['edit_mode'] == true && args['moi_data'] != null) {
         _isEditMode = true;
         final moiData = args['moi_data'] as Map<String, dynamic>;
@@ -104,13 +146,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _loadEditData(Map<String, dynamic> moiData) async {
-    // Store original data for old_data field
     _originalData = Map<String, dynamic>.from(moiData);
-
-    // Remove all listeners temporarily
-    _denomControllers.forEach((_, controller) {
-      controller.removeListener(_calculateTotal);
-    });
 
     setState(() {
       _editingMoiId = moiData['id'];
@@ -123,44 +159,57 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = moiData['is_uncle'] ?? false;
       _currentGroupId = moiData['group_id'];
 
-      // Load persons
       if (moiData['persons'] != null) {
         List<dynamic> personsList = moiData['persons'] as List;
         if (personsList.isNotEmpty) {
           var person1 = personsList[0];
-          _init1Controller.text = person1['init'] ?? '';
-          _name1Controller.text = person1['name'] ?? '';
-          _qualification1Controller.text = person1['qualification'] ?? '';
-          _job1Controller.text = person1['job'] ?? '';
+          String field1 = '';
+          if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
+            field1 += person1['init'];
+          }
+          if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
+            field1 += (field1.isEmpty ? '' : ' ') + person1['name'];
+          }
+          _person1Field1Controller.text = field1;
+
+          String field2 = '';
+          if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
+            field2 += person1['qualification'];
+          }
+          if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
+            field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
+          }
+          _person1Field2Controller.text = field2;
         }
         if (personsList.length > 1) {
           var person2 = personsList[1];
-          _init2Controller.text = person2['init'] ?? '';
-          _name2Controller.text = person2['name'] ?? '';
-          _qualification2Controller.text = person2['qualification'] ?? '';
-          _job2Controller.text = person2['job'] ?? '';
+          String person2Text = '';
+          if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
+            person2Text += person2['init'];
+          }
+          if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ' ') + person2['name'];
+          }
+          if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
+          }
+          if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
+          }
+          _person2Controller.text = person2Text;
         }
       }
 
       _amountController.text = moiData['amount']?.toString() ?? '0';
     });
 
-    // REQUIREMENT 1: Load all grouped entries immediately when editing
     if (_currentGroupId != null) {
       await _loadGroupedMois();
     }
 
-    // Load denominations only if payment method is CASH
     if (_paymentMethod == 'CASH') {
       await _loadDenominations(moiData['id']);
-    } else {
-      _denomControllers.forEach((_, controller) {
-        controller.clear();
-      });
     }
-
-    // Re-add listeners
-    _setupDenomListeners();
   }
 
   Future<void> _loadDenominations(String moiId) async {
@@ -172,16 +221,53 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .maybeSingle();
 
       if (response != null) {
-        setState(() {
-          _denomControllers[500]!.text = response['denom_500']?.toString() ?? '';
-          _denomControllers[200]!.text = response['denom_200']?.toString() ?? '';
-          _denomControllers[100]!.text = response['denom_100']?.toString() ?? '';
-          _denomControllers[50]!.text = response['denom_50']?.toString() ?? '';
-          _denomControllers[20]!.text = response['denom_20']?.toString() ?? '';
-          _denomControllers[10]!.text = response['denom_10']?.toString() ?? '';
-          _denomControllers[5]!.text = response['denom_5']?.toString() ?? '';
-          _denomControllers[1]!.text = response['denom_1']?.toString() ?? '';
+        // Clear existing rows
+        for (var row in _denomRows) {
+          row['countController'].dispose();
+        }
+        _denomRows.clear();
+
+        // Reconstruct denomination rows from saved data
+        Map<int, int> savedDenoms = {
+          500: response['denom_500'] ?? 0,
+          200: response['denom_200'] ?? 0,
+          100: response['denom_100'] ?? 0,
+          50: response['denom_50'] ?? 0,
+          20: response['denom_20'] ?? 0,
+          10: response['denom_10'] ?? 0,
+          5: response['denom_5'] ?? 0,
+          1: response['denom_1'] ?? 0,
+        };
+
+        // Add rows based on saved data
+        savedDenoms.forEach((denom, count) {
+          if (count > 0) {
+            final controller = TextEditingController(text: count.toString());
+            controller.addListener(_onDenomCountChanged);
+
+            List<int> options = [];
+            if (denom >= 500) options = [500, 100, 10, 1];
+            else if (denom >= 100) options = [100, 50, 20, 10, 5, 1];
+            else if (denom >= 50) options = [50, 20, 10, 5, 1];
+            else if (denom >= 20) options = [20, 10, 5, 1];
+            else if (denom >= 10) options = [10, 5, 1];
+            else if (denom >= 5) options = [5, 1];
+            else options = [1];
+
+            _denomRows.add({
+              'denomOptions': options,
+              'selectedDenom': denom,
+              'countController': controller,
+            });
+          }
         });
+
+        // If no denominations saved, initialize with default
+        if (_denomRows.isEmpty) {
+          _initializeDenominations();
+        }
+
+        setState(() {});
       }
     } catch (e) {
       print('Error loading denominations: $e');
@@ -209,17 +295,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _loadGroupedEntryForEdit(Map<String, dynamic> moiData) async {
-    print('Loading entry for edit - Payment: ${moiData['payment_method']}, Amount: ${moiData['amount']}');
-
-    // Store original data for old_data field
     _originalData = Map<String, dynamic>.from(moiData);
 
-    // Remove all listeners temporarily
-    _denomControllers.forEach((_, controller) {
-      controller.removeListener(_calculateTotal);
-    });
-
-    // Load the selected entry for editing
     setState(() {
       _editingMoiId = moiData['id'];
       _serialNo = moiData['serial_no'];
@@ -231,55 +308,60 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = moiData['is_uncle'] ?? false;
       _isEditMode = true;
 
-      // Load persons
       if (moiData['persons'] != null) {
         List<dynamic> personsList = moiData['persons'] as List;
         if (personsList.isNotEmpty) {
           var person1 = personsList[0];
-          _init1Controller.text = person1['init'] ?? '';
-          _name1Controller.text = person1['name'] ?? '';
-          _qualification1Controller.text = person1['qualification'] ?? '';
-          _job1Controller.text = person1['job'] ?? '';
+          String field1 = '';
+          if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
+            field1 += person1['init'];
+          }
+          if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
+            field1 += (field1.isEmpty ? '' : ' ') + person1['name'];
+          }
+          _person1Field1Controller.text = field1;
+
+          String field2 = '';
+          if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
+            field2 += person1['qualification'];
+          }
+          if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
+            field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
+          }
+          _person1Field2Controller.text = field2;
         } else {
-          _init1Controller.clear();
-          _name1Controller.clear();
-          _qualification1Controller.clear();
-          _job1Controller.clear();
+          _person1Field1Controller.clear();
+          _person1Field2Controller.clear();
         }
         if (personsList.length > 1) {
           var person2 = personsList[1];
-          _init2Controller.text = person2['init'] ?? '';
-          _name2Controller.text = person2['name'] ?? '';
-          _qualification2Controller.text = person2['qualification'] ?? '';
-          _job2Controller.text = person2['job'] ?? '';
+          String person2Text = '';
+          if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
+            person2Text += person2['init'];
+          }
+          if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ' ') + person2['name'];
+          }
+          if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
+          }
+          if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
+          }
+          _person2Controller.text = person2Text;
         } else {
-          _init2Controller.clear();
-          _name2Controller.clear();
-          _qualification2Controller.clear();
-          _job2Controller.clear();
+          _person2Controller.clear();
         }
       }
 
       var amountValue = moiData['amount']?.toString() ?? '0';
       _amountController.text = amountValue;
-      print('Amount controller set to: $amountValue');
     });
 
-    // Load denominations only if payment method is CASH
     if (_paymentMethod == 'CASH') {
       await _loadDenominations(moiData['id']);
-    } else {
-      _denomControllers.forEach((_, controller) {
-        controller.clear();
-      });
     }
 
-    // Re-add listeners
-    _setupDenomListeners();
-
-    print('After loading - Amount controller: ${_amountController.text}, Payment: $_paymentMethod');
-
-    // Show a snackbar to indicate editing mode
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -318,26 +400,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  void _calculateTotal() {
-    if (_paymentMethod == 'CASH') {
-      setState(() {
-        int total = 0;
-        _denomControllers.forEach((denom, controller) {
-          int count = int.tryParse(controller.text) ?? 0;
-          total += denom * count;
-        });
-        _amountController.text = total > 0 ? total.toString() : '';
-      });
-    }
-  }
-
   int _getTotalAmount() {
     if (_paymentMethod == 'CASH') {
       int total = 0;
-      _denomControllers.forEach((denom, controller) {
-        int count = int.tryParse(controller.text) ?? 0;
+      for (var row in _denomRows) {
+        int denom = row['selectedDenom'];
+        int count = int.tryParse(row['countController'].text) ?? 0;
         total += denom * count;
-      });
+      }
       return total;
     } else {
       String amountText = _amountController.text.trim();
@@ -352,9 +422,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   int _getTotalCount() {
     int count = 0;
-    _denomControllers.forEach((_, controller) {
-      count += int.tryParse(controller.text) ?? 0;
-    });
+    for (var row in _denomRows) {
+      count += int.tryParse(row['countController'].text) ?? 0;
+    }
     return count;
   }
 
@@ -379,16 +449,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // Replace the _handleGroup method in your collect_moi_screen.dart with this:
-
-  // Replace the _handleGroup method in your collect_moi_screen.dart with this:
-
   Future<void> _handleGroup() async {
     if (!_validateForm()) return;
 
-    // CASE 1: Editing an existing entry that's ALREADY in a group
     if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
-      // User is editing an existing grouped entry and clicked Group button
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -398,20 +462,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
         );
       }
-      return; // Don't proceed
+      return;
     }
 
-    // CASE 2: Editing an existing standalone entry (not in group) - Convert to group
     if (_isEditMode && _editingMoiId != null && _currentGroupId == null) {
       try {
-        // Assign a new group ID to this existing entry
         int groupId = await _getNextGroupId();
 
-        // Update the existing entry with group_id (no new serial number)
         final moiData = {
           'group_id': groupId,
           'updated_at': DateTime.now().toIso8601String(),
-          'old_data': _originalData, // Store old data for audit
+          'old_data': _originalData,
         };
 
         await _supabase
@@ -447,21 +508,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // CASE 3: Adding a NEW entry to an existing or new group
     try {
-      // Load next serial for NEW entries only
       await _loadNextSerialNo();
 
       int groupId;
       if (_currentGroupId != null) {
-        // Use existing group
         groupId = _currentGroupId!;
       } else {
-        // Create new group
         groupId = await _getNextGroupId();
       }
 
-      final moiId = await _saveMoi(groupId, forceUpdate: false); // Never force update in group
+      final moiId = await _saveMoi(groupId, forceUpdate: false);
 
       if (moiId != null) {
         setState(() {
@@ -490,33 +547,47 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // Also update _saveMoi to be more explicit:
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
     List<Map<String, dynamic>> personsData = [];
 
-    if (_name1Controller.text.trim().isNotEmpty) {
+    // Parse Person 1
+    if (_person1Field1Controller.text.trim().isNotEmpty) {
+      String field1 = _person1Field1Controller.text.trim();
+      List<String> parts = field1.split(' ');
+
+      String init = parts.length > 0 ? parts[0] : '';
+      String name = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+      String field2 = _person1Field2Controller.text.trim();
+      List<String> eduJob = field2.split(',').map((e) => e.trim()).toList();
+
       personsData.add({
-        'init': _init1Controller.text,
-        'name': _name1Controller.text,
-        'qualification': _qualification1Controller.text,
-        'job': _job1Controller.text,
+        'init': init,
+        'name': name,
+        'qualification': eduJob.length > 0 ? eduJob[0] : '',
+        'job': eduJob.length > 1 ? eduJob[1] : '',
       });
     }
 
-    if (_name2Controller.text.trim().isNotEmpty) {
-      personsData.add({
-        'init': _init2Controller.text,
-        'name': _name2Controller.text,
-        'qualification': _qualification2Controller.text,
-        'job': _job2Controller.text,
-      });
+    // Parse Person 2
+    if (_person2Controller.text.trim().isNotEmpty) {
+      String person2Text = _person2Controller.text.trim();
+      List<String> parts = person2Text.split(',').map((e) => e.trim()).toList();
+
+      Map<String, dynamic> person2Data = {
+        'init': '',
+        'name': parts.isNotEmpty ? parts[0] : '',
+        'qualification': parts.length > 1 ? parts[1] : '',
+        'job': parts.length > 2 ? parts[2] : '',
+      };
+      personsData.add(person2Data);
     }
 
     final moiData = {
       'event_id': _eventId,
       'operator_id': _operatorId,
       'serial_no': _serialNo,
-      'amount': _getTotalAmount(),
+      'amount': _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
       'payment_method': _paymentMethod,
       'persons': personsData,
       'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
@@ -532,9 +603,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       dynamic response;
       String moiId;
 
-      // Only update if explicitly in edit mode with an existing ID AND forceUpdate is true
       if (forceUpdate && _editingMoiId != null) {
-        // UPDATE MODE - Store old data
         moiData['old_data'] = _originalData;
 
         response = await _supabase
@@ -547,7 +616,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         print('Updated existing MOI: $moiId with serial_no: $_serialNo');
       } else {
-        // INSERT NEW MOI
         moiData['created_at'] = DateTime.now().toIso8601String();
         response = await _supabase
             .from('mois')
@@ -571,19 +639,27 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<void> _saveDenominations(String moiId) async {
     if (_paymentMethod != 'CASH') return;
 
-    final denomData = {
+    // Build denomination data from rows
+    Map<String, dynamic> denomData = {
       'moi_id': moiId,
-      'event_id': _eventId,
-      'operator_id': _operatorId,
-      'denom_500': int.tryParse(_denomControllers[500]!.text) ?? 0,
-      'denom_200': int.tryParse(_denomControllers[200]!.text) ?? 0,
-      'denom_100': int.tryParse(_denomControllers[100]!.text) ?? 0,
-      'denom_50': int.tryParse(_denomControllers[50]!.text) ?? 0,
-      'denom_20': int.tryParse(_denomControllers[20]!.text) ?? 0,
-      'denom_10': int.tryParse(_denomControllers[10]!.text) ?? 0,
-      'denom_5': int.tryParse(_denomControllers[5]!.text) ?? 0,
-      'denom_1': int.tryParse(_denomControllers[1]!.text) ?? 0,
+      'event_id': _eventId!,
+      'operator_id': _operatorId!,
+      'denom_500': 0,
+      'denom_200': 0,
+      'denom_100': 0,
+      'denom_50': 0,
+      'denom_20': 0,
+      'denom_10': 0,
+      'denom_5': 0,
+      'denom_1': 0,
     };
+
+    for (var row in _denomRows) {
+      int denom = row['selectedDenom'];
+      int count = int.tryParse(row['countController'].text) ?? 0;
+
+      denomData['denom_$denom'] = count;
+    }
 
     await _supabase
         .from('moi_denominations')
@@ -591,12 +667,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleSaveAndPrint() async {
-    // Don't load next serial if we're editing
     if (!_isEditMode) {
       await _loadNextSerialNo();
     }
 
-    // Auto-add to group if user forgot to click Group button
     if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
       if (!_validateForm()) return;
 
@@ -630,13 +704,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // Handle grouped entries - UPDATE MODE
     if (_groupedMois.isNotEmpty) {
       if (_isEditMode && _editingMoiId != null) {
         if (!_validateForm()) return;
 
         try {
-          // Pass forceUpdate=true to update the existing entry
           await _saveMoi(_currentGroupId, forceUpdate: true);
           await _loadGroupedMois();
 
@@ -666,7 +738,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // All grouped entries saved
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -684,11 +755,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // Regular save for single entry
     if (!_validateForm()) return;
 
     try {
-      // Pass forceUpdate based on edit mode
       await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
 
       if (mounted) {
@@ -719,16 +788,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-// Helper method to check if form has any data
   bool _hasFormData() {
-    return _name1Controller.text.trim().isNotEmpty ||
-        _name2Controller.text.trim().isNotEmpty ||
+    return _person1Field1Controller.text.trim().isNotEmpty ||
+        _person2Controller.text.trim().isNotEmpty ||
         _getTotalAmount() > 0;
   }
 
   bool _validateForm() {
-    bool hasValidPerson = _name1Controller.text.trim().isNotEmpty ||
-        _name2Controller.text.trim().isNotEmpty;
+    bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
+        _person2Controller.text.trim().isNotEmpty;
 
     if (!hasValidPerson) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -738,14 +806,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     if (_paymentMethod == 'CASH') {
-      if (_getTotalAmount() == 0) {
+      int enteredAmount = int.tryParse(_amountController.text.trim()) ?? 0;
+      if (enteredAmount == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter denomination details')),
+          const SnackBar(content: Text('Please enter the amount')),
+        );
+        return false;
+      }
+
+      int denomTotal = _getTotalAmount();
+
+      if (denomTotal != enteredAmount) {
+        int difference = enteredAmount - denomTotal;
+        String message = difference > 0
+            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
         return false;
       }
     } else {
-      if (_amountController.text.trim().isEmpty || _getTotalAmount() == 0) {
+      if (_amountController.text.trim().isEmpty || int.tryParse(_amountController.text.trim()) == null || int.tryParse(_amountController.text.trim())! == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter amount')),
         );
@@ -765,18 +852,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _notesController.clear();
     _amountController.clear();
 
-    _init1Controller.clear();
-    _name1Controller.clear();
-    _qualification1Controller.clear();
-    _job1Controller.clear();
-    _init2Controller.clear();
-    _name2Controller.clear();
-    _qualification2Controller.clear();
-    _job2Controller.clear();
+    _person1Field1Controller.clear();
+    _person1Field2Controller.clear();
+    _person2Controller.clear();
 
-    _denomControllers.forEach((_, controller) {
-      controller.clear();
-    });
+    // Clear denomination rows
+    for (var row in _denomRows) {
+      row['countController'].dispose();
+    }
+    _denomRows.clear();
+    _initializeDenominations();
 
     setState(() {
       _paymentMethod = 'CASH';
@@ -805,15 +890,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _livingPlaceController.clear();
       _notesController.clear();
       _amountController.clear();
-      _init1Controller.clear();
-      _name1Controller.clear();
-      _qualification1Controller.clear();
-      _job1Controller.clear();
-      _init2Controller.clear();
-      _name2Controller.clear();
-      _qualification2Controller.clear();
-      _job2Controller.clear();
-      _denomControllers.forEach((_, controller) => controller.clear());
+      _person1Field1Controller.clear();
+      _person1Field2Controller.clear();
+      _person2Controller.clear();
+
+      for (var row in _denomRows) {
+        row['countController'].dispose();
+      }
+      _denomRows.clear();
+      _initializeDenominations();
+
       _paymentMethod = 'CASH';
       _isUncle = false;
       _currentGroupId = null;
@@ -843,9 +929,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return 'No name';
     }
   }
-
-
-  // Add after existing methods, before the build method
 
   Future<String> _getOperatorName() async {
     try {
@@ -927,7 +1010,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Save MOI first if not saved
       String? moiId = _editingMoiId;
       if (moiId == null) {
         moiId = await _saveMoi(_currentGroupId, forceUpdate: false);
@@ -936,11 +1018,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // Get operator name and event details
       final operatorName = await _getOperatorName();
       final eventDetails = await _getEventDetails();
 
-      // Get denominations if CASH payment
       Map<int, int>? denominations;
       if (_paymentMethod == 'CASH') {
         denominations = await _getDenominations(moiId);
@@ -956,7 +1036,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
 
-      // Generate receipt
+      // Parse person 1 data
+      String field1 = _person1Field1Controller.text.trim();
+      List<String> parts = field1.split(' ');
+      String init1 = parts.length > 0 ? parts[0] : '';
+      String name1 = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
       final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
         context: context,
         serialNo: _serialNo!,
@@ -965,12 +1050,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventTime: eventDetails['event_time'],
         villageName: _villageController.text.trim(),
         livingPlace: _livingPlaceController.text.trim(),
-        person1Init: _init1Controller.text.trim(),
-        person1Name: _name1Controller.text.trim(),
-        person2Init: _init2Controller.text.trim().isNotEmpty ? _init2Controller.text.trim() : null,
-        person2Name: _name2Controller.text.trim().isNotEmpty ? _name2Controller.text.trim() : null,
+        person1Init: init1,
+        person1Name: name1,
+        person2Init: '',
+        person2Name: _person2Controller.text.trim().isNotEmpty ? _person2Controller.text.trim() : null,
         phone: _phoneController.text.trim(),
-        amount: _getTotalAmount(),
+        amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
         paymentMethod: _paymentMethod,
         denominations: denominations,
       );
@@ -1001,8 +1086,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // In your collect_moi_screen.dart, replace the _handleGenerateGroupReceipt method:
-
   Future<void> _handleGenerateGroupReceipt() async {
     if (_groupedMois.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1014,7 +1097,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // Show dialog to choose receipt type
     final receiptType = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1046,15 +1128,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       final eventDetails = await _getEventDetails();
 
       if (receiptType == 'consolidated') {
-        // Generate consolidated group receipt
-        double totalAmount = 0.0;  // CHANGED to double
+        double totalAmount = 0.0;
         Map<int, int> totalDenominations = {
           500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
         };
 
-        // Load denominations for all entries
         for (var entry in _groupedMois) {
-          // Handle amount as dynamic type and convert safely
           var amountValue = entry['amount'];
           if (amountValue is int) {
             totalAmount += amountValue.toDouble();
@@ -1091,7 +1170,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           eventDate: eventDetails['event_date'],
           eventTime: eventDetails['event_time'],
           groupEntries: _groupedMois,
-          totalAmount: totalAmount,  // Now passing double
+          totalAmount: totalAmount,
           totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
         );
 
@@ -1108,7 +1187,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           throw Exception('Failed to generate group receipt');
         }
       } else {
-        // Generate individual receipts for each entry
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1119,7 +1197,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           );
         }
 
-        // Load denominations for all entries first
         List<Map<String, dynamic>> entriesWithDenoms = [];
         for (var entry in _groupedMois) {
           Map<String, dynamic> entryData = Map.from(entry);
@@ -1165,6 +1242,64 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  String _convertAmountToWords(int amount) {
+    if (amount == 0) return 'Zero Rupees';
+
+    final ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    final teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    final tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    String result = '';
+
+    if (amount >= 10000000) {
+      int crores = amount ~/ 10000000;
+      result += '${ones[crores]} Crore ';
+      amount %= 10000000;
+    }
+
+    if (amount >= 100000) {
+      int lakhs = amount ~/ 100000;
+      result += '${ones[lakhs]} Lakh ';
+      amount %= 100000;
+    }
+
+    if (amount >= 1000) {
+      int thousands = amount ~/ 1000;
+      if (thousands >= 10 && thousands < 20) {
+        result += '${teens[thousands - 10]} Thousand ';
+      } else {
+        if (thousands >= 20) {
+          result += '${tens[thousands ~/ 10]} ';
+          thousands %= 10;
+        }
+        if (thousands > 0) {
+          result += '${ones[thousands]} Thousand ';
+        }
+      }
+      amount %= 1000;
+    }
+
+    if (amount >= 100) {
+      int hundreds = amount ~/ 100;
+      result += '${ones[hundreds]} Hundred ';
+      amount %= 100;
+    }
+
+    if (amount >= 10 && amount < 20) {
+      result += '${teens[amount - 10]} ';
+    } else {
+      if (amount >= 20) {
+        result += '${tens[amount ~/ 10]} ';
+        amount %= 10;
+      }
+      if (amount > 0) {
+        result += '${ones[amount]} ';
+      }
+    }
+
+    return result.trim() + ' Rupees Only';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1192,42 +1327,29 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            _buildSerialAndActions(),
-            const SizedBox(height: 16),
-            _buildTextField('Mobile Number', _phoneController),
-            const SizedBox(height: 16),
+            _buildSerialAndPaymentHeader(),
+            const SizedBox(height: 12),
+            _buildTextField('Search Mobile Number', _phoneController),
+            const SizedBox(height: 12),
             _buildVillageAndLivingPlace(),
-            const SizedBox(height: 16),
-            _buildPersonVertical(
-              'Person 1',
-              _init1Controller,
-              _name1Controller,
-              _qualification1Controller,
-              _job1Controller,
-            ),
-            const SizedBox(height: 16),
-            _buildPersonVertical(
-              'Person 2',
-              _init2Controller,
-              _name2Controller,
-              _qualification2Controller,
-              _job2Controller,
-            ),
-            const SizedBox(height: 16),
-            _buildTextField('Notes', _notesController, maxLines: 3),
-            const SizedBox(height: 16),
-            _buildPaymentMethod(),
-            const SizedBox(height: 16),
-            if (_paymentMethod == 'CASH')
-              _buildDenominations()
-            else
-              _buildAmountField(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _buildPerson1Fields(),
+            const SizedBox(height: 12),
+            _buildPerson2Field(),
+            const SizedBox(height: 12),
+            _buildTextField('Notes', _notesController, maxLines: 2),
+            const SizedBox(height: 12),
+            _buildAmountField(),
+            const SizedBox(height: 12),
+            if (_paymentMethod == 'CASH') _buildDenominations(),
+            const SizedBox(height: 12),
+            if (_paymentMethod == 'CASH') _buildAmountSummary(),
+            const SizedBox(height: 12),
             if (_groupedMois.isNotEmpty) _buildMoiDetails(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _buildActionButtons(),
           ],
         ),
@@ -1235,9 +1357,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildSerialAndActions() {
+  Widget _buildSerialAndPaymentHeader() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1248,11 +1370,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             children: [
               const Text(
                 'Serial No.',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   border: Border.all(color: Colors.black, width: 2),
@@ -1260,45 +1382,54 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: Text(
                   'O${_serialNo?.toString() ?? '0'}',
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
+              const Spacer(),
+              const Text('Uncle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Checkbox(
+                value: _isUncle,
+                onChanged: (value) {
+                  setState(() {
+                    _isUncle = value ?? false;
+                  });
+                },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
             ],
           ),
-          // Hide action buttons when in edit mode OR when a group is active
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionButton(String label, VoidCallback onPressed) {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.black, width: 2),
-        color: Colors.white,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          child: Center(
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Cheque / Advance / UPI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              Checkbox(
+                value: _paymentMethod == 'OTHERS',
+                onChanged: (value) {
+                  setState(() {
+                    _paymentMethod = value == true ? 'OTHERS' : 'CASH';
+                    if (_paymentMethod == 'OTHERS') {
+                      for (var row in _denomRows) {
+                        row['countController'].clear();
+                      }
+                    }
+                  });
+                },
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1306,12 +1437,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
           TextField(
             controller: controller,
             maxLines: maxLines,
-            decoration: const InputDecoration(border: InputBorder.none),
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              hintText: label,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
+            ),
           ),
         ],
       ),
@@ -1320,7 +1457,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Widget _buildVillageAndLivingPlace() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1331,25 +1468,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Village Name', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const Text('Village Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _villageController,
-                  decoration: const InputDecoration(border: InputBorder.none),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
+                  ),
                 ),
               ],
             ),
           ),
-          Container(width: 2, height: 60, color: Colors.black, margin: const EdgeInsets.symmetric(horizontal: 16)),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Living Place', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
+                const Text('Living City', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
-                  decoration: const InputDecoration(border: InputBorder.none),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
+                  ),
                 ),
               ],
             ),
@@ -1359,15 +1506,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildPersonVertical(
-      String title,
-      TextEditingController initController,
-      TextEditingController nameController,
-      TextEditingController qualificationController,
-      TextEditingController jobController,
-      ) {
+  Widget _buildPerson1Fields() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1375,47 +1516,37 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          _buildPersonField('Init', initController),
-          const SizedBox(height: 12),
-          _buildPersonField('Name', nameController),
-          const SizedBox(height: 12),
-          _buildPersonField('Qualification', qualificationController),
-          const SizedBox(height: 12),
-          _buildPersonField('Job', jobController),
+          const Text('Init. Name 1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _person1Field1Controller,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Init Name',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _person1Field2Controller,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'Education and Job',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildPersonField(String label, TextEditingController controller) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-        ),
-        Expanded(
-          child: Container(
-            height: 40,
-            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 1)),
-            child: TextField(
-              controller: controller,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentMethod() {
+  Widget _buildPerson2Field() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1423,43 +1554,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Payment Method', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: RadioListTile<String>(
-                  title: const Text('Cash'),
-                  value: 'CASH',
-                  groupValue: _paymentMethod,
-                  onChanged: (value) {
-                    setState(() {
-                      _paymentMethod = value!;
-                      if (_amountController.text.isNotEmpty) {
-                        _amountController.clear();
-                      }
-                    });
-                  },
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                ),
-              ),
-              Expanded(
-                child: RadioListTile<String>(
-                  title: const Text('Check/\nAdvance/UPI'),
-                  value: 'OTHERS',
-                  groupValue: _paymentMethod,
-                  onChanged: (value) {
-                    setState(() {
-                      _paymentMethod = value!;
-                      _denomControllers.forEach((_, controller) => controller.clear());
-                    });
-                  },
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                ),
-              ),
-            ],
+          const Text('Init. Name 2, Education and Job',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _person2Controller,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'e.g., Mr. John Doe, B.Tech, Engineer',
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
+            ),
+            maxLines: 2,
           ),
         ],
       ),
@@ -1468,7 +1575,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Widget _buildAmountField() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1476,33 +1583,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Amount', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+          const Text('Amount', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
           Container(
-            height: 50,
+            height: 40,
             decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: _amountController,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          CheckboxListTile(
-            title: const Text('Uncle'),
-            value: _isUncle,
-            onChanged: (value) {
-              setState(() {
-                _isUncle = value ?? false;
-              });
-            },
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
           ),
         ],
       ),
@@ -1510,10 +1605,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Widget _buildDenominations() {
-    final denoms = [500, 200, 100, 50, 20, 10, 5, 1];
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1521,131 +1614,352 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Denomination', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          ...denoms.map((denom) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildDenomRow(denom),
-          )),
-          const SizedBox(height: 16),
+          const Text('Denomination', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          ..._denomRows.asMap().entries.map((entry) {
+            int index = entry.key;
+            var row = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _buildDenomRow(row, index),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDenomRow(Map<String, dynamic> row, int index) {
+    final controller = row['countController'] as TextEditingController;
+    final selectedDenom = row['selectedDenom'] as int;
+
+    // Add a controller for denomination input if not exists
+    if (!row.containsKey('denomController')) {
+      row['denomController'] = TextEditingController(text: selectedDenom.toString());
+    }
+    final denomController = row['denomController'] as TextEditingController;
+
+    int count = int.tryParse(controller.text) ?? 0;
+    int total = selectedDenom * count;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 80,
+              height: 35,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black, width: 2),
+                color: Colors.white,
+              ),
+              child: TextField(
+                controller: denomController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  prefixText: '₹',
+                  prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                onChanged: (value) {
+                  if (value.isEmpty) return;
+
+                  int? typedValue = int.tryParse(value);
+                  if (typedValue == null) return;
+
+                  List<int> options = [];
+
+                  if (typedValue == 1) {
+                    options = [100, 10, 1];
+                  } else if (typedValue == 2) {
+                    options = [20, 2];
+                  } else if (typedValue == 5) {
+                    options = [50, 5];
+                  } else if (typedValue == 10) {
+                    options = [10];
+                  } else if (typedValue == 20) {
+                    options = [20];
+                  } else if (typedValue == 50) {
+                    options = [50];
+                  } else if (typedValue == 100) {
+                    options = [100];
+                  } else if (typedValue == 200) {
+                    options = [200];
+                  } else if (typedValue == 500) {
+                    options = [500];
+                  }
+
+                  if (options.isNotEmpty) {
+                    setState(() {
+                      row['denomOptions'] = options;
+                      row['showDropdown'] = options.length > 1;
+                      // If only one option, auto-select it
+                      if (options.length == 1) {
+                        row['selectedDenom'] = options[0];
+                        denomController.text = options[0].toString();
+                        _updateDenominationRows();
+                      }
+                    });
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text('×', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                height: 35,
+                decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
+                child: TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    hintText: '0',
+                    hintStyle: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text('=', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 6),
+            Container(
+              width: 90,
+              height: 35,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black, width: 2),
+                color: Colors.grey[200],
+              ),
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(
+                      total.toString(),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        // Dropdown appears below
+        if (row['showDropdown'] == true && row['denomOptions'] != null) ...[
+          const SizedBox(height: 4),
           Container(
-            padding: const EdgeInsets.all(12),
+            width: 80,
             decoration: BoxDecoration(
-              color: Colors.grey[200],
               border: Border.all(color: Colors.black, width: 2),
+              color: Colors.white,
             ),
             child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total Count:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('${_getTotalCount()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total Amount:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Flexible(
-                      child: Text(
-                        '₹${_getTotalAmount()}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              children: (row['denomOptions'] as List<int>).map((denom) {
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      row['selectedDenom'] = denom;
+                      denomController.text = denom.toString();
+                      row['showDropdown'] = false;
+                      _updateDenominationRows();
+                    });
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
                     ),
-                  ],
-                ),
-              ],
+                    child: Text(
+                      '₹$denom',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ),
-          const SizedBox(height: 16),
-          CheckboxListTile(
-            title: const Text('Uncle'),
-            value: _isUncle,
-            onChanged: (value) {
-              setState(() {
-                _isUncle = value ?? false;
-              });
+        ],
+      ],
+    );
+  }
+
+  void _showDenominationInput(BuildContext context, Map<String, dynamic> row, int index) {
+    final textController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Denomination'),
+        content: TextField(
+          controller: textController,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          decoration: const InputDecoration(
+            prefixText: '₹',
+            hintText: 'e.g., 1, 2, 5, 10, 50, 100, 200, 500',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              String value = textController.text.trim();
+              if (value.isEmpty) return;
+
+              int? typedValue = int.tryParse(value);
+              if (typedValue == null) return;
+
+              List<int> options = [];
+
+              if (typedValue == 1) {
+                options = [500, 100, 10, 1];
+              } else if (typedValue == 2) {
+                options = [200, 20, 2];
+              } else if (typedValue == 5) {
+                options = [500, 50, 5];
+              } else if (typedValue == 10) {
+                options = [100, 10];
+              } else if (typedValue == 20) {
+                options = [200, 20];
+              } else if (typedValue == 50) {
+                options = [500, 50];
+              } else if (typedValue == 100) {
+                options = [100];
+              } else if (typedValue == 200) {
+                options = [200];
+              } else if (typedValue == 500) {
+                options = [500];
+              }
+
+              Navigator.pop(context);
+
+              if (options.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invalid denomination value')),
+                );
+                return;
+              }
+
+              if (options.length == 1) {
+                setState(() {
+                  row['selectedDenom'] = options[0];
+                  _updateDenominationRows();
+                });
+              } else {
+                _showDenominationPicker(context, options, row, index);
+              }
             },
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
+            child: const Text('OK'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDenomRow(int denom) {
-    final controller = _denomControllers[denom]!;
-    int count = int.tryParse(controller.text) ?? 0;
-    int total = denom * count;
+  void _showDenominationPicker(BuildContext context, List<int> options, Map<String, dynamic> row, int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Denomination'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: options.map((denom) {
+            return ListTile(
+              title: Text('₹$denom', style: const TextStyle(fontWeight: FontWeight.bold)),
+              onTap: () {
+                setState(() {
+                  row['selectedDenom'] = denom;
+                  _updateDenominationRows();
+                });
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 
-    return Row(
-      children: [
-        Container(
-          width: 80,
-          height: 40,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.black, width: 2),
-            color: Colors.grey[300],
+  // void _showDenominationPicker(BuildContext context, List<int> options, Map<String, dynamic> row, int index) {
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: const Text('Select Denomination'),
+  //       content: Column(
+  //         mainAxisSize: MainAxisSize.min,
+  //         children: options.map((denom) {
+  //           return ListTile(
+  //             title: Text('₹$denom', style: const TextStyle(fontWeight: FontWeight.bold)),
+  //             onTap: () {
+  //               setState(() {
+  //                 row['selectedDenom'] = denom;
+  //                 _updateDenominationRows();
+  //               });
+  //               Navigator.pop(context);
+  //             },
+  //           );
+  //         }).toList(),
+  //       ),
+  //     ),
+  //   );
+  // }
+
+  Widget _buildAmountSummary() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: Colors.black, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Amount in words', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(
+            _convertAmountToWords(_getTotalAmount()),
+            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
           ),
-          child: Center(
-            child: Text('₹ $denom', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          ),
-        ),
-        const SizedBox(width: 8),
-        const Text('x', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Container(
-            height: 40,
-            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
-            child: TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-                hintText: '0',
-                hintStyle: TextStyle(color: Colors.grey),
-              ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Total Count: ${_getTotalCount()}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                Text('Total Amount: ₹${_getTotalAmount()}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              ],
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        const Text('=', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(width: 8),
-        Container(
-          width: 100,
-          height: 40,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.black, width: 2),
-            color: Colors.grey[200],
-          ),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  total.toString(),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildMoiDetails() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -1655,17 +1969,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: const BoxDecoration(
               border: Border(bottom: BorderSide(color: Colors.black, width: 2)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Moi Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Moi Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 if (_currentGroupId != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.blue[50],
                       border: Border.all(color: Colors.blue, width: 2),
@@ -1673,24 +1987,24 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     ),
                     child: Text(
                       'Group ID - $_currentGroupId',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
                     ),
                   ),
               ],
             ),
           ),
           Container(
-            constraints: const BoxConstraints(maxHeight: 200),
+            constraints: const BoxConstraints(maxHeight: 180),
             child: _groupedMois.isEmpty
                 ? const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Grouped entries will appear here...', style: TextStyle(color: Colors.grey)),
+              padding: EdgeInsets.all(12),
+              child: Text('Grouped entries will appear here...', style: TextStyle(color: Colors.grey, fontSize: 12)),
             )
                 : ListView.separated(
               shrinkWrap: true,
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               itemCount: _groupedMois.length,
-              separatorBuilder: (context, index) => const Divider(color: Colors.black, thickness: 1, height: 16),
+              separatorBuilder: (context, index) => const Divider(color: Colors.black, thickness: 1, height: 12),
               itemBuilder: (context, index) {
                 final moi = _groupedMois[index];
                 final isCurrentlyEditing = _editingMoiId == moi['id'];
@@ -1698,7 +2012,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 return InkWell(
                   onTap: () => _loadGroupedEntryForEdit(moi),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                     decoration: BoxDecoration(
                       color: isCurrentlyEditing ? Colors.blue.shade50 : Colors.transparent,
                       border: isCurrentlyEditing ? Border.all(color: Colors.blue, width: 2) : null,
@@ -1714,7 +2028,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                                 _getPersonsDisplay(moi['persons']),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   color: isCurrentlyEditing ? Colors.blue : Colors.black,
                                 ),
                               ),
@@ -1722,7 +2036,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                                 Text(
                                   moi['village_name'],
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
                                   ),
                                 ),
@@ -1731,22 +2045,22 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                         ),
                         if (isCurrentlyEditing)
                           Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                             decoration: BoxDecoration(
                               color: Colors.blue,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Text(
                               'EDITING',
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                             ),
                           ),
                         Text(
                           '₹${moi['amount']}',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: 14,
                             color: isCurrentlyEditing ? Colors.blue : Colors.green,
                           ),
                         ),
@@ -1769,7 +2083,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           children: [
             Expanded(
               child: Container(
-                height: 50,
+                height: 42,
                 decoration: BoxDecoration(color: Colors.green, border: Border.all(color: Colors.black, width: 2)),
                 child: Material(
                   color: Colors.transparent,
@@ -1778,7 +2092,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     child: const Center(
                       child: Text(
                         'Save & Print',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1788,7 +2102,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Container(
-                height: 50,
+                height: 42,
                 decoration: BoxDecoration(color: Colors.blue, border: Border.all(color: Colors.black, width: 2)),
                 child: Material(
                   color: Colors.transparent,
@@ -1797,7 +2111,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     child: const Center(
                       child: Text(
                         'Group',
-                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -1812,7 +2126,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (_currentGroupId != null && _groupedMois.isNotEmpty) ...[
           Container(
             width: double.infinity,
-            height: 50,
+            height: 42,
             decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
             child: Material(
               color: Colors.transparent,
@@ -1821,7 +2135,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: const Center(
                   child: Text(
                     'Generate Group Receipt',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -1833,7 +2147,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (_currentGroupId == null && (_isEditMode || _hasFormData())) ...[
           Container(
             width: double.infinity,
-            height: 50,
+            height: 42,
             decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
             child: Material(
               color: Colors.transparent,
@@ -1842,7 +2156,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: const Center(
                   child: Text(
                     'Generate Single Receipt',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -1854,7 +2168,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (_currentGroupId != null) ...[
           Container(
             width: double.infinity,
-            height: 50,
+            height: 42,
             decoration: BoxDecoration(color: Colors.purple, border: Border.all(color: Colors.black, width: 2)),
             child: Material(
               color: Colors.transparent,
@@ -1863,7 +2177,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: const Center(
                   child: Text(
                     'ADD ENTRY',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -1874,7 +2188,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         Container(
           width: double.infinity,
-          height: 50,
+          height: 42,
           decoration: BoxDecoration(color: Colors.orange, border: Border.all(color: Colors.black, width: 2)),
           child: Material(
             color: Colors.transparent,
@@ -1883,7 +2197,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               child: const Center(
                 child: Text(
                   'Clear',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -1900,15 +2214,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _livingPlaceController.dispose();
     _notesController.dispose();
     _amountController.dispose();
-    _init1Controller.dispose();
-    _name1Controller.dispose();
-    _qualification1Controller.dispose();
-    _job1Controller.dispose();
-    _init2Controller.dispose();
-    _name2Controller.dispose();
-    _qualification2Controller.dispose();
-    _job2Controller.dispose();
-    _denomControllers.forEach((_, controller) => controller.dispose());
+    _person1Field1Controller.dispose();
+    _person1Field2Controller.dispose();
+    _person2Controller.dispose();
+
+    for (var row in _denomRows) {
+      row['countController'].dispose();
+    }
+
     super.dispose();
   }
 }
