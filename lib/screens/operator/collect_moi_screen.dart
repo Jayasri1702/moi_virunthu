@@ -1895,30 +1895,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  // void _showDenominationPicker(BuildContext context, List<int> options, Map<String, dynamic> row, int index) {
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) => AlertDialog(
-  //       title: const Text('Select Denomination'),
-  //       content: Column(
-  //         mainAxisSize: MainAxisSize.min,
-  //         children: options.map((denom) {
-  //           return ListTile(
-  //             title: Text('₹$denom', style: const TextStyle(fontWeight: FontWeight.bold)),
-  //             onTap: () {
-  //               setState(() {
-  //                 row['selectedDenom'] = denom;
-  //                 _updateDenominationRows();
-  //               });
-  //               Navigator.pop(context);
-  //             },
-  //           );
-  //         }).toList(),
-  //       ),
-  //     ),
-  //   );
-  // }
-
   Widget _buildAmountSummary() {
     return Container(
       padding: const EdgeInsets.all(12),
