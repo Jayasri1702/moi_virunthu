@@ -94,27 +94,40 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   void _addNextDenomRow(int currentDenom) {
     List<int> nextOptions = [];
+    int nextDenom = 0;
 
-    if (currentDenom == 100) {
-      nextOptions = [50, 20, 10, 5, 1];
+    // Define the next denomination based on current
+    if (currentDenom == 500) {
+      nextDenom = 200;
+      nextOptions = [200, 20, 2];
+    } else if (currentDenom == 200) {
+      nextDenom = 100;
+      nextOptions = [100, 10, 1];
+    } else if (currentDenom == 100) {
+      nextDenom = 50;
+      nextOptions = [50, 5];
     } else if (currentDenom == 50) {
-      nextOptions = [20, 10, 5, 1];
+      nextDenom = 20;
+      nextOptions = [20, 2];
     } else if (currentDenom == 20) {
-      nextOptions = [10, 5, 1];
+      nextDenom = 10;
+      nextOptions = [10, 1];
     } else if (currentDenom == 10) {
-      nextOptions = [5, 1];
+      nextDenom = 5;
+      nextOptions = [5];
     } else if (currentDenom == 5) {
+      nextDenom = 1;
       nextOptions = [1];
     }
 
-    if (nextOptions.isNotEmpty && !_hasRowWithDenom(nextOptions[0])) {
+    if (nextOptions.isNotEmpty && !_hasRowWithDenom(nextDenom)) {
       final controller = TextEditingController();
       controller.addListener(_onDenomCountChanged);
 
       setState(() {
         _denomRows.add({
           'denomOptions': nextOptions,
-          'selectedDenom': nextOptions[0],
+          'selectedDenom': nextDenom,
           'countController': controller,
         });
       });
@@ -168,7 +181,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             field1 += person1['init'];
           }
           if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
-            field1 += (field1.isEmpty ? '' : ' ') + person1['name'];
+            field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
           }
           _person1Field1Controller.text = field1;
 
@@ -188,7 +201,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             person2Text += person2['init'];
           }
           if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ' ') + person2['name'];
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
           }
           if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
             person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
@@ -317,7 +330,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             field1 += person1['init'];
           }
           if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
-            field1 += (field1.isEmpty ? '' : ' ') + person1['name'];
+            field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
           }
           _person1Field1Controller.text = field1;
 
@@ -340,7 +353,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             person2Text += person2['init'];
           }
           if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ' ') + person2['name'];
+            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
           }
           if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
             person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
@@ -553,10 +566,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // Parse Person 1
     if (_person1Field1Controller.text.trim().isNotEmpty) {
       String field1 = _person1Field1Controller.text.trim();
-      List<String> parts = field1.split(' ');
+      List<String> parts = field1.split(',').map((e) => e.trim()).toList();
 
       String init = parts.length > 0 ? parts[0] : '';
-      String name = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      String name = parts.length > 1 ? parts[1] : '';
 
       String field2 = _person1Field2Controller.text.trim();
       List<String> eduJob = field2.split(',').map((e) => e.trim()).toList();
@@ -575,10 +588,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       List<String> parts = person2Text.split(',').map((e) => e.trim()).toList();
 
       Map<String, dynamic> person2Data = {
-        'init': '',
-        'name': parts.isNotEmpty ? parts[0] : '',
-        'qualification': parts.length > 1 ? parts[1] : '',
-        'job': parts.length > 2 ? parts[2] : '',
+        'init': parts.length > 0 ? parts[0] : '',
+        'name': parts.length > 1 ? parts[1] : '',
+        'qualification': parts.length > 2 ? parts[2] : '',
+        'job': parts.length > 3 ? parts[3] : '',
       };
       personsData.add(person2Data);
     }
@@ -1038,9 +1051,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       // Parse person 1 data
       String field1 = _person1Field1Controller.text.trim();
-      List<String> parts = field1.split(' ');
+      List<String> parts = field1.split(',').map((e) => e.trim()).toList();
       String init1 = parts.length > 0 ? parts[0] : '';
-      String name1 = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      String name1 = parts.length > 1 ? parts[1] : '';
 
       final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
         context: context,
@@ -1242,64 +1255,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  String _convertAmountToWords(int amount) {
-    if (amount == 0) return 'Zero Rupees';
-
-    final ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-    final teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-    final tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-    String result = '';
-
-    if (amount >= 10000000) {
-      int crores = amount ~/ 10000000;
-      result += '${ones[crores]} Crore ';
-      amount %= 10000000;
-    }
-
-    if (amount >= 100000) {
-      int lakhs = amount ~/ 100000;
-      result += '${ones[lakhs]} Lakh ';
-      amount %= 100000;
-    }
-
-    if (amount >= 1000) {
-      int thousands = amount ~/ 1000;
-      if (thousands >= 10 && thousands < 20) {
-        result += '${teens[thousands - 10]} Thousand ';
-      } else {
-        if (thousands >= 20) {
-          result += '${tens[thousands ~/ 10]} ';
-          thousands %= 10;
-        }
-        if (thousands > 0) {
-          result += '${ones[thousands]} Thousand ';
-        }
-      }
-      amount %= 1000;
-    }
-
-    if (amount >= 100) {
-      int hundreds = amount ~/ 100;
-      result += '${ones[hundreds]} Hundred ';
-      amount %= 100;
-    }
-
-    if (amount >= 10 && amount < 20) {
-      result += '${teens[amount - 10]} ';
-    } else {
-      if (amount >= 20) {
-        result += '${tens[amount ~/ 10]} ';
-        amount %= 10;
-      }
-      if (amount > 0) {
-        result += '${ones[amount]} ';
-      }
-    }
-
-    return result.trim() + ' Rupees Only';
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1387,7 +1342,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   ),
                 ),
               ),
-              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
               const Text('Uncle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               Checkbox(
                 value: _isUncle,
@@ -1399,11 +1358,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
+              const SizedBox(width: 20),
               const Text('Cheque / Advance / UPI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               Checkbox(
                 value: _paymentMethod == 'OTHERS',
@@ -1516,13 +1471,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Init. Name 1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Init, Name 1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           TextField(
             controller: _person1Field1Controller,
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
-              labelText: 'Init Name',
+              labelText: 'e.g., init, name',
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
@@ -1533,7 +1488,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             controller: _person1Field2Controller,
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
-              labelText: 'Education and Job',
+              labelText: 'e.g., education, job',
               border: OutlineInputBorder(),
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
@@ -1554,7 +1509,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Init. Name 2, Education and Job',
+          const Text('Init, Name 2, Education, Job',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           TextField(
@@ -1562,7 +1517,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
-              hintText: 'e.g., Mr. John Doe, B.Tech, Engineer',
+              hintText: 'e.g., init, name, education, job',
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
@@ -1666,19 +1621,34 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 onChanged: (value) {
-                  if (value.isEmpty) return;
+                  if (value.isEmpty) {
+                    setState(() {
+                      row['showDropdown'] = false;
+                      row['denomOptions'] = [500, 100, 10, 1];
+                      row['selectedDenom'] = 500;
+                    });
+                    return;
+                  }
 
                   int? typedValue = int.tryParse(value);
                   if (typedValue == null) return;
+
+                  // Find the maximum denomination from all previous rows
+                  int maxPrevDenom = 0;
+                  for (int i = 0; i < index; i++) {
+                    if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
+                      maxPrevDenom = _denomRows[i]['selectedDenom'];
+                    }
+                  }
 
                   List<int> options = [];
 
                   if (typedValue == 1) {
                     options = [100, 10, 1];
                   } else if (typedValue == 2) {
-                    options = [20, 2];
+                    options = [200, 20];
                   } else if (typedValue == 5) {
-                    options = [50, 5];
+                    options = [500, 50, 5];
                   } else if (typedValue == 10) {
                     options = [10];
                   } else if (typedValue == 20) {
@@ -1691,6 +1661,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     options = [200];
                   } else if (typedValue == 500) {
                     options = [500];
+                  }
+
+                  // Filter out denominations >= maxPrevDenom
+                  if (maxPrevDenom > 0) {
+                    options = options.where((denom) => denom < maxPrevDenom).toList();
                   }
 
                   if (options.isNotEmpty) {
@@ -1795,106 +1770,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  void _showDenominationInput(BuildContext context, Map<String, dynamic> row, int index) {
-    final textController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enter Denomination'),
-        content: TextField(
-          controller: textController,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: const InputDecoration(
-            prefixText: '₹',
-            hintText: 'e.g., 1, 2, 5, 10, 50, 100, 200, 500',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              String value = textController.text.trim();
-              if (value.isEmpty) return;
-
-              int? typedValue = int.tryParse(value);
-              if (typedValue == null) return;
-
-              List<int> options = [];
-
-              if (typedValue == 1) {
-                options = [500, 100, 10, 1];
-              } else if (typedValue == 2) {
-                options = [200, 20, 2];
-              } else if (typedValue == 5) {
-                options = [500, 50, 5];
-              } else if (typedValue == 10) {
-                options = [100, 10];
-              } else if (typedValue == 20) {
-                options = [200, 20];
-              } else if (typedValue == 50) {
-                options = [500, 50];
-              } else if (typedValue == 100) {
-                options = [100];
-              } else if (typedValue == 200) {
-                options = [200];
-              } else if (typedValue == 500) {
-                options = [500];
-              }
-
-              Navigator.pop(context);
-
-              if (options.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Invalid denomination value')),
-                );
-                return;
-              }
-
-              if (options.length == 1) {
-                setState(() {
-                  row['selectedDenom'] = options[0];
-                  _updateDenominationRows();
-                });
-              } else {
-                _showDenominationPicker(context, options, row, index);
-              }
-            },
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDenominationPicker(BuildContext context, List<int> options, Map<String, dynamic> row, int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Denomination'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: options.map((denom) {
-            return ListTile(
-              title: Text('₹$denom', style: const TextStyle(fontWeight: FontWeight.bold)),
-              onTap: () {
-                setState(() {
-                  row['selectedDenom'] = denom;
-                  _updateDenominationRows();
-                });
-                Navigator.pop(context);
-              },
-            );
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
   Widget _buildAmountSummary() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1902,33 +1777,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Amount in words', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 6),
-          Text(
-            _convertAmountToWords(_getTotalAmount()),
-            style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total Count: ${_getTotalCount()}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                Text('Total Amount: ₹${_getTotalAmount()}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ],
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+          border: Border.all(color: Colors.black, width: 2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Total Count: ${_getTotalCount()}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+            Text('Total Amount: ₹${_getTotalAmount()}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }
@@ -2196,6 +2059,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     for (var row in _denomRows) {
       row['countController'].dispose();
+      if (row.containsKey('denomController')) {
+        row['denomController'].dispose();
+      }
     }
 
     super.dispose();
