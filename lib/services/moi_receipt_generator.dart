@@ -71,14 +71,29 @@ class MoiReceiptGenerator {
       HeadlessInAppWebView? headlessWebView;
 
       headlessWebView = HeadlessInAppWebView(
-        initialData: InAppWebViewInitialData(data: htmlContent),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          useHybridComposition: true,
-        ),
+          initialData: InAppWebViewInitialData(data: htmlContent),
+          initialSettings: InAppWebViewSettings(
+            javaScriptEnabled: true,
+            useHybridComposition: true,
+          ),
+          initialSize: Size(302, 800), // ADD THIS LINE
         onLoadStop: (controller, url) async {
           try {
             await Future.delayed(const Duration(milliseconds: 1500));
+
+            // Get the actual content height
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800; // default
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            // Resize to actual content
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
 
             final screenshot = await controller.takeScreenshot();
 
@@ -86,17 +101,15 @@ class MoiReceiptGenerator {
               final pdf = pw.Document();
               final image = pw.MemoryImage(screenshot);
 
+              // Calculate PDF height based on content
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
+
               pdf.addPage(
                 pw.Page(
-                  pageFormat: PdfPageFormat(
-                    80 * PdfPageFormat.mm,
-                    297 * PdfPageFormat.mm,
-                    marginAll: 0,
-                  ),
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
                   build: (pw.Context context) {
-                    return pw.Center(
-                      child: pw.Image(image, fit: pw.BoxFit.contain),
-                    );
+                    return pw.Image(image, fit: pw.BoxFit.fill);
                   },
                 ),
               );
@@ -105,10 +118,10 @@ class MoiReceiptGenerator {
               await file.writeAsBytes(await pdf.save());
               generatedFile = file;
               pdfGenerated = true;
-              print('Single MOI PDF generated: $filePath');
+              print('Denomination receipt PDF generated: $filePath');
             }
           } catch (e) {
-            print('Error generating single MOI PDF: $e');
+            print('Error generating denomination receipt PDF: $e');
           } finally {
             if (headlessWebView != null) {
               await headlessWebView.dispose();
