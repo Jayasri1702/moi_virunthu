@@ -213,7 +213,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      _amountController.text = moiData['amount']?.toString() ?? '0';
+      var amountValue = moiData['amount'];
+      if (amountValue != null) {
+        if (amountValue is double) {
+          _amountController.text = amountValue.toInt().toString();
+        } else {
+          _amountController.text = amountValue.toString();
+        }
+      } else {
+        _amountController.text = '0';
+      }
+
     });
 
     if (_currentGroupId != null) {
@@ -366,9 +376,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _person2Controller.clear();
         }
       }
-
-      var amountValue = moiData['amount']?.toString() ?? '0';
-      _amountController.text = amountValue;
+      var amountValue = moiData['amount'];
+      if (amountValue != null) {
+        if (amountValue is double) {
+          _amountController.text = amountValue.toInt().toString();
+        } else {
+          _amountController.text = amountValue.toString();
+        }
+      } else {
+        _amountController.text = '0';
+      }
     });
 
     if (_paymentMethod == 'CASH') {
@@ -465,6 +482,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<void> _handleGroup() async {
     if (!_validateForm()) return;
 
+    // CASE 1: Editing an existing entry that's ALREADY in a group
     if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -478,6 +496,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+    // CASE 2: Editing an existing standalone entry (not in group) - Convert to group
     if (_isEditMode && _editingMoiId != null && _currentGroupId == null) {
       try {
         int groupId = await _getNextGroupId();
@@ -521,6 +540,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
+    // CASE 3: Adding a NEW entry to an existing or new group
     try {
       await _loadNextSerialNo();
 
@@ -684,6 +704,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       await _loadNextSerialNo();
     }
 
+    // Auto-add to group if user forgot to click Group button
     if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
       if (!_validateForm()) return;
 
@@ -717,6 +738,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
+    // Handle grouped entries - UPDATE MODE
     if (_groupedMois.isNotEmpty) {
       if (_isEditMode && _editingMoiId != null) {
         if (!_validateForm()) return;
@@ -768,6 +790,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+    // Regular save for single entry
     if (!_validateForm()) return;
 
     try {
@@ -819,30 +842,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     if (_paymentMethod == 'CASH') {
-      int enteredAmount = int.tryParse(_amountController.text.trim()) ?? 0;
-      if (enteredAmount == 0) {
+      int denomTotal = _getTotalAmount();
+
+      if (denomTotal == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter the amount')),
+          const SnackBar(content: Text('Please enter denomination details')),
         );
         return false;
       }
 
-      int denomTotal = _getTotalAmount();
+      // Only validate amount match if amount is manually entered
+      String enteredAmountText = _amountController.text.trim();
+      if (enteredAmountText.isNotEmpty) {
+        int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
 
-      if (denomTotal != enteredAmount) {
-        int difference = enteredAmount - denomTotal;
-        String message = difference > 0
-            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
-            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+        if (denomTotal != enteredAmount) {
+          int difference = enteredAmount - denomTotal;
+          String message = difference > 0
+              ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+              : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        return false;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          return false;
+        }
       }
     } else {
       if (_amountController.text.trim().isEmpty || int.tryParse(_amountController.text.trim()) == null || int.tryParse(_amountController.text.trim())! == 0) {
