@@ -49,36 +49,44 @@ class ReceiptGenerator {
           javaScriptEnabled: true,
           useHybridComposition: true,
         ),
+        initialSize: Size(302, 800), // Set initial size to match your content width
         onLoadStop: (controller, url) async {
           try {
-            // Wait for fonts to load
             await Future.delayed(const Duration(milliseconds: 1500));
 
-            // Take a screenshot of the rendered HTML
+            // Get the actual content height
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800; // default
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            // Resize to actual content
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
             final screenshot = await controller.takeScreenshot();
 
             if (screenshot != null) {
-              // Create PDF from screenshot
               final pdf = pw.Document();
-
               final image = pw.MemoryImage(screenshot);
+
+              // Calculate PDF height based on content
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
 
               pdf.addPage(
                 pw.Page(
-                  pageFormat: PdfPageFormat(
-                    80 * PdfPageFormat.mm, // 80mm width
-                    297 * PdfPageFormat.mm, // Auto height
-                    marginAll: 0,
-                  ),
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
                   build: (pw.Context context) {
-                    return pw.Center(
-                      child: pw.Image(image, fit: pw.BoxFit.contain),
-                    );
+                    return pw.Image(image, fit: pw.BoxFit.fill);
                   },
                 ),
               );
 
-              // Save to file
               final file = File(filePath);
               await file.writeAsBytes(await pdf.save());
               generatedFile = file;
@@ -88,14 +96,10 @@ class ReceiptGenerator {
           } catch (e) {
             print('Error generating PDF: $e');
           } finally {
-            // Dispose the headless WebView
             if (headlessWebView != null) {
               await headlessWebView.dispose();
             }
           }
-        },
-        onConsoleMessage: (controller, consoleMessage) {
-          print('WebView Console: ${consoleMessage.message}');
         },
       );
 
