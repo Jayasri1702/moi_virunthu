@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// Add this import at the top of your cash_withdrawal_screen.dart file
 import '../../services/withdrawal_receipt_generator.dart';
 
 class CashWithdrawalScreen extends StatefulWidget {
@@ -39,10 +38,17 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   Map<String, int> _availableBalance = {};
   bool _isLoadingBalance = false;
 
+  // Track if withdrawal was just saved
+  bool _withdrawalSaved = false;
+  Map<int, int>? _lastSavedDenominations;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
+    final args = ModalRoute
+        .of(context)
+        ?.settings
+        .arguments;
     if (args != null && args is Map<String, dynamic>) {
       setState(() {
         eventData = args;
@@ -136,10 +142,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       print('=== MOI Data Count: ${moiData.length} ===');
       for (var entry in moiData) {
         final paymentMethod = entry['mois']?['payment_method'];
-        if (paymentMethod != 'CASH') continue; // Only count CASH payments
+        if (paymentMethod != 'CASH') continue;
 
         for (var denom in denominations) {
-          collected['$denom'] = (collected['$denom'] ?? 0) + ((entry['denom_$denom'] ?? 0) as int);
+          collected['$denom'] = (collected['$denom'] ?? 0) +
+              ((entry['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Collected: $collected');
@@ -151,7 +158,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) +
+              ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Withdrawn: $withdrawn');
@@ -163,7 +171,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          exchanged['$denom'] = (exchanged['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+          exchanged['$denom'] = (exchanged['$denom'] ?? 0) +
+              ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Exchanged (Net): $exchanged');
@@ -171,14 +180,22 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       // Calculate available = collected - withdrawn + exchanged
       setState(() {
         _availableBalance = {
-          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) + (exchanged['500'] ?? 0),
-          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) + (exchanged['200'] ?? 0),
-          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) + (exchanged['100'] ?? 0),
-          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) + (exchanged['50'] ?? 0),
-          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) + (exchanged['20'] ?? 0),
-          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) + (exchanged['10'] ?? 0),
-          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) + (exchanged['5'] ?? 0),
-          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) + (exchanged['1'] ?? 0),
+          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) +
+              (exchanged['500'] ?? 0),
+          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) +
+              (exchanged['200'] ?? 0),
+          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) +
+              (exchanged['100'] ?? 0),
+          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) +
+              (exchanged['50'] ?? 0),
+          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) +
+              (exchanged['20'] ?? 0),
+          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) +
+              (exchanged['10'] ?? 0),
+          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) +
+              (exchanged['5'] ?? 0),
+          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) +
+              (exchanged['1'] ?? 0),
         };
         _isLoadingBalance = false;
       });
@@ -228,7 +245,9 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     int count1 = int.tryParse(_denom1Controller.text) ?? 0;
 
     setState(() {
-      _totalCount = count500 + count200 + count100 + count50 + count20 + count10 + count5 + count1;
+      _totalCount =
+          count500 + count200 + count100 + count50 + count20 + count10 +
+              count5 + count1;
       _totalAmount = (count500 * 500) +
           (count200 * 200) +
           (count100 * 100) +
@@ -237,6 +256,9 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           (count10 * 10) +
           (count5 * 5) +
           (count1 * 1);
+
+      // Reset withdrawal saved state when amounts change
+      _withdrawalSaved = false;
     });
   }
 
@@ -255,6 +277,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       _denom1Controller.clear();
       _totalCount = 0;
       _totalAmount = 0.0;
+      _withdrawalSaved = false;
+      _lastSavedDenominations = null;
     });
   }
 
@@ -276,7 +300,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       if (requestedCount > 0) {
         int available = _availableBalance[denom] ?? 0;
         if (requestedCount > available) {
-          errors.add('₹$denom: Requested $requestedCount but only $available available (total for event)');
+          errors.add(
+              '₹$denom: Requested $requestedCount but only $available available (total for event)');
         }
       }
     });
@@ -284,52 +309,57 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     if (errors.isNotEmpty) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            'Insufficient Denomination',
-            style: TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'The following denominations are not available:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '(Based on total collected by all operators)',
-                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
-              ),
-              const SizedBox(height: 12),
-              ...errors.map((error) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        error,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
+        builder: (context) =>
+            AlertDialog(
+              title: const Text(
+                'Insufficient Denomination',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
                 ),
-              )),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'The following denominations are not available:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '(Based on total collected by all operators)',
+                    style: TextStyle(fontSize: 12,
+                        color: Colors.grey,
+                        fontStyle: FontStyle.italic),
+                  ),
+                  const SizedBox(height: 12),
+                  ...errors.map((error) =>
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red,
+                                size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                error,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return false;
     }
@@ -337,7 +367,6 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     return true;
   }
 
-  // Replace your _saveWithdrawal method with this updated version:
   Future<void> _saveWithdrawal() async {
     if (_formKey.currentState?.validate() != true) {
       return;
@@ -345,14 +374,18 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
 
     if (_totalAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter denomination details. Amount cannot be zero.')),
+        const SnackBar(content: Text(
+            'Please enter denomination details. Amount cannot be zero.')),
       );
       return;
     }
 
-    if (_requestedByController.text.trim().isEmpty) {
+    if (_requestedByController.text
+        .trim()
+        .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter who requested the withdrawal')),
+        const SnackBar(
+            content: Text('Please enter who requested the withdrawal')),
       );
       return;
     }
@@ -416,7 +449,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       });
 
       // Generate withdrawal receipt
-      final receiptFile = await WithdrawalReceiptGenerator.generateWithdrawalReceipt(
+      final receiptFile = await WithdrawalReceiptGenerator
+          .generateWithdrawalReceipt(
         context: context,
         operatorName: operatorName,
         withdrawalDate: DateTime.now(),
@@ -424,23 +458,32 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         requestedBy: _requestedByController.text.trim(),
         amount: _totalAmount,
         denominations: denominations,
-        reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
+        reason: _reasonController.text
+            .trim()
+            .isNotEmpty ? _reasonController.text.trim() : null,
       );
 
       if (receiptFile != null) {
         print('Withdrawal receipt generated: ${receiptFile.path}');
       }
 
+      // Mark withdrawal as saved and store denominations
+      setState(() {
+        _withdrawalSaved = true;
+        _lastSavedDenominations = Map<int, int>.from(denominations);
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(0)} saved successfully!'),
+            content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(
+                0)} saved successfully! You can now send the receipt.'),
             backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
           ),
         );
       }
 
-      _clearAllFields();
       // Reload balance after successful withdrawal
       await _loadAvailableBalance();
     } catch (e) {
@@ -456,54 +499,35 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     }
   }
 
-  // In your cash_withdrawal_screen.dart, update the _saveWithdrawal method and add WhatsApp button
-
-// Add this method after _saveWithdrawal
   Future<void> _sendReceiptToWhatsApp() async {
-    if (_formKey.currentState?.validate() != true) {
-      return;
-    }
-
-    if (_totalAmount <= 0) {
+    if (!_withdrawalSaved) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter denomination details. Amount cannot be zero.')),
+        const SnackBar(
+          content: Text(
+              'Please save the withdrawal first before sending receipt'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
-    if (_requestedByController.text.trim().isEmpty) {
+    if (_phoneController.text
+        .trim()
+        .isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter who requested the withdrawal')),
+        const SnackBar(
+            content: Text('Please enter phone number to send receipt')),
       );
-      return;
-    }
-
-    if (_phoneController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter phone number to send receipt')),
-      );
-      return;
-    }
-
-    // Validate denominations
-    if (!_validateDenominations()) {
       return;
     }
 
     try {
       final operatorName = eventData?['operator_name'] ?? 'Unknown';
 
-      // Prepare denominations map
-      Map<int, int> denominations = {
-        500: int.tryParse(_denom500Controller.text) ?? 0,
-        200: int.tryParse(_denom200Controller.text) ?? 0,
-        100: int.tryParse(_denom100Controller.text) ?? 0,
-        50: int.tryParse(_denom50Controller.text) ?? 0,
-        20: int.tryParse(_denom20Controller.text) ?? 0,
-        10: int.tryParse(_denom10Controller.text) ?? 0,
-        5: int.tryParse(_denom5Controller.text) ?? 0,
-        1: int.tryParse(_denom1Controller.text) ?? 0,
-      };
+      // Use the saved denominations
+      if (_lastSavedDenominations == null) {
+        throw Exception('No saved withdrawal data found');
+      }
 
       // Send receipt to WhatsApp
       await WithdrawalReceiptGenerator.sendToWhatsApp(
@@ -514,10 +538,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         withdrawalTime: TimeOfDay.now(),
         requestedBy: _requestedByController.text.trim(),
         amount: _totalAmount,
-        denominations: denominations,
-        reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
+        denominations: _lastSavedDenominations!,
+        reason: _reasonController.text
+            .trim()
+            .isNotEmpty ? _reasonController.text.trim() : null,
       );
-
     } catch (e) {
       print('Error sending receipt to WhatsApp: $e');
       if (mounted) {
@@ -591,12 +616,14 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                 const SizedBox(height: 16),
 
                 // Requested By
-                _buildInputField('Requested By', _requestedByController, required: true),
+                _buildInputField(
+                    'Requested By', _requestedByController, required: true),
 
                 const SizedBox(height: 16),
 
-                /// Phone Number
-                _buildInputField('Phone Number', _phoneController, keyboardType: TextInputType.phone, required: true),
+                // Phone Number
+                _buildInputField('Phone Number', _phoneController,
+                    keyboardType: TextInputType.phone, required: true),
 
                 const SizedBox(height: 16),
 
@@ -661,7 +688,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Total Withdrawal Amount: ₹${_totalAmount.toStringAsFixed(0)}',
+                              'Total Withdrawal Amount: ₹${_totalAmount
+                                  .toStringAsFixed(0)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 16,
@@ -712,10 +740,9 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                 const SizedBox(height: 20),
 
                 // Action Buttons
-                // Action Buttons
                 Column(
                   children: [
-                    // Save and Clear buttons (existing)
+                    // Save and Clear buttons
                     Row(
                       children: [
                         Expanded(
@@ -727,7 +754,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                                 backgroundColor: Colors.green,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.zero,
-                                  side: const BorderSide(color: Colors.black, width: 2),
+                                  side: const BorderSide(
+                                      color: Colors.black, width: 2),
                                 ),
                               ),
                               child: const Text(
@@ -751,7 +779,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                                 backgroundColor: Colors.orange,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.zero,
-                                  side: const BorderSide(color: Colors.black, width: 2),
+                                  side: const BorderSide(
+                                      color: Colors.black, width: 2),
                                 ),
                               ),
                               child: const Text(
@@ -770,26 +799,38 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
 
                     const SizedBox(height: 12),
 
-                    // New WhatsApp button
+                    // WhatsApp button - disabled until withdrawal is saved
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: ElevatedButton.icon(
-                        onPressed: _sendReceiptToWhatsApp,
-                        icon: const Icon(Icons.send, color: Colors.white),
-                        label: const Text(
-                          'Send Receipt to WhatsApp',
+                        onPressed: _withdrawalSaved
+                            ? _sendReceiptToWhatsApp
+                            : null,
+                        icon: Icon(
+                          Icons.send,
+                          color: _withdrawalSaved ? Colors.white : Colors
+                              .grey[400],
+                        ),
+                        label: Text(
+                          _withdrawalSaved
+                              ? 'Send Receipt to WhatsApp'
+                              : 'Save Withdrawal First',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: _withdrawalSaved ? Colors.white : Colors
+                                .grey[400],
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF25D366), // WhatsApp green color
+                          backgroundColor: _withdrawalSaved
+                              ? const Color(0xFF25D366)
+                              : Colors.grey[300],
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.zero,
-                            side: const BorderSide(color: Colors.black, width: 2),
+                            side: const BorderSide(
+                                color: Colors.black, width: 2),
                           ),
                         ),
                       ),
@@ -879,6 +920,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
+            const Text(
+              'x',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(width: 8),
             Expanded(
               child: Container(
                 height: 40,
@@ -918,7 +964,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Text(
-                        ((int.tryParse(controller.text) ?? 0) * int.parse(denomination))
+                        ((int.tryParse(controller.text) ?? 0) *
+                            int.parse(denomination))
                             .toString(),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
