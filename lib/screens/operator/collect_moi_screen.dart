@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/moi_receipt_generator.dart';
+import 'package:flutter/services.dart';
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -430,6 +431,290 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _checkExistingEntry() async {
+    try {
+      // Get the values to check
+      String villageName = _villageController.text.trim();
+      int amount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
+
+      // Parse Person 1 name
+      String person1Name = '';
+      if (_person1Field1Controller.text.trim().isNotEmpty) {
+        List<String> parts = _person1Field1Controller.text.trim().split(',').map((e) => e.trim()).toList();
+        person1Name = parts.length > 1 ? parts[1] : '';
+      }
+
+      // Parse Person 1 job
+      String person1Job = '';
+      if (_person1Field2Controller.text.trim().isNotEmpty) {
+        List<String> parts = _person1Field2Controller.text.trim().split(',').map((e) => e.trim()).toList();
+        person1Job = parts.length > 1 ? parts[1] : '';
+      }
+
+      // Parse Person 2 name
+      String person2Name = '';
+      if (_person2Controller.text.trim().isNotEmpty) {
+        List<String> parts = _person2Controller.text.trim().split(',').map((e) => e.trim()).toList();
+        person2Name = parts.length > 1 ? parts[1] : '';
+      }
+
+      // Query all entries for this event (not deleted)
+      final response = await _supabase
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false);
+
+      List<Map<String, dynamic>> matchingEntries = [];
+
+      // Check each entry for matches
+      for (var entry in response) {
+        // Check village name
+        String entryVillage = entry['village_name'] ?? '';
+        if (entryVillage.toLowerCase() != villageName.toLowerCase()) continue;
+
+        // Check amount
+        var entryAmount = entry['amount'];
+        int entryAmountInt = 0;
+        if (entryAmount is int) {
+          entryAmountInt = entryAmount;
+        } else if (entryAmount is double) {
+          entryAmountInt = entryAmount.toInt();
+        }
+        if (entryAmountInt != amount) continue;
+
+        // Check persons
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+
+          // Check Person 1 name and job
+          if (personsList.isNotEmpty) {
+            var p1 = personsList[0];
+            String entryP1Name = p1['name'] ?? '';
+            String entryP1Job = p1['job'] ?? '';
+
+            if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) continue;
+            if (person1Job.isNotEmpty && entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
+          }
+
+          // Check Person 2 name
+          if (person2Name.isNotEmpty && personsList.length > 1) {
+            var p2 = personsList[1];
+            String entryP2Name = p2['name'] ?? '';
+
+            if (entryP2Name.toLowerCase() != person2Name.toLowerCase()) continue;
+          }
+        }
+
+        // If we reach here, all fields match
+        matchingEntries.add(entry);
+      }
+
+      return matchingEntries;
+    } catch (e) {
+      print('Error checking existing entry: $e');
+      return [];
+    }
+  }
+
+  Future<bool> _showExistingEntryDialog(List<Map<String, dynamic>> existingEntries) async {
+    String serialNumbers = existingEntries.map((e) => 'O${e['serial_no']}').join(', ');
+
+    // Build the complete data display
+    String entryDetails = '';
+    if (existingEntries.isNotEmpty) {
+      var entry = existingEntries[0];
+
+      // Show ALL fields
+      entryDetails += '📍 Village: ${entry['village_name'] ?? 'N/A'}\n';
+      entryDetails += '🏙️ Living Place: ${entry['living_place'] ?? 'N/A'}\n';
+      entryDetails += '📞 Phone: ${entry['phone'] ?? 'N/A'}\n';
+      entryDetails += '💰 Amount: ₹${entry['amount']}\n';
+      entryDetails += '💳 Payment: ${entry['payment_method'] ?? 'N/A'}\n';
+      entryDetails += '👤 Uncle: ${(entry['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var p1 = personsList[0];
+          entryDetails += '\n👤 Person 1:\n';
+          entryDetails += '  Init: ${p1['init'] ?? 'N/A'}\n';
+          entryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
+          entryDetails += '  Education: ${p1['qualification'] ?? 'N/A'}\n';
+          entryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
+        }
+        if (personsList.length > 1) {
+          var p2 = personsList[1];
+          entryDetails += '\n👤 Person 2:\n';
+          entryDetails += '  Init: ${p2['init'] ?? 'N/A'}\n';
+          entryDetails += '  Name: ${p2['name'] ?? 'N/A'}\n';
+          entryDetails += '  Education: ${p2['qualification'] ?? 'N/A'}\n';
+          entryDetails += '  Job: ${p2['job'] ?? 'N/A'}\n';
+        }
+      }
+
+      if (entry['notes'] != null && entry['notes'].toString().isNotEmpty) {
+        entryDetails += '\n📝 Notes: ${entry['notes']}\n';
+      }
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '⚠️ Entry Already Exists!',
+          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(  // Added ScrollView for long content
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This entry already exists in Serial No: $serialNumbers',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Existing Entry Details:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                entryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Do you want to proceed anyway?',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'DISCARD',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.green[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'PROCEED',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+  Future<void> _autoFillFromPhoneNumber(String phoneNumber) async {
+    if (phoneNumber.trim().isEmpty || phoneNumber.length != 10) return;
+
+    try {
+      // Search for the most recent entry with this phone number from ANY event
+      final response = await _supabase
+          .from('mois')
+          .select('*')
+          .eq('phone', phoneNumber.trim())
+          .eq('is_deleted', false)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (response != null) {
+        setState(() {
+          // Fill living place and village
+          if (response['living_place'] != null) {
+            _livingPlaceController.text = response['living_place'];
+          }
+          if (response['village_name'] != null) {
+            _villageController.text = response['village_name'];
+          }
+
+          // Fill person 1 details
+          if (response['persons'] != null) {
+            List<dynamic> personsList = response['persons'] as List;
+
+            if (personsList.isNotEmpty) {
+              var person1 = personsList[0];
+
+              // Fill Person 1 Field 1 (Init, Name)
+              String field1 = '';
+              if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
+                field1 += person1['init'];
+              }
+              if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
+                field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
+              }
+              _person1Field1Controller.text = field1;
+
+              // Fill Person 1 Field 2 (Education, Job)
+              String field2 = '';
+              if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
+                field2 += person1['qualification'];
+              }
+              if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
+                field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
+              }
+              _person1Field2Controller.text = field2;
+            }
+
+            // Fill Person 2 details
+            if (personsList.length > 1) {
+              var person2 = personsList[1];
+              String person2Text = '';
+
+              if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
+                person2Text += person2['init'];
+              }
+              if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
+                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
+              }
+              if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
+                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
+              }
+              if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
+                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
+              }
+
+              _person2Controller.text = person2Text;
+            }
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Details auto-filled from previous entry!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error auto-filling from phone number: $e');
+    }
+  }
+
   int _getTotalAmount() {
     if (_paymentMethod == 'CASH') {
       int total = 0;
@@ -542,6 +827,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     // CASE 3: Adding a NEW entry to an existing or new group
     try {
+      // CHECK FOR EXISTING ENTRY FIRST
+      final existingEntries = await _checkExistingEntry();
+
+      if (existingEntries.isNotEmpty) {
+        final shouldProceed = await _showExistingEntryDialog(existingEntries);
+
+        if (!shouldProceed) {
+          // User chose DISCARD - clear the form
+          _handleClear();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Entry discarded and form cleared'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       await _loadNextSerialNo();
 
       int groupId;
@@ -793,6 +1100,30 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // Regular save for single entry
     if (!_validateForm()) return;
 
+// CHECK FOR EXISTING ENTRY FIRST (only for new entries, not edit mode)
+    if (!_isEditMode && _currentGroupId == null) {
+      final existingEntries = await _checkExistingEntry();
+
+      if (existingEntries.isNotEmpty) {
+        final shouldProceed = await _showExistingEntryDialog(existingEntries);
+
+        if (!shouldProceed) {
+          // User chose DISCARD - clear the form
+          _handleClear();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Entry discarded and form cleared'),
+                backgroundColor: Colors.orange,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+
     try {
       await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
 
@@ -840,6 +1171,63 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
       return false;
     }
+
+    // ADD THIS PHONE NUMBER VALIDATION (ONLY FOR EDIT MODE) ⬇️
+    // Phone number validation ONLY for critical edits (amount, payment method, denominations)
+    if (_isEditMode) {
+      // Check if user is editing amount, payment method, or denominations
+      bool isEditingCriticalFields = false;
+
+      if (_originalData != null) {
+        // Check if amount changed
+        var originalAmount = _originalData!['amount'];
+        int currentAmount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
+        if (originalAmount != currentAmount) {
+          isEditingCriticalFields = true;
+        }
+
+        // Check if payment method changed
+        if (_originalData!['payment_method'] != _paymentMethod) {
+          isEditingCriticalFields = true;
+        }
+
+        // Check if denominations changed (only if CASH)
+        if (_paymentMethod == 'CASH' && _originalData!['payment_method'] == 'CASH') {
+          int currentDenomTotal = _getTotalAmount();
+          if (originalAmount != currentDenomTotal) {
+            isEditingCriticalFields = true;
+          }
+        }
+      }
+
+      // Only validate phone if critical fields are being edited
+      if (isEditingCriticalFields) {
+        String phoneNumber = _phoneController.text.trim();
+
+        if (phoneNumber.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phone number is mandatory when editing amount, payment method, or denominations!'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return false;
+        }
+
+        if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Phone number must be exactly 10 digits!'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return false;
+        }
+      }
+    }
+    // END OF PHONE NUMBER VALIDATION ⬆️
 
     if (_paymentMethod == 'CASH') {
       int denomTotal = _getTotalAmount();
@@ -1291,7 +1679,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
     }
 
-    return Scaffold(
+    return Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            // Check for Ctrl+S
+            if (event.logicalKey == LogicalKeyboardKey.keyS &&
+                (event.logicalKey.keyLabel == 's' || event.logicalKey.keyLabel == 'S') &&
+                HardwareKeyboard.instance.isControlPressed) {
+              _handleSaveAndPrint();
+              return KeyEventResult.handled;
+            }
+            // Check for Ctrl+G
+            if (event.logicalKey == LogicalKeyboardKey.keyG &&
+                (event.logicalKey.keyLabel == 'g' || event.logicalKey.keyLabel == 'G') &&
+                HardwareKeyboard.instance.isControlPressed) {
+              _handleGroup();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -1315,7 +1724,42 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           children: [
             _buildSerialAndPaymentHeader(),
             const SizedBox(height: 12),
-            _buildTextField('Search Mobile Number', _phoneController),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.black, width: 2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Search Mobile Number',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Search Mobile Number',
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      isDense: true,
+                      counterText: '',  // Hide character counter
+                    ),
+                    onChanged: (value) {
+                      // Auto-fill when 10 digits are entered
+                      if (value.length == 10 && !_isEditMode) {
+                        _autoFillFromPhoneNumber(value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             _buildVillageAndLivingPlace(),
             const SizedBox(height: 12),
@@ -1337,6 +1781,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ],
         ),
       ),
+        ),
     );
   }
 
@@ -1570,6 +2015,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           Container(
             height: 40,
+            alignment: Alignment.center,  // ADD THIS
             decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: _amountController,
@@ -1578,7 +2024,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8),
+                contentPadding: EdgeInsets.zero,  // CHANGE THIS
+                isDense: true,  // ADD THIS
               ),
             ),
           ),
@@ -1633,6 +2080,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Container(
               width: 80,
               height: 35,
+              alignment: Alignment.center,  // ADD THIS
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black, width: 2),
                 color: Colors.white,
@@ -1644,7 +2092,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
+                  contentPadding: EdgeInsets.zero,  // KEEP THIS
+                  isDense: true,  // ADD THIS
                   prefixText: '₹',
                   prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
@@ -1717,6 +2166,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Expanded(
               child: Container(
                 height: 35,
+                alignment: Alignment.center,  // ADD THIS
                 decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
                 child: TextField(
                   controller: controller,
@@ -1725,7 +2175,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   style: const TextStyle(fontSize: 14),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding: EdgeInsets.zero,  // KEEP THIS
+                    isDense: true,  // ADD THIS
                     hintText: '0',
                     hintStyle: TextStyle(color: Colors.grey),
                   ),
@@ -1738,19 +2189,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Container(
               width: 90,
               height: 35,
+              alignment: Alignment.center,  // ADD THIS if text still not centered
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black, width: 2),
                 color: Colors.grey[200],
               ),
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      total.toString(),
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
+              // Remove the Center widget and directly use:
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    total.toString(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ),
