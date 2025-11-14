@@ -18,7 +18,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   bool _loading = true;
 
   // Filter controllers
-  String _dateFilter = 'All'; // Today, Upcoming, Past, All
+  String _dateFilter = 'All';
   String? _selectedEventType;
   String? _selectedStatus;
 
@@ -47,8 +47,101 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       '/admin/event-expenses',
       arguments: event,
     );
-    // Refresh events when returning from expenses page
     _loadEvents();
+  }
+
+  // NEW: Show operators dialog and navigate to operator dashboard
+  Future<void> _showOperatorsDialog(Map<String, dynamic> event) async {
+    try {
+      // Fetch assigned operators for this event
+      final assignments = await _auth.client
+          .from('event_assignments')
+          .select('''
+            operator_id,
+            users!inner(id, full_name, phone)
+          ''')
+          .eq('event_id', event['id']);
+
+      if (!mounted) return;
+
+      if (assignments == null || assignments.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No operators assigned to this event'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Show dialog with operator list
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Assigned Operators'),
+          content: SizedBox(
+            width: 300,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: assignments.length,
+              separatorBuilder: (context, index) => const Divider(),
+              itemBuilder: (context, index) {
+                final operator = assignments[index]['users'];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: const Color(0xFFB846D7),
+                    child: Text(
+                      operator['full_name'][0].toUpperCase(),
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  title: Text(operator['full_name']),
+                  subtitle: Text(operator['phone'] ?? ''),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                  onTap: () {
+                    Navigator.pop(context); // Close dialog
+                    _navigateToOperatorDashboard(event, operator);
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading operators: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // NEW: Navigate to operator dashboard as admin
+  void _navigateToOperatorDashboard(
+      Map<String, dynamic> event,
+      Map<String, dynamic> operator,
+      ) {
+    // Prepare event data with operator info
+    final eventDataWithOperator = Map<String, dynamic>.from(event);
+    eventDataWithOperator['_operator_name'] = operator['full_name'];
+    eventDataWithOperator['_operator_id'] = operator['id'];
+
+    // Navigate to operator dashboard
+    Navigator.pushNamed(
+      context,
+      '/operator/event-dashboard',
+      arguments: eventDataWithOperator,
+    );
   }
 
   Future<void> _deleteEvent(Map<String, dynamic> event) async {
@@ -147,7 +240,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
 
       final data = await query;
 
-      // Update status based on event date
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final todayDate = DateTime.parse(today);
 
@@ -155,8 +247,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
         if (event['event_date'] != null) {
           final eventDate = DateTime.parse(event['event_date']);
 
-          // If event date is in the past and status is still 'upcoming', update it to 'completed'
-          if (eventDate.isBefore(todayDate) && event['status']?.toString().toLowerCase() == 'upcoming') {
+          if (eventDate.isBefore(todayDate) &&
+              event['status']?.toString().toLowerCase() == 'upcoming') {
             try {
               await _auth.client
                   .from('events')
@@ -193,7 +285,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     final todayDate = DateTime.parse(today);
 
     var filtered = _events.where((event) {
-      // Date filter (Today, Upcoming, Past, All)
       if (_dateFilter != 'All' && event['event_date'] != null) {
         final eventDate = DateTime.parse(event['event_date']);
 
@@ -218,16 +309,15 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
         }
       }
 
-      // Event type filter
       if (_selectedEventType != null && _selectedEventType!.isNotEmpty) {
         if (event['event_types']['id'] != _selectedEventType) {
           return false;
         }
       }
 
-      // Status filter
       if (_selectedStatus != null && _selectedStatus!.isNotEmpty) {
-        if (event['status']?.toString().toLowerCase() != _selectedStatus!.toLowerCase()) {
+        if (event['status']?.toString().toLowerCase() !=
+            _selectedStatus!.toLowerCase()) {
           return false;
         }
       }
@@ -285,39 +375,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     }
   }
 
-  // Get count by date category
-  Map<String, int> _getEventCounts() {
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    final todayDate = DateTime.parse(today);
-
-    int todayCount = 0;
-    int upcomingCount = 0;
-    int pastCount = 0;
-
-    for (var event in _events) {
-      if (event['event_date'] != null) {
-        final eventDate = DateTime.parse(event['event_date']);
-
-        if (eventDate.year == todayDate.year &&
-            eventDate.month == todayDate.month &&
-            eventDate.day == todayDate.day) {
-          todayCount++;
-        } else if (eventDate.isAfter(todayDate)) {
-          upcomingCount++;
-        } else {
-          pastCount++;
-        }
-      }
-    }
-
-    return {
-      'today': todayCount,
-      'upcoming': upcomingCount,
-      'past': pastCount,
-      'total': _events.length,
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
     final isSmallScreen = MediaQuery.of(context).size.width < 900;
@@ -329,7 +386,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
           child: Column(
             children: [
-              // Title
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 decoration: BoxDecoration(
@@ -346,7 +402,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Main Card
               Container(
                 width: double.infinity,
                 constraints: const BoxConstraints(maxWidth: 1200),
@@ -356,7 +411,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Header
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -401,7 +455,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                         runSpacing: 12,
                         alignment: WrapAlignment.start,
                         children: [
-                          // Date Filter Label
                           const SizedBox(
                             width: 100,
                             child: Padding(
@@ -412,8 +465,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               ),
                             ),
                           ),
-
-                          // Date Filter Dropdown
                           SizedBox(
                             width: isSmallScreen ? double.infinity : 150,
                             child: DropdownButtonFormField<String>(
@@ -437,10 +488,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               },
                             ),
                           ),
-
                           const SizedBox(width: 20),
-
-                          // Event Label
                           const SizedBox(
                             width: 100,
                             child: Padding(
@@ -451,8 +499,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               ),
                             ),
                           ),
-
-                          // Event Type Dropdown
                           SizedBox(
                             width: isSmallScreen ? double.infinity : 250,
                             child: DropdownButtonFormField<String>(
@@ -480,10 +526,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               },
                             ),
                           ),
-
                           const SizedBox(width: 20),
-
-                          // Status Label
                           const SizedBox(
                             width: 50,
                             child: Padding(
@@ -494,8 +537,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                               ),
                             ),
                           ),
-
-                          // Status Dropdown
                           SizedBox(
                             width: isSmallScreen ? double.infinity : 150,
                             child: DropdownButtonFormField<String>(
@@ -638,9 +679,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                 ),
                                 DataCell(
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: _getStatusColor(event['status']).withOpacity(0.1),
+                                      color: _getStatusColor(event['status'])
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(4),
                                       border: Border.all(
                                         color: _getStatusColor(event['status']),
@@ -662,7 +705,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
-                                        icon: const Icon(Icons.edit, size: 18, color: Colors.blue),
+                                        icon: const Icon(Icons.edit,
+                                            size: 18, color: Colors.blue),
                                         onPressed: () => _editEvent(event),
                                         tooltip: 'Edit',
                                         padding: EdgeInsets.zero,
@@ -670,7 +714,8 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       IconButton(
-                                        icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                                        icon: const Icon(Icons.delete,
+                                            size: 18, color: Colors.red),
                                         onPressed: () => _deleteEvent(event),
                                         tooltip: 'Delete',
                                         padding: EdgeInsets.zero,
@@ -678,9 +723,20 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       IconButton(
-                                        icon: const Icon(Icons.currency_rupee, size: 18, color: Colors.green),
+                                        icon: const Icon(Icons.currency_rupee,
+                                            size: 18, color: Colors.green),
                                         onPressed: () => _manageExpenses(event),
                                         tooltip: 'Manage Expenses',
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      // NEW: Operator icon
+                                      IconButton(
+                                        icon: const Icon(Icons.people,
+                                            size: 18, color: Color(0xFFB846D7)),
+                                        onPressed: () => _showOperatorsDialog(event),
+                                        tooltip: 'View Operators',
                                         padding: EdgeInsets.zero,
                                         constraints: const BoxConstraints(),
                                       ),
@@ -785,39 +841,6 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, int count, Color color, bool isSmall) {
-    return Container(
-      width: isSmall ? double.infinity : 150,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        border: Border.all(color: color, width: 2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: [
-          Text(
-            count.toString(),
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: color,
-            ),
-          ),
-        ],
       ),
     );
   }
