@@ -21,18 +21,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   String operatorName = '';
   String? operatorId; // Add this
 
+  bool _isAdminView = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Get event data from navigation arguments
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
       setState(() {
         eventData = args;
-        // Get operator name from the event data if it was passed
         operatorName = args['_operator_name'] ?? '';
-        operatorId = args['_operator_id']; // Add this
+        operatorId = args['_operator_id'];
+        // Check if this is admin viewing operator dashboard
+        _isAdminView = args['_operator_name'] != null && args['_operator_name'].toString().isNotEmpty;
       });
     }
   }
@@ -216,6 +217,22 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       arguments: eventDataWithOperator,
                     );
                   }),
+
+                  // ADD THIS BLOCK
+                  if (_isAdminView) ...[
+                    const SizedBox(height: 12),
+                    _buildActionButton('Correct Person Data', () {
+                      Navigator.pushNamed(
+                        context,
+                        '/admin/correct-person-data',
+                        arguments: {
+                          'event_id': eventData!['id'],
+                          'operator_id': operatorId,
+                        },
+                      );
+                    }),
+                  ],
+
                   const SizedBox(height: 12),
                   _buildActionButton('Correct Village Names', () {
                     Navigator.push(

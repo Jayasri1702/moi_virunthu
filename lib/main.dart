@@ -18,6 +18,7 @@ import 'screens/operator/cash_withdrawal_screen.dart';
 import 'screens/operator/exchange_denomination_screen.dart';
 import 'screens/operator/collection_details_screen.dart';
 import 'screens/operator/moi_receipt_preview_screen.dart';
+import 'screens/admin/correct_person_data_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,6 +56,7 @@ class MyApp extends StatelessWidget {
         '/operator/exchange-denomination': (context) => const ExchangeDenominationScreen(),
         '/operator/collection-details': (context) => const CollectionDetailsScreen(),
         '/operator/moi-receipt-preview': (context) => const MoiReceiptPreviewScreen(),
+        '/admin/correct-person-data': (context) => const CorrectPersonDataScreen(),
       },
     );
   }
