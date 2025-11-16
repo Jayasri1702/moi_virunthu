@@ -13,6 +13,7 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
 
   List<Map<String, dynamic>> _mois = [];
   bool _loading = true;
+  bool _saving = false;
   String? _eventId;
 
   // Controllers for editing - Map<moiId, Map<fieldName, controller>>
@@ -52,19 +53,18 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     setState(() => _loading = true);
 
     try {
-        final data = await _auth.client
-            .from('mois')
-            .select('*')
-            .eq('event_id', _eventId!)
-            .eq('is_deleted', false)
-            .order('serial_no', ascending: true);
+      final data = await _auth.client
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false)
+          .order('serial_no', ascending: true);
 
-        setState(() {
-          _mois = List<Map<String, dynamic>>.from(data);
-          // Don't dispose controllers here, just reinitialize them
-          _initializeControllers();
-          _loading = false;
-        });
+      setState(() {
+        _mois = List<Map<String, dynamic>>.from(data);
+        _initializeControllers();
+        _loading = false;
+      });
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
@@ -79,15 +79,12 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
   }
 
   void _initializeControllers() {
-    // Create a new map instead of clearing to avoid disposing active controllers
     final newControllers = <String, Map<String, TextEditingController>>{};
 
     for (var moi in _mois) {
       final moiId = moi['id'];
 
-      // Reuse existing controllers if they exist, otherwise create new ones
       if (_controllers.containsKey(moiId)) {
-        // Update existing controllers with new values
         _controllers[moiId]!['village_name']!.text = moi['village_name'] ?? '';
         _controllers[moiId]!['living_place']!.text = moi['living_place'] ?? '';
 
@@ -104,7 +101,6 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
 
         newControllers[moiId] = _controllers[moiId]!;
       } else {
-        // Create new controllers for this moi
         newControllers[moiId] = {
           'village_name': TextEditingController(text: moi['village_name'] ?? ''),
           'living_place': TextEditingController(text: moi['living_place'] ?? ''),
@@ -130,112 +126,39 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     _controllers = newControllers;
   }
 
-  String _getPersonNames(Map<String, dynamic> moi) {
-    final persons = moi['persons'] as List<dynamic>?;
-    if (persons == null || persons.isEmpty) return '';
+  Future<void> _saveAllChanges() async {
+    setState(() => _saving = true);
 
-    return persons.map((person) {
-      final p = person as Map<String, dynamic>;
-      final init = p['init'] ?? '';
-      final name = p['name'] ?? '';
-      if (init.isNotEmpty && name.isNotEmpty) {
-        return '$init.$name';
-      } else if (name.isNotEmpty) {
-        return name;
+    int successCount = 0;
+    int errorCount = 0;
+
+    for (var moi in _mois) {
+      try {
+        await _saveSingleMoi(moi);
+        successCount++;
+      } catch (e) {
+        errorCount++;
+        print('❌ Error saving moi ${moi['serial_no']}: $e');
       }
-      return '';
-    }).where((n) => n.isNotEmpty).join(', ');
-  }
+    }
 
-  String _getEducations(Map<String, dynamic> moi) {
-    final persons = moi['persons'] as List<dynamic>?;
-    if (persons == null || persons.isEmpty) return '';
+    setState(() => _saving = false);
 
-    return persons.map((person) {
-      final p = person as Map<String, dynamic>;
-      return p['qualification'] ?? '';
-    }).where((e) => e.isNotEmpty).join(', ');
-  }
-
-  String _getJobs(Map<String, dynamic> moi) {
-    final persons = moi['persons'] as List<dynamic>?;
-    if (persons == null || persons.isEmpty) return '';
-
-    return persons.map((person) {
-      final p = person as Map<String, dynamic>;
-      return p['job'] ?? '';
-    }).where((j) => j.isNotEmpty).join(', ');
-  }
-
-  Future<void> _saveChanges(Map<String, dynamic> moi) async {
-    final moiId = moi['id'];
-
-    try {
-      // Reconstruct persons array from controllers
-      final persons = moi['persons'] as List<dynamic>?;
-      final updatedPersons = <Map<String, dynamic>>[];
-
-      if (persons != null) {
-        for (int i = 0; i < persons.length; i++) {
-          final init = _controllers[moiId]!['person_${i}_init']!.text.trim();
-          final name = _controllers[moiId]!['person_${i}_name']!.text.trim();
-          final qualification = _controllers[moiId]!['person_${i}_qualification']!.text.trim();
-          final job = _controllers[moiId]!['person_${i}_job']!.text.trim();
-
-          // Match collect_moi structure - include all fields
-          updatedPersons.add({
-            'init': init,
-            'name': name,
-            'qualification': qualification,
-            'job': job,
-          });
-        }
-      }
-
-      print('🔄 Updating moi $moiId');
-      print('📝 Updated persons: $updatedPersons');
-
-// Update in database (NO old_data tracking for correct person data)
-      final response = await _auth.client
-          .from('mois')
-          .update({
-        'persons': updatedPersons,
-        'village_name': _controllers[moiId]!['village_name']!.text.trim().isEmpty
-            ? null
-            : _controllers[moiId]!['village_name']!.text.trim(),
-        'living_place': _controllers[moiId]!['living_place']!.text.trim().isEmpty
-            ? null
-            : _controllers[moiId]!['living_place']!.text.trim(),
-        'updated_at': DateTime.now().toIso8601String(),
-      })
-          .eq('id', moiId)
-          .select()
-          .single();
-
-      print('✅ Update successful: $response');
-
-      if (mounted) {
-        // Reload data FIRST to ensure we have fresh data
-        await _loadMois();
-
-        // Then show success message
+    if (mounted) {
+      if (errorCount == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Changes saved for Serial No: O${moi['serial_no']}'),
+            content: Text('✅ All changes saved successfully! ($successCount records)'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 3),
           ),
         );
-      }
-    } catch (e) {
-      print('❌ Error saving changes: $e');
-      print('📍 Error type: ${e.runtimeType}');
-
-      if (mounted) {
+        await _loadMois();
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            content: Text('⚠️ Saved $successCount records, $errorCount failed'),
+            backgroundColor: Colors.orange,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -243,132 +166,53 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     }
   }
 
-  void _showEditDialog(Map<String, dynamic> moi) {
+  Future<void> _saveSingleMoi(Map<String, dynamic> moi) async {
     final moiId = moi['id'];
+
+    // Reconstruct persons array from controllers
     final persons = moi['persons'] as List<dynamic>?;
+    final updatedPersons = <Map<String, dynamic>>[];
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Person Data - O${moi['serial_no']}'),
-        content: SingleChildScrollView(
-          child: SizedBox(
-            width: 500,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Person fields
-                if (persons != null)
-                  ...List.generate(persons.length, (i) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Person ${i + 1}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _controllers[moiId]!['person_${i}_init'],
-                          decoration: const InputDecoration(
-                            labelText: 'Init',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _controllers[moiId]!['person_${i}_name'],
-                          decoration: const InputDecoration(
-                            labelText: 'Name',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _controllers[moiId]!['person_${i}_qualification'],
-                          decoration: const InputDecoration(
-                            labelText: 'Education',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _controllers[moiId]!['person_${i}_job'],
-                          decoration: const InputDecoration(
-                            labelText: 'Job',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                        if (i < persons.length - 1)
-                          const Divider(height: 24, thickness: 2),
-                        if (i < persons.length - 1)
-                          const SizedBox(height: 8),
-                      ],
-                    );
-                  }),
+    if (persons != null) {
+      for (int i = 0; i < persons.length; i++) {
+        final init = _controllers[moiId]!['person_${i}_init']!.text.trim();
+        final name = _controllers[moiId]!['person_${i}_name']!.text.trim();
+        final qualification = _controllers[moiId]!['person_${i}_qualification']!.text.trim();
+        final job = _controllers[moiId]!['person_${i}_job']!.text.trim();
 
-                const SizedBox(height: 16),
-                const Divider(thickness: 2),
-                const SizedBox(height: 16),
+        updatedPersons.add({
+          'init': init,
+          'name': name,
+          'qualification': qualification,
+          'job': job,
+        });
+      }
+    }
 
-                // Village and Living Place
-                const Text(
-                  'Location Details',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _controllers[moiId]!['village_name'],
-                  decoration: const InputDecoration(
-                    labelText: 'Village Name',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _controllers[moiId]!['living_place'],
-                  decoration: const InputDecoration(
-                    labelText: 'Living City',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _saveChanges(moi);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB846D7),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Save'),
-          ),
-        ],
+    await _auth.client
+        .from('mois')
+        .update({
+      'persons': updatedPersons,
+      'village_name': _controllers[moiId]!['village_name']!.text.trim().isEmpty
+          ? null
+          : _controllers[moiId]!['village_name']!.text.trim(),
+      'living_place': _controllers[moiId]!['living_place']!.text.trim().isEmpty
+          ? null
+          : _controllers[moiId]!['living_place']!.text.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    })
+        .eq('id', moiId);
+  }
+
+  Widget _buildEditableCell(TextEditingController controller) {
+    return TextField(
+      controller: controller,
+      decoration: const InputDecoration(
+        border: InputBorder.none,
+        contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        isDense: true,
       ),
+      style: const TextStyle(fontSize: 13),
     );
   }
 
@@ -401,148 +245,276 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
           style: TextStyle(fontSize: 16, color: Colors.grey),
         ),
       )
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey[400]!),
-              ),
+          : Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // Header
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF7B3A99), Color(0xFF9B4DB8)],
-                      ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.grey[400]!),
                     ),
-                    child: const Text(
-                      'PERSON DATA - Click on any row to edit',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+                    child: Column(
+                      children: [
+                        // Header
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF7B3A99), Color(0xFF9B4DB8)],
+                            ),
+                          ),
+                          child: const Text(
+                            'PERSON DATA - Edit fields directly in the table',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
 
-                  // Table
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
-                      border: TableBorder.all(color: Colors.grey[300]!),
-                      columnSpacing: 16,
-                      dataRowMinHeight: 48,
-                      dataRowMaxHeight: 80,
-                      columns: const [
-                        DataColumn(
-                          label: Text(
-                            'S.No',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Names',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Education',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Job',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Village Name',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        DataColumn(
-                          label: Text(
-                            'Living City',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                        // Table
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
+                            border: TableBorder.all(color: Colors.grey[300]!),
+                            columnSpacing: 8,
+                            dataRowMinHeight: 48,
+                            dataRowMaxHeight: 80,
+                            columns: const [
+                              DataColumn(
+                                label: Text(
+                                  'S.No',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Init 1',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Name 1',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Education 1',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Job 1',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Init 2',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Name 2',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Education 2',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Job 2',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Village Name',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                              DataColumn(
+                                label: Text(
+                                  'Living City',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                ),
+                              ),
+                            ],
+                            rows: _mois.map((moi) {
+                              final moiId = moi['id'];
+                              final persons = moi['persons'] as List<dynamic>?;
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    Text(
+                                      'O${moi['serial_no']?.toString() ?? ''}',
+                                      style: const TextStyle(fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                  // Person 1 fields
+                                  DataCell(
+                                    SizedBox(
+                                      width: 60,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['person_0_init']!,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['person_0_name']!,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['person_0_qualification']!,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['person_0_job']!,
+                                      ),
+                                    ),
+                                  ),
+                                  // Person 2 fields (if exists)
+                                  DataCell(
+                                    SizedBox(
+                                      width: 60,
+                                      child: persons != null && persons.length > 1
+                                          ? _buildEditableCell(
+                                        _controllers[moiId]!['person_1_init']!,
+                                      )
+                                          : const SizedBox(),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: persons != null && persons.length > 1
+                                          ? _buildEditableCell(
+                                        _controllers[moiId]!['person_1_name']!,
+                                      )
+                                          : const SizedBox(),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: persons != null && persons.length > 1
+                                          ? _buildEditableCell(
+                                        _controllers[moiId]!['person_1_qualification']!,
+                                      )
+                                          : const SizedBox(),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: persons != null && persons.length > 1
+                                          ? _buildEditableCell(
+                                        _controllers[moiId]!['person_1_job']!,
+                                      )
+                                          : const SizedBox(),
+                                    ),
+                                  ),
+                                  // Village and Living Place
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['village_name']!,
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: 120,
+                                      child: _buildEditableCell(
+                                        _controllers[moiId]!['living_place']!,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
                           ),
                         ),
                       ],
-                      rows: _mois.map((moi) {
-                        return DataRow(
-                          onSelectChanged: (_) => _showEditDialog(moi),
-                          cells: [
-                            DataCell(Text('O${moi['serial_no']?.toString() ?? ''}')),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  _getPersonNames(moi),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  _getEducations(moi),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  _getJobs(moi),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  moi['village_name'] ?? '',
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ),
-                            DataCell(
-                              SizedBox(
-                                width: 150,
-                                child: Text(
-                                  moi['living_place'] ?? '',
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 2,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // Bottom Save Button
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: ElevatedButton(
+              onPressed: _saving ? null : _saveAllChanges,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB846D7),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 2,
+              ),
+              child: _saving
+                  ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+                  : const Text(
+                'SAVE ALL CHANGES',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
