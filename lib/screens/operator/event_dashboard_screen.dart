@@ -16,12 +16,13 @@ class EventDashboardScreen extends StatefulWidget {
   State<EventDashboardScreen> createState() => _EventDashboardScreenState();
 }
 
+// Around line 16-18, modify the state variables:
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   Map<String, dynamic>? eventData;
   String operatorName = '';
-  String? operatorId; // Add this
+  String? operatorId;
 
-  bool _isAdminView = false;
+  bool _isAdminView = false; // This already exists
 
   @override
   void didChangeDependencies() {
@@ -32,8 +33,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventData = args;
         operatorName = args['_operator_name'] ?? '';
         operatorId = args['_operator_id'];
-        // Check if this is admin viewing operator dashboard
-        _isAdminView = args['_operator_name'] != null && args['_operator_name'].toString().isNotEmpty;
+        // ✅ MODIFY THIS LINE - Check for explicit admin view flag
+        _isAdminView = args['_is_admin_view'] == true;
       });
     }
   }

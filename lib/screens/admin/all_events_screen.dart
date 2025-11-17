@@ -127,6 +127,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   }
 
   // NEW: Navigate to operator dashboard as admin
+  // Around line 91-100, modify the _navigateToOperatorDashboard method:
   void _navigateToOperatorDashboard(
       Map<String, dynamic> event,
       Map<String, dynamic> operator,
@@ -135,6 +136,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     final eventDataWithOperator = Map<String, dynamic>.from(event);
     eventDataWithOperator['_operator_name'] = operator['full_name'];
     eventDataWithOperator['_operator_id'] = operator['id'];
+    eventDataWithOperator['_is_admin_view'] = true; // ✅ ADD THIS LINE
 
     // Navigate to operator dashboard
     Navigator.pushNamed(
