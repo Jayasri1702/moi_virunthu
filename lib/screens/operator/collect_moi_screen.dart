@@ -399,7 +399,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         const SnackBar(
           content: Text('Entry loaded for editing. Make changes and click "Save & Print"'),
           backgroundColor: Colors.blue,
-          duration: Duration(seconds: 3),
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -700,16 +700,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             }
           }
         });
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Details auto-filled from previous entry!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
       }
     } catch (e) {
       print('Error auto-filling from phone number: $e');
@@ -775,7 +765,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SnackBar(
             content: Text('This entry is already in a group! Use "Save & Print" to update it, or click "Add Entry" to add a new entry to the group.'),
             backgroundColor: Colors.orange,
-            duration: Duration(seconds: 4),
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -806,15 +796,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         await _clearFormForNextEntry();
         _phoneFocusNode.requestFocus(); // ✅ ADD THIS
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Entry converted to group successfully! Add more entries to this group.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
         return;
       } catch (e) {
         print('Error converting to group: $e');
@@ -838,15 +819,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (!shouldProceed) {
           // User chose DISCARD - clear the form
           _handleClear();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Entry discarded and form cleared'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
           return;
         }
       }
@@ -871,14 +843,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         await _clearFormForNextEntry();
         _phoneFocusNode.requestFocus(); // ✅ ADD THIS
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Entry added to group successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
       }
     } catch (e) {
       print('Error in group operation: $e');
@@ -1084,13 +1048,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All grouped entries saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
         Navigator.pushReplacementNamed(
           context,
           '/operator/collection-details',
@@ -1113,15 +1070,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (!shouldProceed) {
           // User chose DISCARD - clear the form
           _handleClear();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Entry discarded and form cleared'),
-                backgroundColor: Colors.orange,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
           return;
         }
       }
@@ -1131,12 +1079,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isEditMode ? 'MOI updated successfully!' : 'MOI saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
 
         if (_isEditMode) {
           Navigator.pushReplacementNamed(
@@ -1176,6 +1118,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return false;
     }
 
+
+    // ✅ UPDATE THIS SECTION - Phone validation for ALL cases (not just edit mode)
+    String phoneNumber = _phoneController.text.trim();
+
+    // Phone must be either empty OR exactly 10 digits
+    if (phoneNumber.isNotEmpty) {
+      if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone number must be exactly 10 digits or leave it empty!'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return false;
+      }
+    }
+
+
     // ADD THIS PHONE NUMBER VALIDATION (ONLY FOR EDIT MODE) ⬇️
     // Phone number validation ONLY for critical edits (amount, payment method, denominations)
     if (_isEditMode) {
@@ -1213,7 +1174,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             const SnackBar(
               content: Text('Phone number is mandatory when editing amount, payment method, or denominations!'),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: Duration(seconds: 2),
             ),
           );
           return false;
@@ -1224,7 +1185,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             const SnackBar(
               content: Text('Phone number must be exactly 10 digits!'),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: Duration(seconds: 2),
             ),
           );
           return false;
@@ -1258,7 +1219,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             SnackBar(
               content: Text(message),
               backgroundColor: Colors.red,
-              duration: const Duration(seconds: 4),
+              duration: const Duration(seconds: 2),
             ),
           );
           return false;
@@ -1309,13 +1270,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _clearFormForNextEntry();
     _phoneFocusNode.requestFocus(); // ✅ ADD THIS
 
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ready to add new entry to group'),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   void _handleClear() async {
@@ -1627,7 +1581,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             SnackBar(
               content: Text('Generating ${_groupedMois.length} receipts...'),
               backgroundColor: Colors.blue,
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 2),
             ),
           );
         }
@@ -2134,23 +2088,39 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     prefixText: '₹',
                     prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
-                  onChanged: (value) {
-                    if (value.isEmpty) {
-                      setState(() {
-                        row['showDropdown'] = false;
-                        row['denomOptions'] = [500, 100, 10, 1];
-                        row['selectedDenom'] = 500;
-                      });
+                onChanged: (value) {
+                  if (value.isEmpty) {
+                    setState(() {
+                      row['showDropdown'] = false;
+                      row['denomOptions'] = [500, 100, 10, 1];
+                      row['selectedDenom'] = 500;
+                    });
+                    return;
+                  }
+
+                  int? typedValue = int.tryParse(value);
+                  if (typedValue == null) return;
+
+                  // ✅ UPDATED VALIDATION - Check if it's a valid starting digit or complete denomination
+                  List<int> validDenoms = [1, 5, 10, 20, 50, 100, 200, 500];
+                  List<int> validStartDigits = [1, 2, 5]; // Valid first digits for denominations
+
+                  // If it's a single digit, check if it's a valid starting digit
+                  if (value.length == 1) {
+                    if (!validStartDigits.contains(typedValue)) {
+                      denomController.text = '';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Only denominations starting with 1, 2, or 5 are allowed'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                       return;
                     }
-
-                    int? typedValue = int.tryParse(value);
-                    if (typedValue == null) return;
-
-                    // ✅ ADD THIS VALIDATION - Only allow valid denominations
-                    List<int> validDenoms = [1, 5, 10, 20, 50, 100, 200, 500];
+                  } else {
+                    // For multi-digit entries, check if it's a valid denomination
                     if (!validDenoms.contains(typedValue)) {
-                      // Clear the field if invalid denomination
                       denomController.text = '';
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -2161,35 +2131,36 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                       );
                       return;
                     }
+                  }
 
-                    // Find the maximum denomination from all previous rows
-                    int maxPrevDenom = 0;
-                    for (int i = 0; i < index; i++) {
-                      if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
-                        maxPrevDenom = _denomRows[i]['selectedDenom'];
-                      }
+                  // Find the maximum denomination from all previous rows
+                  int maxPrevDenom = 0;
+                  for (int i = 0; i < index; i++) {
+                    if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
+                      maxPrevDenom = _denomRows[i]['selectedDenom'];
                     }
+                  }
 
                   List<int> options = [];
 
                   if (typedValue == 1) {
                     options = [100, 10, 1];
                   } else if (typedValue == 2) {
-                    options = [200, 20];
+                    options = [200, 20]; // ✅ ADD 2 here as well
                   } else if (typedValue == 5) {
                     options = [500, 50, 5];
                   } else if (typedValue == 10) {
                     options = [10];
                   } else if (typedValue == 20) {
-                    options = [20];
+                    options = [20]; // ✅ Should include 2 as option
                   } else if (typedValue == 50) {
-                    options = [50];
+                    options = [50, 5]; // ✅ Should include 5 as option
                   } else if (typedValue == 100) {
-                    options = [100];
+                    options = [100, 10, 1]; // ✅ Should include options
                   } else if (typedValue == 200) {
-                    options = [200];
+                    options = [200, 20]; // ✅ Should include options
                   } else if (typedValue == 500) {
-                    options = [500];
+                    options = [500, 50, 5]; // ✅ Should include options
                   }
 
                   // Filter out denominations >= maxPrevDenom
@@ -2380,6 +2351,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 final isCurrentlyEditing = _editingMoiId == moi['id'];
 
                 return InkWell(
+                  // ✅ ADD DOUBLE-CLICK TO DELETE
+                  onDoubleTap: () => _handleDeleteFromGroup(moi),
                   onTap: () => _loadGroupedEntryForEdit(moi),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -2444,6 +2417,100 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleDeleteFromGroup(Map<String, dynamic> moi) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '🗑️ Delete Entry',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Do you want to delete this entry from the group?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text('Serial No: O${moi['serial_no']}'),
+            Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
+            Text('Amount: ₹${moi['amount']}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.grey[200],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'DELETE',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldDelete == true) {
+      try {
+        // Mark as deleted
+        await _supabase
+            .from('mois')
+            .update({'is_deleted': true, 'updated_at': DateTime.now().toIso8601String()})
+            .eq('id', moi['id']);
+
+        // If this was the entry being edited, clear edit mode
+        if (_editingMoiId == moi['id']) {
+          setState(() {
+            _isEditMode = false;
+            _editingMoiId = null;
+            _originalData = null;
+          });
+          await _clearFormForNextEntry();
+        }
+
+        // Reload the group
+        await _loadGroupedMois();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Entry deleted from group'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        print('Error deleting entry: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error deleting entry: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildActionButtons() {
