@@ -15,6 +15,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   // Controllers
   final _phoneController = TextEditingController();
+  final _phoneFocusNode = FocusNode(); // ✅ ADD THIS
   final _villageController = TextEditingController();
   final _livingPlaceController = TextEditingController();
   final _notesController = TextEditingController();
@@ -803,6 +804,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         await _loadGroupedMois();
         await _clearFormForNextEntry();
+        _phoneFocusNode.requestFocus(); // ✅ ADD THIS
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -867,6 +869,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         await _loadGroupedMois();
         await _clearFormForNextEntry();
+        _phoneFocusNode.requestFocus(); // ✅ ADD THIS
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1143,6 +1146,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           );
         } else {
           await _clearFormForNextEntry();
+          _phoneFocusNode.requestFocus(); // ✅ ADD THIS
         }
       }
     } catch (e) {
@@ -1303,6 +1307,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   void _handleAddEntry() {
     _clearFormForNextEntry();
+    _phoneFocusNode.requestFocus(); // ✅ ADD THIS
+
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -1697,6 +1703,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _handleGroup();
               return KeyEventResult.handled;
             }
+            // Check for Ctrl+Delete
+            if (event.logicalKey == LogicalKeyboardKey.delete &&
+                HardwareKeyboard.instance.isControlPressed) {
+              _handleClear();
+              return KeyEventResult.handled;
+            }
+            // Check for Ctrl+A (Add Entry - only when in group mode)
+            if (event.logicalKey == LogicalKeyboardKey.keyA &&
+                (event.logicalKey.keyLabel == 'a' || event.logicalKey.keyLabel == 'A') &&
+                HardwareKeyboard.instance.isControlPressed) {
+              if (_currentGroupId != null) {
+                _handleAddEntry();
+                return KeyEventResult.handled;
+              }
+            }
+// Check for Ctrl+P (Generate receipt)
+            if (event.logicalKey == LogicalKeyboardKey.keyP &&
+                (event.logicalKey.keyLabel == 'p' || event.logicalKey.keyLabel == 'P') &&
+                HardwareKeyboard.instance.isControlPressed) {
+              if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+                _handleGenerateGroupReceipt();
+              } else if (_currentGroupId == null && (_isEditMode || _hasFormData())) {
+                _handleGenerateSingleReceipt();
+              }
+              return KeyEventResult.handled;
+            }
+
           }
           return KeyEventResult.ignored;
         },
@@ -1740,8 +1773,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   const SizedBox(height: 6),
                   TextField(
                     controller: _phoneController,
-                    keyboardType: TextInputType.phone,
+                    focusNode: _phoneFocusNode,
+                    keyboardType: TextInputType.number, // ✅ CHANGE from phone to number
                     maxLength: 10,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly, // ✅ ADD THIS - Only digits allowed
+                    ],
                     style: const TextStyle(fontSize: 13),
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -2086,37 +2123,52 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 color: Colors.white,
               ),
               child: TextField(
-                controller: denomController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,  // KEEP THIS
-                  isDense: true,  // ADD THIS
-                  prefixText: '₹',
-                  prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                onChanged: (value) {
-                  if (value.isEmpty) {
-                    setState(() {
-                      row['showDropdown'] = false;
-                      row['denomOptions'] = [500, 100, 10, 1];
-                      row['selectedDenom'] = 500;
-                    });
-                    return;
-                  }
-
-                  int? typedValue = int.tryParse(value);
-                  if (typedValue == null) return;
-
-                  // Find the maximum denomination from all previous rows
-                  int maxPrevDenom = 0;
-                  for (int i = 0; i < index; i++) {
-                    if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
-                      maxPrevDenom = _denomRows[i]['selectedDenom'];
+                  controller: denomController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    prefixText: '₹',
+                    prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  onChanged: (value) {
+                    if (value.isEmpty) {
+                      setState(() {
+                        row['showDropdown'] = false;
+                        row['denomOptions'] = [500, 100, 10, 1];
+                        row['selectedDenom'] = 500;
+                      });
+                      return;
                     }
-                  }
+
+                    int? typedValue = int.tryParse(value);
+                    if (typedValue == null) return;
+
+                    // ✅ ADD THIS VALIDATION - Only allow valid denominations
+                    List<int> validDenoms = [1, 5, 10, 20, 50, 100, 200, 500];
+                    if (!validDenoms.contains(typedValue)) {
+                      // Clear the field if invalid denomination
+                      denomController.text = '';
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Find the maximum denomination from all previous rows
+                    int maxPrevDenom = 0;
+                    for (int i = 0; i < index; i++) {
+                      if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
+                        maxPrevDenom = _denomRows[i]['selectedDenom'];
+                      }
+                    }
 
                   List<int> options = [];
 
@@ -2528,6 +2580,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
+    _phoneFocusNode.dispose(); // ✅ ADD THIS
     _villageController.dispose();
     _livingPlaceController.dispose();
     _notesController.dispose();
