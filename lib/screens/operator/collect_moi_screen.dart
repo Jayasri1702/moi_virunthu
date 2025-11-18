@@ -2662,7 +2662,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         row['denomController'].dispose();
       }
     }
-
     super.dispose();
   }
 }
