@@ -62,6 +62,61 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
     }
   }
 
+  Future<void> _deleteEntry(String entryId) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Delete'),
+          content: const Text('Are you sure you want to permanently delete this entry from the database?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Permanently delete the entry from database
+      await _auth.client
+          .from('mois')
+          .delete()
+          .eq('id', entryId);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Entry deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+      // Reload the data
+      await _loadDoubleEntries();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting entry: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   // Helper to extract initial from name
   // "P. Prashanth" → "P"
   // "Prashanth" → ""
@@ -291,13 +346,14 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
                         _buildHeaderCell('Village Name', 130),
                         _buildHeaderCell('Living Place', 130),
                         _buildHeaderCell('Amount', 100),
+                        _buildHeaderCell('Action', 80),
                       ],
                     ),
 
                     // BODY
                     Expanded(
                       child: SizedBox(
-                        width: 700, // total width of all columns
+                        width: 780, // total width of all columns
                         child: ListView.builder(
                           itemCount: doubleEntries.length,
                           itemBuilder: (context, index) {
@@ -360,6 +416,24 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
                                     align: TextAlign.right,
                                     isMatch: isAmountMatch,
                                   ),
+                                  // Delete button cell
+                                  Container(
+                                    width: 80,
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      border: Border(
+                                        right: BorderSide(color: Colors.grey[300]!, width: 1),
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: IconButton(
+                                        icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onPressed: () => _deleteEntry(entryId),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
@@ -370,7 +444,7 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
 
                     // FOOTER
                     Container(
-                      width: 700,
+                      width: 780,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         border: Border(
