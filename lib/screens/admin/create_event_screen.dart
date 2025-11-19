@@ -391,7 +391,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             title: const Text('Manage Event Types'),
             content: SizedBox(
               width: 500,
-              child: SingleChildScrollView( // ADD THIS
+              child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,7 +402,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      constraints: const BoxConstraints(maxHeight: 150), // CHANGED from 200 to 150
+                      constraints: const BoxConstraints(maxHeight: 200),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey[300]!),
                         borderRadius: BorderRadius.circular(4),
@@ -427,6 +427,25 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             )
                                 : null,
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Edit button
+                                IconButton(
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  onPressed: () => _showEditEventTypeDialog(type, setDialogState),
+                                  color: Colors.blue,
+                                  tooltip: 'Edit',
+                                ),
+                                // Delete button
+                                IconButton(
+                                  icon: const Icon(Icons.delete, size: 18),
+                                  onPressed: () => _deleteEventType(type['id'], setDialogState),
+                                  color: Colors.red,
+                                  tooltip: 'Delete',
+                                ),
+                              ],
+                            ),
                           );
                         },
                       ),
@@ -457,11 +476,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                         isDense: true,
                       ),
-                      maxLines: 3, // CHANGED from 2 to 3
+                      maxLines: 3,
                     ),
                   ],
                 ),
-              ), // CLOSE SingleChildScrollView
+              ),
             ),
             actions: [
               TextButton(
@@ -559,6 +578,221 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         : 0;
 
     return booked - advance - discount - balanceLive;
+  }
+
+  Future<void> _showEditEventTypeDialog(Map<String, dynamic> eventType, StateSetter parentSetState) async {
+    final nameController = TextEditingController(text: eventType['name']);
+    final descriptionController = TextEditingController(text: eventType['description'] ?? '');
+    bool isUpdating = false;
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Edit Event Type'),
+            content: SizedBox(
+              width: 400,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Event Type Name *',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      isDense: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      isDense: true,
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isUpdating
+                    ? null
+                    : () async {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Event type name is required'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+
+                  setDialogState(() => isUpdating = true);
+
+                  try {
+                    await _auth.client
+                        .from('event_types')
+                        .update({
+                      'name': name,
+                      'description': descriptionController.text.trim().isEmpty
+                          ? null
+                          : descriptionController.text.trim(),
+                    })
+                        .eq('id', eventType['id']);
+
+                    await _loadEventTypes();
+
+                    // Update parent dialog state
+                    parentSetState(() {});
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Event type updated successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      Navigator.pop(context);
+                    }
+                  } catch (e) {
+                    setDialogState(() => isUpdating = false);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error updating event type: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFB846D7),
+                  foregroundColor: Colors.white,
+                ),
+                child: isUpdating
+                    ? const SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : const Text('Update'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteEventType(String eventTypeId, StateSetter parentSetState) async {
+    // Check if this event type is being used by any events
+    try {
+      final eventsUsingType = await _auth.client
+          .from('events')
+          .select('id')
+          .eq('event_type', eventTypeId)
+          .limit(1);
+
+      if (eventsUsingType.isNotEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot delete: This event type is being used by existing events'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error checking event type usage: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Delete'),
+        content: const Text('Are you sure you want to delete this event type? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _auth.client
+          .from('event_types')
+          .delete()
+          .eq('id', eventTypeId);
+
+      await _loadEventTypes();
+
+      // Update parent dialog state
+      parentSetState(() {});
+
+      // If the deleted type was selected, select the first available type
+      if (_selectedEventType == eventTypeId) {
+        setState(() {
+          _selectedEventType = _eventTypes.isNotEmpty ? _eventTypes[0]['id'] : null;
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Event type deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting event type: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _selectDate() async {
@@ -1053,6 +1287,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             const SizedBox(height: 16),
 
+                            // Replace the "Event For" field section in your create_event_screen.dart
+// Around line 1190-1210
+
                             _buildFormRow(
                               label: 'Event For',
                               required: false,
@@ -1064,8 +1301,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   isDense: true,
                                 ),
+                                maxLines: 3,  // ADD THIS LINE - allows multiple lines like Remark field
                               ),
                             ),
+
                             const SizedBox(height: 16),
 
                             _buildFormRow(
