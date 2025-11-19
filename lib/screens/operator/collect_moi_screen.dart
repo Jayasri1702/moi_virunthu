@@ -178,40 +178,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         List<dynamic> personsList = moiData['persons'] as List;
         if (personsList.isNotEmpty) {
           var person1 = personsList[0];
-          String field1 = '';
-          if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
-            field1 += person1['init'];
-          }
-          if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
-            field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
-          }
-          _person1Field1Controller.text = field1;
-
-          String field2 = '';
-          if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
-            field2 += person1['qualification'];
-          }
-          if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
-            field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
-          }
-          _person1Field2Controller.text = field2;
+          _person1Field1Controller.text = person1['name'] ?? '';
+          _person1Field2Controller.text = person1['job'] ?? '';
         }
         if (personsList.length > 1) {
           var person2 = personsList[1];
-          String person2Text = '';
-          if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
-            person2Text += person2['init'];
-          }
-          if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
-          }
-          if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
-          }
-          if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
-          }
-          _person2Controller.text = person2Text;
+          _person2Controller.text = person2['details'] ?? '';
         }
       }
 
@@ -337,45 +309,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         List<dynamic> personsList = moiData['persons'] as List;
         if (personsList.isNotEmpty) {
           var person1 = personsList[0];
-          String field1 = '';
-          if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
-            field1 += person1['init'];
-          }
-          if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
-            field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
-          }
-          _person1Field1Controller.text = field1;
-
-          String field2 = '';
-          if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
-            field2 += person1['qualification'];
-          }
-          if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
-            field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
-          }
-          _person1Field2Controller.text = field2;
-        } else {
-          _person1Field1Controller.clear();
-          _person1Field2Controller.clear();
+          _person1Field1Controller.text = person1['name'] ?? '';
+          _person1Field2Controller.text = person1['job'] ?? '';
         }
         if (personsList.length > 1) {
           var person2 = personsList[1];
-          String person2Text = '';
-          if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
-            person2Text += person2['init'];
-          }
-          if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
-          }
-          if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
-          }
-          if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
-            person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
-          }
-          _person2Controller.text = person2Text;
-        } else {
-          _person2Controller.clear();
+          _person2Controller.text = person2['details'] ?? '';
         }
       }
       var amountValue = moiData['amount'];
@@ -439,25 +378,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       int amount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
 
       // Parse Person 1 name
-      String person1Name = '';
-      if (_person1Field1Controller.text.trim().isNotEmpty) {
-        List<String> parts = _person1Field1Controller.text.trim().split(',').map((e) => e.trim()).toList();
-        person1Name = parts.length > 1 ? parts[1] : '';
-      }
+      String person1Name = _person1Field1Controller.text.trim();
 
-      // Parse Person 1 job
-      String person1Job = '';
-      if (_person1Field2Controller.text.trim().isNotEmpty) {
-        List<String> parts = _person1Field2Controller.text.trim().split(',').map((e) => e.trim()).toList();
-        person1Job = parts.length > 1 ? parts[1] : '';
-      }
+// Parse Person 1 job
+      String person1Job = _person1Field2Controller.text.trim();
 
-      // Parse Person 2 name
-      String person2Name = '';
-      if (_person2Controller.text.trim().isNotEmpty) {
-        List<String> parts = _person2Controller.text.trim().split(',').map((e) => e.trim()).toList();
-        person2Name = parts.length > 1 ? parts[1] : '';
-      }
+// Parse Person 2 details
+      String person2Details = _person2Controller.text.trim();
 
       // Query all entries for this event (not deleted)
       final response = await _supabase
@@ -485,6 +412,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (entryAmountInt != amount) continue;
 
         // Check persons
+        // Check persons
         if (entry['persons'] != null) {
           List<dynamic> personsList = entry['persons'] as List;
 
@@ -498,12 +426,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             if (person1Job.isNotEmpty && entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
           }
 
-          // Check Person 2 name
-          if (person2Name.isNotEmpty && personsList.length > 1) {
+          // Check Person 2 details
+          if (person2Details.isNotEmpty && personsList.length > 1) {
             var p2 = personsList[1];
-            String entryP2Name = p2['name'] ?? '';
+            String entryP2Details = p2['details'] ?? '';
 
-            if (entryP2Name.toLowerCase() != person2Name.toLowerCase()) continue;
+            if (entryP2Details.toLowerCase() != person2Details.toLowerCase()) continue;
           }
         }
 
@@ -539,18 +467,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (personsList.isNotEmpty) {
           var p1 = personsList[0];
           entryDetails += '\n👤 Person 1:\n';
-          entryDetails += '  Init: ${p1['init'] ?? 'N/A'}\n';
           entryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
-          entryDetails += '  Education: ${p1['qualification'] ?? 'N/A'}\n';
           entryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
         }
         if (personsList.length > 1) {
           var p2 = personsList[1];
           entryDetails += '\n👤 Person 2:\n';
-          entryDetails += '  Init: ${p2['init'] ?? 'N/A'}\n';
-          entryDetails += '  Name: ${p2['name'] ?? 'N/A'}\n';
-          entryDetails += '  Education: ${p2['qualification'] ?? 'N/A'}\n';
-          entryDetails += '  Job: ${p2['job'] ?? 'N/A'}\n';
+          entryDetails += '  Details: ${p2['details'] ?? 'N/A'}\n';
         }
       }
 
@@ -656,47 +579,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
             if (personsList.isNotEmpty) {
               var person1 = personsList[0];
-
-              // Fill Person 1 Field 1 (Init, Name)
-              String field1 = '';
-              if (person1['init'] != null && person1['init'].toString().isNotEmpty) {
-                field1 += person1['init'];
-              }
-              if (person1['name'] != null && person1['name'].toString().isNotEmpty) {
-                field1 += (field1.isEmpty ? '' : ', ') + person1['name'];
-              }
-              _person1Field1Controller.text = field1;
-
-              // Fill Person 1 Field 2 (Education, Job)
-              String field2 = '';
-              if (person1['qualification'] != null && person1['qualification'].toString().isNotEmpty) {
-                field2 += person1['qualification'];
-              }
-              if (person1['job'] != null && person1['job'].toString().isNotEmpty) {
-                field2 += (field2.isEmpty ? '' : ', ') + person1['job'];
-              }
-              _person1Field2Controller.text = field2;
+              _person1Field1Controller.text = person1['name'] ?? '';
+              _person1Field2Controller.text = person1['job'] ?? '';
             }
 
-            // Fill Person 2 details
             if (personsList.length > 1) {
               var person2 = personsList[1];
-              String person2Text = '';
-
-              if (person2['init'] != null && person2['init'].toString().isNotEmpty) {
-                person2Text += person2['init'];
-              }
-              if (person2['name'] != null && person2['name'].toString().isNotEmpty) {
-                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['name'];
-              }
-              if (person2['qualification'] != null && person2['qualification'].toString().isNotEmpty) {
-                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['qualification'];
-              }
-              if (person2['job'] != null && person2['job'].toString().isNotEmpty) {
-                person2Text += (person2Text.isEmpty ? '' : ', ') + person2['job'];
-              }
-
-              _person2Controller.text = person2Text;
+              _person2Controller.text = person2['details'] ?? '';
             }
           }
         });
@@ -857,37 +746,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
     List<Map<String, dynamic>> personsData = [];
 
-    // Parse Person 1
-    if (_person1Field1Controller.text.trim().isNotEmpty) {
-      String field1 = _person1Field1Controller.text.trim();
-      List<String> parts = field1.split(',').map((e) => e.trim()).toList();
-
-      String init = parts.length > 0 ? parts[0] : '';
-      String name = parts.length > 1 ? parts[1] : '';
-
-      String field2 = _person1Field2Controller.text.trim();
-      List<String> eduJob = field2.split(',').map((e) => e.trim()).toList();
-
+// Parse Person 1
+    if (_person1Field1Controller.text.trim().isNotEmpty || _person1Field2Controller.text.trim().isNotEmpty) {
       personsData.add({
-        'init': init,
-        'name': name,
-        'qualification': eduJob.length > 0 ? eduJob[0] : '',
-        'job': eduJob.length > 1 ? eduJob[1] : '',
+        'name': _person1Field1Controller.text.trim(),
+        'job': _person1Field2Controller.text.trim(),
       });
     }
 
-    // Parse Person 2
+// Parse Person 2
     if (_person2Controller.text.trim().isNotEmpty) {
-      String person2Text = _person2Controller.text.trim();
-      List<String> parts = person2Text.split(',').map((e) => e.trim()).toList();
-
-      Map<String, dynamic> person2Data = {
-        'init': parts.length > 0 ? parts[0] : '',
-        'name': parts.length > 1 ? parts[1] : '',
-        'qualification': parts.length > 2 ? parts[2] : '',
-        'job': parts.length > 3 ? parts[3] : '',
-      };
-      personsData.add(person2Data);
+      personsData.add({
+        'details': _person2Controller.text.trim(),
+      });
     }
 
     final moiData = {
@@ -1308,9 +1179,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       List<String> names = [];
       for (var person in personsList) {
-        String name = person['name'] ?? '';
-        if (name.isNotEmpty) {
-          names.add(name);
+        if (person['name'] != null && person['name'].toString().isNotEmpty) {
+          names.add(person['name']);
+        } else if (person['details'] != null && person['details'].toString().isNotEmpty) {
+          // For person 2, extract first part before comma
+          String details = person['details'];
+          String firstName = details.split(',')[0].trim();
+          names.add(firstName);
         }
       }
       return names.isEmpty ? 'No name' : names.join(', ');
@@ -1425,11 +1300,34 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
 
-      // Parse person 1 data
-      String field1 = _person1Field1Controller.text.trim();
-      List<String> parts = field1.split(',').map((e) => e.trim()).toList();
-      String init1 = parts.length > 0 ? parts[0] : '';
-      String name1 = parts.length > 1 ? parts[1] : '';
+      // Parse person1Name (split by dot)
+      String person1Name = _person1Field1Controller.text.trim();
+      String person1Init = '';
+      String person1NameOnly = person1Name;
+      if (person1Name.contains('.')) {
+        List<String> parts = person1Name.split('.');
+        person1Init = parts[0].trim();
+        person1NameOnly = parts.length > 1 ? parts.sublist(1).join('.').trim() : person1Name;
+      }
+
+// Parse person1Job (no splitting needed, pass as-is or split if needed)
+      String person1Job = _person1Field2Controller.text.trim();
+
+// Parse person2Details
+      String person2Details = _person2Controller.text.trim();
+      String person2Init = '';
+      String person2NameOnly = '';
+      if (person2Details.isNotEmpty && person2Details.contains(',')) {
+        List<String> parts = person2Details.split(',');
+        String namePart = parts[0].trim();
+        if (namePart.contains('.')) {
+          List<String> nameParts = namePart.split('.');
+          person2Init = nameParts[0].trim();
+          person2NameOnly = nameParts.length > 1 ? nameParts.sublist(1).join('.').trim() : namePart;
+        } else {
+          person2NameOnly = namePart;
+        }
+      }
 
       final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
         context: context,
@@ -1439,10 +1337,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventTime: eventDetails['event_time'],
         villageName: _villageController.text.trim(),
         livingPlace: _livingPlaceController.text.trim(),
-        person1Init: init1,
-        person1Name: name1,
-        person2Init: '',
-        person2Name: _person2Controller.text.trim().isNotEmpty ? _person2Controller.text.trim() : null,
+        person1Init: person1Init,
+        person1Name: person1NameOnly,
+        person2Init: person2Init,
+        person2Name: person2NameOnly.isNotEmpty ? person2NameOnly : null,
         phone: _phoneController.text.trim(),
         amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
         paymentMethod: _paymentMethod,

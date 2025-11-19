@@ -6,6 +6,7 @@ import 'uncle_reorder_screen.dart';
 import 'denomination_screen.dart';
 import 'user_wise_collection.dart';
 import 'similar_entries_screen.dart';
+import 'double_entries_screen.dart';
 import 'modified_report_screen.dart';
 import 'cash_managements_screen.dart';
 
@@ -293,6 +294,17 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => SimilarEntriesScreen(
+                          eventId: eventData!['id'], // ✅ Get from eventData map
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  _buildActionButton('Double Entries', () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DoubleEntriesScreen(
                           eventId: eventData!['id'], // ✅ Get from eventData map
                         ),
                       ),

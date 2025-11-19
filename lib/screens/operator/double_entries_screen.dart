@@ -1,32 +1,30 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 
-class SimilarEntriesScreen extends StatefulWidget {
+class DoubleEntriesScreen extends StatefulWidget {
   final String eventId;
-  final String? searchName;
 
-  const SimilarEntriesScreen({
+  const DoubleEntriesScreen({
     super.key,
     required this.eventId,
-    this.searchName,
   });
 
   @override
-  State<SimilarEntriesScreen> createState() => _SimilarEntriesScreenState();
+  State<DoubleEntriesScreen> createState() => _DoubleEntriesScreenState();
 }
 
-class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
+class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
   final _auth = AuthService();
   List<Map<String, dynamic>> _allEntries = [];
-  List<Map<String, dynamic>> similarEntries = [];
-  Map<String, List<String>> nameMatchGroups = {};
+  List<Map<String, dynamic>> doubleEntries = [];
+  Map<String, List<String>> matchGroups = {};
   bool _isLoading = true;
   final ScrollController _horizontalController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadSimilarEntries();
+    _loadDoubleEntries();
   }
 
   @override
@@ -35,7 +33,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSimilarEntries() async {
+  Future<void> _loadDoubleEntries() async {
     setState(() => _isLoading = true);
 
     try {
@@ -48,7 +46,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
 
       setState(() {
         _allEntries = List<Map<String, dynamic>>.from(data);
-        _filterSimilarEntries();
+        _filterDoubleEntries();
       });
     } catch (e) {
       if (mounted) {
@@ -64,7 +62,23 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     }
   }
 
-  // Helper to extract name after dot (removes initial)
+  // Helper to extract initial from name
+  // "P. Prashanth" → "P"
+  // "Prashanth" → ""
+  String _extractInitial(String name) {
+    if (name.isEmpty) return '';
+
+    final trimmed = name.trim();
+    final dotIndex = trimmed.indexOf('.');
+
+    if (dotIndex > 0) {
+      return trimmed.substring(0, dotIndex).trim().toUpperCase();
+    }
+
+    return '';
+  }
+
+  // Helper to extract name without initial
   // "P. Prashanth" → "Prashanth"
   // "Prashanth" → "Prashanth"
   String _extractNameWithoutInitial(String name) {
@@ -74,67 +88,38 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     final dotIndex = trimmed.indexOf('.');
 
     if (dotIndex > 0 && dotIndex < trimmed.length - 1) {
-      // Has initial like "P. Prashanth"
       return trimmed.substring(dotIndex + 1).trim();
     }
 
     return trimmed;
   }
 
-  // Helper to extract person 2 name from details (before first comma, after dot if exists)
-  // "S. Jayasri, B.E, engineer" → "Jayasri" (for comparison)
-  // But keeps original "S. Jayasri" for display
-  String _extractPerson2NameFull(String? details) {
-    if (details == null || details.isEmpty) return '';
-    final firstCommaIndex = details.indexOf(',');
-    return firstCommaIndex > 0
-        ? details.substring(0, firstCommaIndex).trim()
-        : details.trim();
-  }
-
-  String _extractPerson2NameForComparison(String? details) {
-    final fullName = _extractPerson2NameFull(details);
-    return _extractNameWithoutInitial(fullName);
-  }
-
-  void _filterSimilarEntries() {
-    // Group entries by composite key: village_name + person1_name + person1_job + person2_name
-    // All names are normalized (without initials) for comparison
+  void _filterDoubleEntries() {
+    // Group entries by composite key: village_name + initial + name + job + amount
     Map<String, List<Map<String, dynamic>>> groupedEntries = {};
 
     for (var entry in _allEntries) {
       final villageName = (entry['village_name']?.toString() ?? '').trim().toLowerCase();
+      final amount = entry['amount']?.toString() ?? '0';
       final persons = entry['persons'] as List<dynamic>?;
 
       if (persons == null || persons.isEmpty) continue;
 
       // Extract Person 1 data
       String person1NameRaw = '';
+      String person1Initial = '';
       String person1NameNormalized = '';
       String person1Job = '';
 
       if (persons.isNotEmpty) {
         person1NameRaw = persons[0]['name']?.toString() ?? '';
-        // Remove initial for comparison
+        person1Initial = _extractInitial(person1NameRaw).toLowerCase();
         person1NameNormalized = _extractNameWithoutInitial(person1NameRaw).trim().toLowerCase();
         person1Job = (persons[0]['job']?.toString() ?? '').trim().toLowerCase();
       }
 
-      // Extract Person 2 name from details (before first comma, after dot)
-      String person2NameRaw = '';
-      String person2NameNormalized = '';
-
-      if (persons.length > 1) {
-        final person2Details = persons[1]['details']?.toString() ?? '';
-        if (person2Details.isNotEmpty) {
-          person2NameRaw = _extractPerson2NameFull(person2Details);
-          // Remove initial for comparison
-          person2NameNormalized = _extractNameWithoutInitial(person2NameRaw).trim().toLowerCase();
-        }
-      }
-
-      // Create composite key with normalized names (without initials)
-      final compositeKey = '$villageName|$person1NameNormalized|$person1Job|$person2NameNormalized';
+      // Create composite key: village + initial + name + job + amount
+      final compositeKey = '$villageName|$person1Initial|$person1NameNormalized|$person1Job|$amount';
 
       if (!groupedEntries.containsKey(compositeKey)) {
         groupedEntries[compositeKey] = [];
@@ -145,7 +130,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     // Filter groups with duplicates (more than 1 entry)
     Set<String> processedIds = {};
     List<Map<String, dynamic>> duplicates = [];
-    Map<String, List<String>> matchGroups = {};
+    Map<String, List<String>> groups = {};
 
     groupedEntries.forEach((key, entries) {
       if (entries.length > 1) {
@@ -158,42 +143,37 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
           }
 
           // Store which fields matched for highlighting
-          if (!matchGroups.containsKey(entryId)) {
-            matchGroups[entryId] = [];
+          if (!groups.containsKey(entryId)) {
+            groups[entryId] = [];
           }
 
           final persons = entry['persons'] as List<dynamic>?;
           if (persons != null && persons.isNotEmpty) {
-            // Mark person 1 name as matching (normalized without initial)
+            // Mark person 1 name as matching
             final p1NameRaw = persons[0]['name']?.toString() ?? '';
+            final p1Initial = _extractInitial(p1NameRaw).toLowerCase();
             final p1NameNormalized = _extractNameWithoutInitial(p1NameRaw).trim().toLowerCase();
-            if (p1NameNormalized.isNotEmpty) {
-              matchGroups[entryId]!.add('p1_name:$p1NameNormalized');
-            }
-
-            // Mark person 1 job as matching
             final p1Job = persons[0]['job']?.toString().trim().toLowerCase() ?? '';
-            if (p1Job.isNotEmpty) {
-              matchGroups[entryId]!.add('p1_job:$p1Job');
+
+            if (p1NameNormalized.isNotEmpty) {
+              groups[entryId]!.add('p1_name:$p1Initial|$p1NameNormalized');
             }
 
-            // Mark person 2 name as matching (normalized without initial)
-            if (persons.length > 1) {
-              final p2Details = persons[1]['details']?.toString() ?? '';
-              if (p2Details.isNotEmpty) {
-                final p2NameRaw = _extractPerson2NameFull(p2Details);
-                final p2NameNormalized = _extractNameWithoutInitial(p2NameRaw).trim().toLowerCase();
-                if (p2NameNormalized.isNotEmpty) {
-                  matchGroups[entryId]!.add('p2_name:$p2NameNormalized');
-                }
-              }
+            if (p1Job.isNotEmpty) {
+              groups[entryId]!.add('p1_job:$p1Job');
             }
           }
 
           // Mark village as matching
           final village = entry['village_name']?.toString().trim().toLowerCase() ?? '';
           if (village.isNotEmpty) {
-            matchGroups[entryId]!.add('village:$village');
+            groups[entryId]!.add('village:$village');
+          }
+
+          // Mark amount as matching
+          final amt = entry['amount']?.toString() ?? '';
+          if (amt.isNotEmpty) {
+            groups[entryId]!.add('amount:$amt');
           }
         }
       }
@@ -207,8 +187,8 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     });
 
     setState(() {
-      similarEntries = duplicates;
-      nameMatchGroups = matchGroups;
+      doubleEntries = duplicates;
+      matchGroups = groups;
     });
   }
 
@@ -220,22 +200,25 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     );
   }
 
-  // Updated helper method to check if a field is matching
-  // For names, it normalizes by removing initials before comparison
+  // Check if a field is matching
   bool _isFieldMatching(String entryId, String fieldType, String value) {
-    if (!nameMatchGroups.containsKey(entryId)) return false;
-    final matchingFields = nameMatchGroups[entryId]!;
+    if (!matchGroups.containsKey(entryId)) return false;
+    final matchingFields = matchGroups[entryId]!;
 
-    String normalizedValue;
-    if (fieldType == 'p1_name' || fieldType == 'p2_name') {
-      // For name fields, remove initial before comparing
-      normalizedValue = _extractNameWithoutInitial(value).trim().toLowerCase();
+    if (fieldType == 'p1_name') {
+      // For name fields, check with initial
+      final initial = _extractInitial(value).toLowerCase();
+      final nameNormalized = _extractNameWithoutInitial(value).trim().toLowerCase();
+      final searchKey = '$fieldType:$initial|$nameNormalized';
+      return matchingFields.contains(searchKey);
+    } else if (fieldType == 'amount') {
+      final searchKey = '$fieldType:$value';
+      return matchingFields.contains(searchKey);
     } else {
-      normalizedValue = value.trim().toLowerCase();
+      final normalizedValue = value.trim().toLowerCase();
+      final searchKey = '$fieldType:$normalizedValue';
+      return matchingFields.contains(searchKey);
     }
-
-    final searchKey = '$fieldType:$normalizedValue';
-    return matchingFields.contains(searchKey);
   }
 
   @override
@@ -250,7 +233,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Similar Entries',
+          'Double Entries',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
@@ -265,7 +248,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
             padding: const EdgeInsets.all(16),
             color: Colors.white,
             child: const Text(
-              'Similar Entries',
+              'Double Entries',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -286,10 +269,10 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                   ? const Center(
                 child: CircularProgressIndicator(color: Color(0xFF6B4C9A)),
               )
-                  : similarEntries.isEmpty
+                  : doubleEntries.isEmpty
                   ? const Center(
                 child: Text(
-                  'No similar entries found',
+                  'No double entries found',
                   style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
               )
@@ -302,8 +285,9 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                     Row(
                       children: [
                         _buildHeaderCell('Serial.No', 70),
-                        _buildHeaderCell('First Person', 120),
-                        _buildHeaderCell('Second Person', 120),
+                        _buildHeaderCell('Init.', 50),
+                        _buildHeaderCell('Name', 120),
+                        _buildHeaderCell('Job', 100),
                         _buildHeaderCell('Village Name', 130),
                         _buildHeaderCell('Living Place', 130),
                         _buildHeaderCell('Amount', 100),
@@ -313,35 +297,34 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                     // BODY
                     Expanded(
                       child: SizedBox(
-                        width: 670, // total width of all columns
+                        width: 700, // total width of all columns
                         child: ListView.builder(
-                          itemCount: similarEntries.length,
+                          itemCount: doubleEntries.length,
                           itemBuilder: (context, index) {
-                            final entry = similarEntries[index];
+                            final entry = doubleEntries[index];
                             final entryId = entry['id'];
                             final persons = entry['persons'] as List<dynamic>?;
 
-                            // Display WITH initials (as stored in DB)
-                            String person1NameDisplay = '';
+                            String person1NameFull = '';
+                            String person1Initial = '';
+                            String person1Name = '';
                             String person1Job = '';
-                            String person2NameDisplay = '';
 
                             if (persons != null && persons.isNotEmpty) {
-                              // Person 1: Show full name with initial
-                              person1NameDisplay = persons[0]['name']?.toString() ?? '';
+                              person1NameFull = persons[0]['name']?.toString() ?? '';
+                              person1Initial = _extractInitial(person1NameFull);
+                              person1Name = _extractNameWithoutInitial(person1NameFull);
                               person1Job = persons[0]['job']?.toString() ?? '';
-
-                              if (persons.length > 1) {
-                                // Person 2: Show full name with initial (before first comma)
-                                final person2Details = persons[1]['details']?.toString() ?? '';
-                                person2NameDisplay = _extractPerson2NameFull(person2Details);
-                              }
                             }
 
-                            // Check if fields match (comparison done without initials)
-                            final isP1NameMatch = _isFieldMatching(entryId, 'p1_name', person1NameDisplay);
-                            final isP2NameMatch = _isFieldMatching(entryId, 'p2_name', person2NameDisplay);
+                            final amountValue = double.tryParse(entry['amount']?.toString() ?? '0') ?? 0.0;
+                            final amountStr = entry['amount']?.toString() ?? '0';
+
+                            // Check if fields match
+                            final isNameMatch = _isFieldMatching(entryId, 'p1_name', person1NameFull);
+                            final isJobMatch = _isFieldMatching(entryId, 'p1_job', person1Job);
                             final isVillageMatch = _isFieldMatching(entryId, 'village', entry['village_name'] ?? '');
+                            final isAmountMatch = _isFieldMatching(entryId, 'amount', amountStr);
 
                             return Container(
                               decoration: BoxDecoration(
@@ -358,10 +341,13 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                                       entry['serial_no']?.toString() ?? '',
                                       70,
                                       align: TextAlign.center),
-                                  _buildDataCell(person1NameDisplay, 120,
-                                      isMatch: isP1NameMatch),
-                                  _buildDataCell(person2NameDisplay, 120,
-                                      isMatch: isP2NameMatch),
+                                  _buildDataCell(person1Initial, 50,
+                                      align: TextAlign.center,
+                                      isMatch: isNameMatch),
+                                  _buildDataCell(person1Name, 120,
+                                      isMatch: isNameMatch),
+                                  _buildDataCell(person1Job, 100,
+                                      isMatch: isJobMatch),
                                   _buildDataCell(
                                       entry['village_name'] ?? '',
                                       130,
@@ -369,14 +355,10 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                                   _buildDataCell(
                                       entry['living_place'] ?? '', 130),
                                   _buildDataCell(
-                                    _formatAmount(
-                                      double.tryParse(entry['amount']
-                                          ?.toString() ??
-                                          '0') ??
-                                          0.0,
-                                    ),
+                                    _formatAmount(amountValue),
                                     100,
                                     align: TextAlign.right,
+                                    isMatch: isAmountMatch,
                                   ),
                                 ],
                               ),
@@ -388,7 +370,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
 
                     // FOOTER
                     Container(
-                      width: 670,
+                      width: 700,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         border: Border(
@@ -399,7 +381,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                       child: Align(
                         alignment: Alignment.centerRight,
                         child: Text(
-                          'Total   ${similarEntries.length}',
+                          'Total   ${doubleEntries.length}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
