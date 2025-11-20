@@ -19,7 +19,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
   List<Map<String, dynamic>> userDenominations = [];
   bool _isLoading = true;
 
-  // NEW: Summary data
+  // Summary data
   Map<String, dynamic> _summaryData = {};
   bool _isLoadingSummary = false;
 
@@ -94,15 +94,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
           ''')
           .eq('event_id', widget.eventId);
 
-      // Calculate current denominations using correct business logic:
-      // MOI (collected) = ADD (+)
-      // Withdrawals (given away) = SUBTRACT (-)
-      // Exchanges (net change) = ADD/SUBTRACT (+/-)
+      // Calculate current denominations
       Map<String, Map<String, dynamic>> operatorDenoms = {};
 
       // Step 1: ADD MOI denominations (cash collected by operator)
-      // Only include CASH payment method
-      print('=== MOI Data Count: ${moiData.length} ===');
       for (var entry in moiData) {
         final operatorId = entry['operator_id'];
         if (operatorId == null) continue;
@@ -126,20 +121,15 @@ class _DenominationScreenState extends State<DenominationScreen> {
           };
         }
 
-        // ADD collected denominations from MOI (operator receives cash)
+        // ADD collected denominations from MOI
         for (var denom in denominations) {
           int currentValue = operatorDenoms[operatorId]!['denom_$denom'] as int;
           int addValue = entry['denom_$denom'] ?? 0;
-          operatorDenoms[operatorId]!['denom_$denom'] = currentValue + addValue; // ADD
+          operatorDenoms[operatorId]!['denom_$denom'] = currentValue + addValue;
         }
       }
-      print('=== After MOI (ADD) ===');
-      operatorDenoms.forEach((id, data) {
-        print('${data['user_name']}: 500=${data['denom_500']}, 200=${data['denom_200']}, 100=${data['denom_100']}');
-      });
 
-      // Step 2: SUBTRACT withdrawal denominations (cash given away by operator)
-      print('=== Withdrawal Data Count: ${withdrawalData.length} ===');
+      // Step 2: SUBTRACT withdrawal denominations
       for (var withdrawal in withdrawalData) {
         final operatorId = withdrawal['operator_id'];
         if (operatorId == null) continue;
@@ -147,27 +137,18 @@ class _DenominationScreenState extends State<DenominationScreen> {
         final denomData = withdrawal['cash_withdrawal_denominations'];
         if (denomData == null) continue;
 
-        // Ensure operator exists in map
         if (!operatorDenoms.containsKey(operatorId)) {
           continue;
         }
 
-        // SUBTRACT withdrawn denominations (operator gives cash away)
         for (var denom in denominations) {
           int currentValue = operatorDenoms[operatorId]!['denom_$denom'] as int;
           int subtractValue = denomData['denom_$denom'] ?? 0;
-          operatorDenoms[operatorId]!['denom_$denom'] = currentValue - subtractValue; // SUBTRACT
+          operatorDenoms[operatorId]!['denom_$denom'] = currentValue - subtractValue;
         }
       }
-      print('=== After Withdrawals (SUBTRACT) ===');
-      operatorDenoms.forEach((id, data) {
-        print('${data['user_name']}: 500=${data['denom_500']}, 200=${data['denom_200']}, 100=${data['denom_100']}');
-      });
 
-      // Step 3: ADD/SUBTRACT exchange denominations (net change)
-      // Positive values = received more (ADD)
-      // Negative values = gave away more (SUBTRACT)
-      print('=== Exchange Data Count: ${exchangeData.length} ===');
+      // Step 3: ADD/SUBTRACT exchange denominations
       for (var exchange in exchangeData) {
         final operatorId = exchange['operator_id'];
         if (operatorId == null) continue;
@@ -175,23 +156,16 @@ class _DenominationScreenState extends State<DenominationScreen> {
         final denomData = exchange['cash_exchange_denominations'];
         if (denomData == null) continue;
 
-        // Ensure operator exists in map
         if (!operatorDenoms.containsKey(operatorId)) {
           continue;
         }
 
-        // ADD net exchange amounts (received - returned, already calculated)
         for (var denom in denominations) {
           int currentValue = operatorDenoms[operatorId]!['denom_$denom'] as int;
           int exchangeValue = denomData['denom_$denom'] ?? 0;
-          operatorDenoms[operatorId]!['denom_$denom'] = currentValue + exchangeValue; // ADD (can be negative)
+          operatorDenoms[operatorId]!['denom_$denom'] = currentValue + exchangeValue;
         }
       }
-      print('=== After Exchanges (ADD NET) ===');
-      operatorDenoms.forEach((id, data) {
-        print('${data['user_name']}: 500=${data['denom_500']}, 200=${data['denom_200']}, 100=${data['denom_100']}');
-      });
-      print('=== FINAL RESULT ===');
 
       // Convert to list and sort by name
       List<Map<String, dynamic>> denoms = operatorDenoms.values.toList();
@@ -202,7 +176,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
         userDenominations = denoms;
       });
 
-      // NEW: Calculate summary data
+      // Calculate summary data
       await _calculateSummary();
     } catch (e) {
       if (mounted) {
@@ -218,7 +192,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
     }
   }
 
-  // NEW: Calculate summary method
+  // Calculate summary method with corrected formulas
   Future<void> _calculateSummary() async {
     setState(() => _isLoadingSummary = true);
 
@@ -230,7 +204,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
             total_amount,
             mois!moi_denominations_moi_id_fkey (
               payment_method,
-              is_deleted
+              is_deleted,
+              amount
             )
           ''')
           .eq('event_id', widget.eventId);
@@ -256,7 +231,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
         totalWithdrawals += ((item['amount'] ?? 0) as num).toDouble();
       }
 
-      // Get OTHERS payment total
+      // Get OTHERS payment total (Check/Advance/UPI)
       final othersData = await _auth.client
           .from('mois')
           .select('amount')
@@ -276,13 +251,21 @@ class _DenominationScreenState extends State<DenominationScreen> {
           .eq('event_id', widget.eventId)
           .eq('is_deleted', false);
 
+      // Calculate totals as per requirements:
+      // Total Event Amount = Total Cash Collected + Check/Advance/UPI (without withdrawals)
+      double totalEventAmount = totalCashCollected + totalOthers;
+
+      // Hand Cash = Total Event Amount - Total Withdrawals
+      double handCash = totalEventAmount - totalWithdrawals;
+
       setState(() {
         _summaryData = {
-          'totalCashCollected': totalCashCollected - totalWithdrawals,
-          'computedTotal': totalCashCollected + totalOthers,
+          'totalCashCollected': totalCashCollected,
           'totalWithdrawals': totalWithdrawals,
           'totalOthers': totalOthers,
           'peopleCount': peopleCount.length,
+          'totalEventAmount': totalEventAmount,
+          'handCash': handCash,
         };
       });
     } catch (e) {
@@ -299,7 +282,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
     for (var user in userDenominations) {
       for (var denom in denominations) {
-        int count = (user['denom_$denom'] ?? 0).abs(); // Use absolute value
+        int count = (user['denom_$denom'] ?? 0).abs();
         totalCounts[denom] = (totalCounts[denom] ?? 0) + count;
         totalAmounts[denom] = (totalAmounts[denom] ?? 0) + (count * denom);
       }
@@ -315,7 +298,6 @@ class _DenominationScreenState extends State<DenominationScreen> {
   }
 
   String _formatAmount(int amount) {
-    // Format without negative sign
     final absAmount = amount.abs();
     return absAmount.toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
@@ -365,324 +347,336 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
           const SizedBox(height: 16),
 
-          // Table
+          // Table with proper scrolling
           Expanded(
             child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.black, width: 2),
-                ),
-                child: Column(
-                  children: [
-                    // Table Header
-                    Container(
-                      color: const Color(0xFF6B4C9A),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            _buildHeaderCell('User', width: 120),
-                            _buildHeaderCell('500', width: 60),
-                            _buildHeaderCell('200', width: 60),
-                            _buildHeaderCell('100', width: 60),
-                            _buildHeaderCell('50', width: 60),
-                            _buildHeaderCell('20', width: 60),
-                            _buildHeaderCell('10', width: 60),
-                            _buildHeaderCell('5', width: 60),
-                            _buildHeaderCell('1', width: 60),
-                            _buildHeaderCell('Total', width: 100),
-                          ],
-                        ),
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                children: [
+                  // Table
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.black, width: 2),
                       ),
-                    ),
-
-                    // Table Body
-                    Expanded(
-                      child: _isLoading
-                          ? const Center(
-                        child: CircularProgressIndicator(
-                          color: Color(0xFF6B4C9A),
-                        ),
-                      )
-                          : userDenominations.isEmpty
-                          ? const Center(
-                        child: Text(
-                          'No denomination data available',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Table Header
+                          Container(
+                            color: const Color(0xFF6B4C9A),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildHeaderCell('User', width: 120),
+                                  _buildHeaderCell('500', width: 60),
+                                  _buildHeaderCell('200', width: 60),
+                                  _buildHeaderCell('100', width: 60),
+                                  _buildHeaderCell('50', width: 60),
+                                  _buildHeaderCell('20', width: 60),
+                                  _buildHeaderCell('10', width: 60),
+                                  _buildHeaderCell('5', width: 60),
+                                  _buildHeaderCell('1', width: 60),
+                                  _buildHeaderCell('Total', width: 100),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                          : SingleChildScrollView(
-                        child: Column(
-                          children: userDenominations.map((user) {
-                            int userTotal = 0;
-                            for (var denom in denominations) {
-                              int count = user['denom_$denom'] ?? 0;
-                              userTotal += count * denom;
-                            }
 
-                            return Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: Colors.grey[300]!,
-                                    width: 1,
+                          // Table Body
+                          _isLoading
+                              ? Container(
+                            padding: const EdgeInsets.all(40),
+                            child: const CircularProgressIndicator(
+                              color: Color(0xFF6B4C9A),
+                            ),
+                          )
+                              : userDenominations.isEmpty
+                              ? Container(
+                            padding: const EdgeInsets.all(40),
+                            child: const Text(
+                              'No denomination data available',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                              : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: userDenominations.map((user) {
+                              int userTotal = 0;
+                              for (var denom in denominations) {
+                                int count = user['denom_$denom'] ?? 0;
+                                userTotal += count * denom;
+                              }
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: Colors.grey[300]!,
+                                      width: 1,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              child: IntrinsicHeight(
-                                child: Row(
-                                  children: [
-                                    _buildDataCell(
-                                      user['user_name'] ?? '',
-                                      width: 120,
-                                      bold: true,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_500'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_200'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_100'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_50'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_20'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_10'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_5'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      ((user['denom_1'] ?? 0) as int).abs().toString(),
-                                      width: 60,
-                                    ),
-                                    _buildDataCell(
-                                      _formatAmount(userTotal),
-                                      width: 100,
-                                      bold: true,
-                                    ),
-                                  ],
+                                child: IntrinsicHeight(
+                                  child: Row(
+                                    children: [
+                                      _buildDataCell(
+                                        user['user_name'] ?? '',
+                                        width: 120,
+                                        bold: true,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_500'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_200'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_100'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_50'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_20'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_10'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_5'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        ((user['denom_1'] ?? 0) as int).abs().toString(),
+                                        width: 60,
+                                      ),
+                                      _buildDataCell(
+                                        _formatAmount(userTotal),
+                                        width: 100,
+                                        bold: true,
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              );
+                            }).toList(),
+                          ),
+
+                          // Denomination Labels Row
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.grey[400]!, width: 2),
                               ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('', width: 120),
+                                  _buildFooterCell('500', width: 60, color: Colors.red),
+                                  _buildFooterCell('200', width: 60, color: Colors.red),
+                                  _buildFooterCell('100', width: 60, color: Colors.red),
+                                  _buildFooterCell('50', width: 60, color: Colors.red),
+                                  _buildFooterCell('20', width: 60, color: Colors.red),
+                                  _buildFooterCell('10', width: 60, color: Colors.red),
+                                  _buildFooterCell('5', width: 60, color: Colors.red),
+                                  _buildFooterCell('1', width: 60, color: Colors.red),
+                                  _buildFooterCell('', width: 100),
+                                ],
+                              ),
+                            ),
+                          ),
 
-                    // Denomination Labels Row
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.grey[400]!, width: 2),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            _buildFooterCell('', width: 120),
-                            _buildFooterCell('500', width: 60, color: Colors.red),
-                            _buildFooterCell('200', width: 60, color: Colors.red),
-                            _buildFooterCell('100', width: 60, color: Colors.red),
-                            _buildFooterCell('50', width: 60, color: Colors.red),
-                            _buildFooterCell('20', width: 60, color: Colors.red),
-                            _buildFooterCell('10', width: 60, color: Colors.red),
-                            _buildFooterCell('5', width: 60, color: Colors.red),
-                            _buildFooterCell('1', width: 60, color: Colors.red),
-                            _buildFooterCell('', width: 100),
-                          ],
-                        ),
-                      ),
-                    ),
+                          // Total Count Row
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.grey[300]!, width: 1),
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('Total Count', width: 120, bold: true),
+                                  _buildFooterCell(
+                                    (totals['counts'][500] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][200] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][100] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][50] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][20] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][10] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][5] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    (totals['counts'][1] as int).abs().toString(),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell('', width: 100),
+                                ],
+                              ),
+                            ),
+                          ),
 
-                    // Total Count Row
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.grey[300]!, width: 1),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            _buildFooterCell('Total Count', width: 120, bold: true),
-                            _buildFooterCell(
-                              (totals['counts'][500] as int).abs().toString(),
-                              width: 60,
+                          // Total Amount Row
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.grey[300]!, width: 1),
+                              ),
                             ),
-                            _buildFooterCell(
-                              (totals['counts'][200] as int).abs().toString(),
-                              width: 60,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('Total Amount', width: 120, bold: true),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][500] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][200] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][100] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][50] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][20] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][10] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][5] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['amounts'][1] as int),
+                                    width: 60,
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(totals['grandTotal'] as int),
+                                    width: 100,
+                                    bold: true,
+                                    color: Colors.blue,
+                                  ),
+                                ],
+                              ),
                             ),
-                            _buildFooterCell(
-                              (totals['counts'][100] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              (totals['counts'][50] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              (totals['counts'][20] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              (totals['counts'][10] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              (totals['counts'][5] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              (totals['counts'][1] as int).abs().toString(),
-                              width: 60,
-                            ),
-                            _buildFooterCell('', width: 100),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
 
-                    // Total Amount Row
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: Colors.grey[300]!, width: 1),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: IntrinsicHeight(
-                        child: Row(
-                          children: [
-                            _buildFooterCell('Total Amount', width: 120, bold: true),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][500] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][200] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][100] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][50] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][20] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][10] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][5] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['amounts'][1] as int),
-                              width: 60,
-                            ),
-                            _buildFooterCell(
-                              _formatAmount(totals['grandTotal'] as int),
-                              width: 100,
-                              bold: true,
-                              color: Colors.blue,
-                            ),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 16),
+
+                  // Summary Section with corrected calculations
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.black, width: 2),
                     ),
-                  ],
-                ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Summary',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const Divider(thickness: 2, color: Colors.black),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Total Cash Collected',
+                          '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}',
+                          Colors.green,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Total Withdrawals',
+                          '₹${_formatAmount((_summaryData['totalWithdrawals'] ?? 0).round())}',
+                          Colors.red,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Check/Advance/UPI',
+                          '₹${_formatAmount((_summaryData['totalOthers'] ?? 0).round())}',
+                          Colors.orange,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Total People',
+                          '${_summaryData['peopleCount'] ?? 0}',
+                          Colors.purple,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Total Event Amount',
+                          '₹${_formatAmount((_summaryData['totalEventAmount'] ?? 0).round())}',
+                          Colors.blue,
+                        ),
+                        const SizedBox(height: 8),
+                        _buildSummaryRow(
+                          'Hand Cash',
+                          '₹${_formatAmount((_summaryData['handCash'] ?? 0).round())}',
+                          Colors.teal,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
 
-          const SizedBox(height: 16),
-
-          // NEW: Summary Section
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Summary',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Divider(thickness: 2, color: Colors.black),
-                const SizedBox(height: 8),
-                _buildSummaryRow(
-                  'Total Cash Collected',
-                  '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}',
-                  Colors.green,
-                ),
-                const SizedBox(height: 8),
-                _buildSummaryRow(
-                  'Computed Total Matches',
-                  '₹${_formatAmount((_summaryData['computedTotal'] ?? 0).round())}',
-                  Colors.blue,
-                ),
-                const SizedBox(height: 8),
-                _buildSummaryRow(
-                  'Total Withdrawals',
-                  '₹${_formatAmount((_summaryData['totalWithdrawals'] ?? 0).round())}',
-                  Colors.red,
-                ),
-                const SizedBox(height: 8),
-                _buildSummaryRow(
-                  'Check/Advance/UPI',
-                  '₹${_formatAmount((_summaryData['totalOthers'] ?? 0).round())}',
-                  Colors.orange,
-                ),
-                const SizedBox(height: 8),
-                _buildSummaryRow(
-                  'Total People',
-                  '${_summaryData['peopleCount'] ?? 0}',
-                  Colors.purple,
-                ),
-              ],
-            ),
-          ),
-
-          // Replace the entire Padding widget with action buttons (around line 530-580)
-// with this complete implementation:
-
+          // Action buttons
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -721,9 +715,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         // Calculate totals
                         final totals = _calculateTotals();
 
-                        // Calculate verupaadu (difference)
-                        final verupaadu = (_summaryData['totalCashCollected'] ?? 0) -
-                            (_summaryData['computedTotal'] ?? 0);
+                        // Calculate verupaadu (difference between hand cash and grand total)
+                        final verupaadu = (_summaryData['handCash'] ?? 0) - (totals['grandTotal'] as int);
 
                         // Show loading
                         if (mounted) {
@@ -749,7 +742,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           denominationAmounts: totals['amounts'] as Map<int, int>,
                           grandTotal: totals['grandTotal'] as int,
                           totalCashCollected: ((_summaryData['totalCashCollected'] ?? 0) as num).toDouble(),
-                          computedTotal: ((_summaryData['computedTotal'] ?? 0) as num).toDouble(),
+                          computedTotal: ((_summaryData['totalEventAmount'] ?? 0) as num).toDouble(),
                           totalWithdrawals: ((_summaryData['totalWithdrawals'] ?? 0) as num).toDouble(),
                           verupaadu: (verupaadu as num).toDouble(),
                           peopleCount: _summaryData['peopleCount'] ?? 0,
@@ -892,7 +885,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
     );
   }
 
-  // NEW: Summary row builder
+  // Summary row builder
   Widget _buildSummaryRow(String label, String value, Color color) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

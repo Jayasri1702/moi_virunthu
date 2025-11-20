@@ -16,13 +16,49 @@ class ModifiedReportScreen extends StatefulWidget {
 class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _modifiedEntries = [];
+  List<Map<String, dynamic>> _filteredEntries = [];
   bool _isLoading = true;
   Map<String, bool> _expandedCards = {};
+
+  // Search controller
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadModifiedEntries();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    setState(() {
+      _searchQuery = _searchController.text.toLowerCase();
+      _filterEntries();
+    });
+  }
+
+  void _filterEntries() {
+    if (_searchQuery.isEmpty) {
+      _filteredEntries = List.from(_modifiedEntries);
+    } else {
+      _filteredEntries = _modifiedEntries.where((entry) {
+        final personName = _getPersonName(entry['persons']).toLowerCase();
+        final serialNo = entry['serial_no']?.toString().toLowerCase() ?? '';
+        final village = entry['village_name']?.toString().toLowerCase() ?? '';
+
+        return personName.contains(_searchQuery) ||
+            serialNo.contains(_searchQuery) ||
+            village.contains(_searchQuery);
+      }).toList();
+    }
   }
 
   Future<void> _loadModifiedEntries() async {
@@ -48,6 +84,7 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
 
       setState(() {
         _modifiedEntries = List<Map<String, dynamic>>.from(response);
+        _filteredEntries = List.from(_modifiedEntries);
         _isLoading = false;
       });
     } catch (e) {
@@ -196,118 +233,64 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        backgroundColor: const Color(0xFF4CAF50),
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Modified Report',
           style: TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            color: Colors.grey[300],
+            height: 1,
+          ),
+        ),
       ),
-      body: Column(
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF4CAF50),
+        ),
+      )
+          : _modifiedEntries.isEmpty
+          ? _buildEmptyState()
+          : Column(
         children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: const Text(
-              'Modified Report',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Table Header
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50),
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Row(
-              children: [
-                _buildHeaderCell('Sl.No', flex: 1),
-                _buildHeaderCell('Name', flex: 2),
-                _buildHeaderCell('Modified Field', flex: 2),
-                _buildHeaderCell('Updated Value', flex: 2),
-              ],
-            ),
-          ),
-
-          // Table Body
+          // Search Box and Summary in scrollable area
           Expanded(
-            child: _isLoading
-                ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF4CAF50),
-              ),
-            )
-                : _modifiedEntries.isEmpty
-                ? const Center(
-              child: Text(
-                'No modified entries found',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _modifiedEntries.length,
-              itemBuilder: (context, index) {
-                final entry = _modifiedEntries[index];
-                final entryId = entry['id'];
-                final isExpanded = _expandedCards[entryId] ?? false;
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // Summary Card
+                _buildSummaryCard(),
+                const SizedBox(height: 16),
 
-                return _buildModificationRow(entry, isExpanded, entryId);
-              },
-            ),
-          ),
+                // Search Box
+                _buildSearchBox(),
+                const SizedBox(height: 16),
 
-          // Exit Button
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
-                    side: const BorderSide(color: Colors.black, width: 2),
-                  ),
-                ),
-                child: const Text(
-                  'Exit',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
+                // Modified Entries List
+                ..._filteredEntries.map((entry) {
+                  final entryId = entry['id'];
+                  final isExpanded = _expandedCards[entryId] ?? false;
+                  return _buildModernCard(entry, isExpanded, entryId);
+                }).toList(),
+
+                // Show "No results" message if filtered list is empty
+                if (_filteredEntries.isEmpty && _searchQuery.isNotEmpty)
+                  _buildNoResultsWidget(),
+              ],
             ),
           ),
         ],
@@ -315,35 +298,175 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
     );
   }
 
-  Widget _buildHeaderCell(String text, {int flex = 1}) {
-    return Expanded(
-      flex: flex,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border(
-            right: BorderSide(color: Colors.white, width: 1),
+  Widget _buildSearchBox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          textAlign: TextAlign.center,
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Search by name, serial no, or village...',
+          hintStyle: TextStyle(color: Colors.grey[400]),
+          prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+            icon: Icon(Icons.clear, color: Colors.grey[600]),
+            onPressed: () {
+              _searchController.clear();
+            },
+          )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),
       ),
     );
   }
 
-  Widget _buildModificationRow(Map<String, dynamic> entry, bool isExpanded, String entryId) {
+  Widget _buildNoResultsWidget() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No results found',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try searching with different keywords',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.check_circle_outline,
+            size: 80,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Modified Entries',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'All entries are in their original state',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.edit_note,
+            color: Colors.white,
+            size: 32,
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Total Modified Entries',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_modifiedEntries.length}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (_searchQuery.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Showing ${_filteredEntries.length} results',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModernCard(Map<String, dynamic> entry, bool isExpanded, String entryId) {
     final serialNo = entry['serial_no']?.toString() ?? 'N/A';
     final personName = _getPersonName(entry['persons']);
     final changeHistory = _getChangeHistory(entry['old_data']);
 
-    // Get current values
     final currentValues = {
       'village_name': entry['village_name'],
       'amount': entry['amount'],
@@ -351,220 +474,308 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
       'phone': entry['phone'],
     };
 
-    // Get latest old values (most recent change in history)
     Map<String, dynamic> latestOldValues = changeHistory.isNotEmpty
         ? changeHistory.last
         : {};
 
-    // Get changed fields for summary
     final changedFields = _getChangedFields(latestOldValues, currentValues);
-    final modifiedFieldsText = changedFields.keys.join(', ');
-    final updatedValues = changedFields.values.map((v) => v[1]).join(', ');
 
-    return Column(
-      children: [
-        InkWell(
-          onTap: () {
-            setState(() {
-              _expandedCards[entryId] = !isExpanded;
-            });
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Row(
-              children: [
-                _buildCell(serialNo, flex: 1),
-                _buildCell(personName, flex: 2),
-                _buildCell(modifiedFieldsText, flex: 2, color: Colors.orange[100]),
-                _buildCell(updatedValues, flex: 2, color: Colors.green[100]),
-              ],
-            ),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-
-        // Expanded history
-        if (isExpanded)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              border: Border.all(color: Colors.black, width: 2),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[700],
-                    border: const Border(
-                      bottom: BorderSide(color: Colors.black, width: 1),
-                    ),
-                  ),
-                  child: const Text(
-                    'Change History',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                _buildFullHistory(changeHistory, currentValues),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildCell(String text, {int flex = 1, Color? color}) {
-    return Expanded(
-      flex: flex,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color,
-          border: Border(
-            right: BorderSide(color: Colors.grey[300]!, width: 1),
-          ),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.black,
-          ),
-          textAlign: TextAlign.center,
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildFullHistory(List<Map<String, dynamic>> history, Map<String, dynamic> currentValues) {
-    if (history.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text(
-          'No change history available',
-          style: TextStyle(color: Colors.grey),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: history.length,
-      itemBuilder: (context, index) {
-        final oldSnapshot = history[index];
-        final newSnapshot = index < history.length - 1
-            ? history[index + 1]
-            : currentValues;
-
-        final changes = _getChangedFields(oldSnapshot, newSnapshot);
-        final changeNumber = index + 1;
-        final isLatest = index == history.length - 1;
-
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: isLatest ? Colors.white : Colors.grey[100],
-            border: Border(
-              bottom: BorderSide(
-                color: Colors.grey[300]!,
-                width: 1,
-              ),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isLatest ? Colors.blue[700] : Colors.grey[600],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Change $changeNumber',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ...changes.entries.map((entry) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expandedCards[entryId] = !isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
                     children: [
-                      Expanded(
-                        flex: 2,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                         child: Text(
-                          entry.key,
+                          'O$serialNo',
                           style: const TextStyle(
-                            fontSize: 13,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
+                            color: Color(0xFF4CAF50),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          personName.isEmpty ? 'No Name' : personName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
                         ),
                       ),
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.red[50],
-                            border: Border.all(color: Colors.red[300]!),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            entry.value[0].isEmpty ? '(empty)' : entry.value[0],
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.red,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Icon(Icons.arrow_forward, size: 16, color: Colors.grey),
-                      ),
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.green[50],
-                            border: Border.all(color: Colors.green[300]!),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            entry.value[1].isEmpty ? '(empty)' : entry.value[1],
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                      Icon(
+                        isExpanded
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        color: Colors.grey[600],
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-            ],
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.edit, size: 16, color: Colors.orange[700]),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Modified Fields',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange[700],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: changedFields.keys.map((field) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.orange[300]!),
+                              ),
+                              child: Text(
+                                field,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.orange[800],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        );
-      },
+          if (isExpanded) _buildExpandedHistory(changeHistory, currentValues),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedHistory(List<Map<String, dynamic>> history, Map<String, dynamic> currentValues) {
+    if (history.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: const BorderRadius.only(
+            bottomLeft: Radius.circular(12),
+            bottomRight: Radius.circular(12),
+          ),
+        ),
+        child: const Center(
+          child: Text(
+            'No change history available',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[700],
+            ),
+            child: Row(
+              children: const [
+                Icon(Icons.history, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Change History',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: history.length,
+            itemBuilder: (context, index) {
+              final oldSnapshot = history[index];
+              final newSnapshot = index < history.length - 1
+                  ? history[index + 1]
+                  : currentValues;
+
+              final changes = _getChangedFields(oldSnapshot, newSnapshot);
+              final changeNumber = index + 1;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[700],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Change $changeNumber',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...changes.entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.key,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red[50],
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.red[200]!),
+                                    ),
+                                    child: Text(
+                                      entry.value[0].isEmpty ? '(empty)' : entry.value[0],
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  child: Icon(
+                                    Icons.arrow_forward,
+                                    size: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green[50],
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.green[200]!),
+                                    ),
+                                    child: Text(
+                                      entry.value[1].isEmpty ? '(empty)' : entry.value[1],
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

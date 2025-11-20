@@ -888,6 +888,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_isEditMode && _editingMoiId != null) {
         if (!_validateForm()) return;
 
+        // ✅ ADD THIS CHECK HERE - Compare current data with original
+        if (_hasNoChanges()) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No changes detected. Nothing to update.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
         try {
           await _saveMoi(_currentGroupId, forceUpdate: true);
           await _loadGroupedMois();
@@ -934,21 +946,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 // CHECK FOR EXISTING ENTRY FIRST (only for new entries, not edit mode)
     if (!_isEditMode && _currentGroupId == null) {
       final existingEntries = await _checkExistingEntry();
+      // ... existing code
+    }
 
-      if (existingEntries.isNotEmpty) {
-        final shouldProceed = await _showExistingEntryDialog(existingEntries);
-
-        if (!shouldProceed) {
-          // User chose DISCARD - clear the form
-          _handleClear();
-          return;
-        }
-      }
+// ✅ ADD THIS CHECK HERE - For single MOI edit mode
+    if (_isEditMode && _hasNoChanges()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No changes detected. Nothing to update.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
     }
 
     try {
       await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
-
       if (mounted) {
 
         if (_isEditMode) {
@@ -976,6 +990,60 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty ||
         _getTotalAmount() > 0;
+  }
+
+  bool _hasNoChanges() {
+    if (_originalData == null || !_isEditMode) return false;
+
+    // Compare all fields
+    bool phoneChanged = (_originalData!['phone'] ?? '') != _phoneController.text.trim();
+    bool villageChanged = (_originalData!['village_name'] ?? '') != _villageController.text.trim();
+    bool livingPlaceChanged = (_originalData!['living_place'] ?? '') != _livingPlaceController.text.trim();
+    bool notesChanged = (_originalData!['notes'] ?? '') != _notesController.text.trim();
+    bool paymentMethodChanged = _originalData!['payment_method'] != _paymentMethod;
+    bool isUncleChanged = (_originalData!['is_uncle'] ?? false) != _isUncle;
+
+    // Compare amount
+    var originalAmount = _originalData!['amount'];
+    int currentAmount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
+    bool amountChanged = originalAmount != currentAmount;
+
+    // Compare persons
+    bool personsChanged = false;
+    if (_originalData!['persons'] != null) {
+      List<dynamic> originalPersons = _originalData!['persons'] as List;
+
+      String currentP1Name = _person1Field1Controller.text.trim();
+      String currentP1Job = _person1Field2Controller.text.trim();
+      String currentP2Details = _person2Controller.text.trim();
+
+      String origP1Name = '';
+      String origP1Job = '';
+      String origP2Details = '';
+
+      if (originalPersons.isNotEmpty) {
+        origP1Name = originalPersons[0]['name'] ?? '';
+        origP1Job = originalPersons[0]['job'] ?? '';
+      }
+
+      if (originalPersons.length > 1) {
+        origP2Details = originalPersons[1]['details'] ?? '';
+      }
+
+      personsChanged = currentP1Name != origP1Name ||
+          currentP1Job != origP1Job ||
+          currentP2Details != origP2Details;
+    } else {
+      // If original had no persons but current has
+      personsChanged = _person1Field1Controller.text.trim().isNotEmpty ||
+          _person1Field2Controller.text.trim().isNotEmpty ||
+          _person2Controller.text.trim().isNotEmpty;
+    }
+
+    // Return true if NO changes detected
+    return !phoneChanged && !villageChanged && !livingPlaceChanged &&
+        !notesChanged && !paymentMethodChanged && !isUncleChanged &&
+        !amountChanged && !personsChanged;
   }
 
   bool _validateForm() {
