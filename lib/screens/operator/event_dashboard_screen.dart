@@ -94,11 +94,20 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             Container(
               width: double.infinity,
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.all(24),  // Change from vertical: 16
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: Colors.black, width: 2),
+                borderRadius: BorderRadius.circular(12),  // Add this
+                boxShadow: [  // Add this shadow
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
+              // Remove: border: Border.all(color: Colors.black, width: 2),
               child: const Text(
                 'Dashboard',
                 style: TextStyle(
@@ -116,8 +125,17 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: Colors.black, width: 2),
+                borderRadius: BorderRadius.circular(12),  // Add this
+                boxShadow: [  // Add this shadow
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
+              // Remove: border: Border.all(color: Colors.black, width: 2),
               child: Column(
                 children: [
                   Text(
@@ -480,7 +498,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF5B21B6),
+                  color: const Color(0xFF8F8F8F),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(

@@ -113,7 +113,7 @@ class AdminDashboard extends StatelessWidget {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF5B21B6),
+                        color: const Color(0xFF8F8F8F),
                         borderRadius: BorderRadius.circular(40),
                       ),
                       child: const Icon(
@@ -245,7 +245,7 @@ class AdminDashboard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF5B21B6),
+                  color: const Color(0xFF8F8F8F),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(

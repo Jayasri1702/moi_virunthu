@@ -80,60 +80,66 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   void _updateDenominationRows() {
-    // Check each row if it has a count, then show next row
-    for (int i = 0; i < _denomRows.length; i++) {
-      final count = int.tryParse(_denomRows[i]['countController'].text) ?? 0;
-      final selectedDenom = _denomRows[i]['selectedDenom'];
+    // Check the last row - if it has a count and denomination is selected, add next row
+    if (_denomRows.isEmpty) return;
 
-      if (count > 0 && selectedDenom < 500) {
-        // Show next row if it doesn't exist
-        if (i == _denomRows.length - 1) {
-          _addNextDenomRow(selectedDenom);
-        }
-      }
+    final lastRow = _denomRows[_denomRows.length - 1];
+    final count = int.tryParse(lastRow['countController'].text) ?? 0;
+    final selectedDenom = lastRow['selectedDenom'];
+
+    // If last row has a count entered, show the next row
+    if (count > 0 && !_hasRowWithDenom(_getNextDenomination(selectedDenom))) {
+      _addNextDenomRow(selectedDenom);
     }
   }
 
-  void _addNextDenomRow(int currentDenom) {
-    List<int> nextOptions = [];
-    int nextDenom = 0;
+  int _getNextDenomination(int currentDenom) {
+    // Return the next logical denomination
+    if (currentDenom >= 500) return 200;
+    if (currentDenom >= 200) return 100;
+    if (currentDenom >= 100) return 50;
+    if (currentDenom >= 50) return 20;
+    if (currentDenom >= 20) return 10;
+    if (currentDenom >= 10) return 5;
+    if (currentDenom >= 5) return 1;
+    return 0; // No more denominations
+  }
 
-    // Define the next denomination based on current
-    if (currentDenom == 500) {
-      nextDenom = 200;
-      nextOptions = [200, 20, 2];
-    } else if (currentDenom == 200) {
-      nextDenom = 100;
+  void _addNextDenomRow(int currentDenom) {
+    int nextDenom = _getNextDenomination(currentDenom);
+    if (nextDenom == 0) return; // No more denominations to add
+
+    List<int> nextOptions = [];
+
+    // Define options based on next denomination
+    if (nextDenom == 200) {
+      nextOptions = [200, 20];
+    } else if (nextDenom == 100) {
       nextOptions = [100, 10, 1];
-    } else if (currentDenom == 100) {
-      nextDenom = 50;
+    } else if (nextDenom == 50) {
       nextOptions = [50, 5];
-    } else if (currentDenom == 50) {
-      nextDenom = 20;
-      nextOptions = [20, 2];
-    } else if (currentDenom == 20) {
-      nextDenom = 10;
+    } else if (nextDenom == 20) {
+      nextOptions = [20];
+    } else if (nextDenom == 10) {
       nextOptions = [10, 1];
-    } else if (currentDenom == 10) {
-      nextDenom = 5;
+    } else if (nextDenom == 5) {
       nextOptions = [5];
-    } else if (currentDenom == 5) {
-      nextDenom = 1;
+    } else if (nextDenom == 1) {
       nextOptions = [1];
     }
 
-    if (nextOptions.isNotEmpty && !_hasRowWithDenom(nextDenom)) {
-      final controller = TextEditingController();
-      controller.addListener(_onDenomCountChanged);
+    if (nextOptions.isEmpty) return;
 
-      setState(() {
-        _denomRows.add({
-          'denomOptions': nextOptions,
-          'selectedDenom': nextDenom,
-          'countController': controller,
-        });
+    final controller = TextEditingController();
+    controller.addListener(_onDenomCountChanged);
+
+    setState(() {
+      _denomRows.add({
+        'denomOptions': nextOptions,
+        'selectedDenom': nextDenom,
+        'countController': controller,
       });
-    }
+    });
   }
 
   bool _hasRowWithDenom(int denom) {
