@@ -89,13 +89,16 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
         _controllers[moiId]!['living_place']!.text = moi['living_place'] ?? '';
 
         final persons = moi['persons'] as List<dynamic>?;
-        if (persons != null) {
-          for (int i = 0; i < persons.length; i++) {
-            final person = persons[i] as Map<String, dynamic>;
-            _controllers[moiId]!['person_${i}_init']!.text = person['init'] ?? '';
-            _controllers[moiId]!['person_${i}_name']!.text = person['name'] ?? '';
-            _controllers[moiId]!['person_${i}_qualification']!.text = person['qualification'] ?? '';
-            _controllers[moiId]!['person_${i}_job']!.text = person['job'] ?? '';
+        if (persons != null && persons.isNotEmpty) {
+          // Person 1
+          final person1 = persons[0] as Map<String, dynamic>;
+          _controllers[moiId]!['person_0_name']!.text = person1['name'] ?? '';
+          _controllers[moiId]!['person_0_job']!.text = person1['job'] ?? '';
+
+          // Person 2
+          if (persons.length > 1) {
+            final person2 = persons[1] as Map<String, dynamic>;
+            _controllers[moiId]!['person_1_details']!.text = person2['details'] ?? '';
           }
         }
 
@@ -107,17 +110,21 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
         };
 
         final persons = moi['persons'] as List<dynamic>?;
-        if (persons != null) {
-          for (int i = 0; i < persons.length; i++) {
-            final person = persons[i] as Map<String, dynamic>;
-            newControllers[moiId]!['person_${i}_init'] =
-                TextEditingController(text: person['init'] ?? '');
-            newControllers[moiId]!['person_${i}_name'] =
-                TextEditingController(text: person['name'] ?? '');
-            newControllers[moiId]!['person_${i}_qualification'] =
-                TextEditingController(text: person['qualification'] ?? '');
-            newControllers[moiId]!['person_${i}_job'] =
-                TextEditingController(text: person['job'] ?? '');
+        if (persons != null && persons.isNotEmpty) {
+          // Person 1
+          final person1 = persons[0] as Map<String, dynamic>;
+          newControllers[moiId]!['person_0_name'] =
+              TextEditingController(text: person1['name'] ?? '');
+          newControllers[moiId]!['person_0_job'] =
+              TextEditingController(text: person1['job'] ?? '');
+
+          // Person 2
+          if (persons.length > 1) {
+            final person2 = persons[1] as Map<String, dynamic>;
+            newControllers[moiId]!['person_1_details'] =
+                TextEditingController(text: person2['details'] ?? '');
+          } else {
+            newControllers[moiId]!['person_1_details'] = TextEditingController();
           }
         }
       }
@@ -168,23 +175,25 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
 
   Future<void> _saveSingleMoi(Map<String, dynamic> moi) async {
     final moiId = moi['id'];
-
-    // Reconstruct persons array from controllers
     final persons = moi['persons'] as List<dynamic>?;
     final updatedPersons = <Map<String, dynamic>>[];
 
-    if (persons != null) {
-      for (int i = 0; i < persons.length; i++) {
-        final init = _controllers[moiId]!['person_${i}_init']!.text.trim();
-        final name = _controllers[moiId]!['person_${i}_name']!.text.trim();
-        final qualification = _controllers[moiId]!['person_${i}_qualification']!.text.trim();
-        final job = _controllers[moiId]!['person_${i}_job']!.text.trim();
+    if (persons != null && persons.isNotEmpty) {
+      // Person 1
+      final name = _controllers[moiId]!['person_0_name']!.text.trim();
+      final job = _controllers[moiId]!['person_0_job']!.text.trim();
+
+      updatedPersons.add({
+        'name': name,
+        'job': job,
+      });
+
+      // Person 2 (if exists)
+      if (persons.length > 1) {
+        final details = _controllers[moiId]!['person_1_details']!.text.trim();
 
         updatedPersons.add({
-          'init': init,
-          'name': name,
-          'qualification': qualification,
-          'job': job,
+          'details': details,
         });
       }
     }
@@ -296,49 +305,19 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
                               ),
                               DataColumn(
                                 label: Text(
-                                  'Init 1',
+                                  'Person 1 Name',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                 ),
                               ),
                               DataColumn(
                                 label: Text(
-                                  'Name 1',
+                                  'Person 1 Job',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                 ),
                               ),
                               DataColumn(
                                 label: Text(
-                                  'Education 1',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Job 1',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Init 2',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Name 2',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Education 2',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Job 2',
+                                  'Person 2 Details',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                 ),
                               ),
@@ -367,81 +346,36 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
                                       style: const TextStyle(fontWeight: FontWeight.w500),
                                     ),
                                   ),
-                                  // Person 1 fields
+                                  // Person 1 Name
                                   DataCell(
                                     SizedBox(
-                                      width: 60,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['person_0_init']!,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
+                                      width: 150,
                                       child: _buildEditableCell(
                                         _controllers[moiId]!['person_0_name']!,
                                       ),
                                     ),
                                   ),
+                                  // Person 1 Job
                                   DataCell(
                                     SizedBox(
-                                      width: 120,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['person_0_qualification']!,
-                                      ),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
+                                      width: 150,
                                       child: _buildEditableCell(
                                         _controllers[moiId]!['person_0_job']!,
                                       ),
                                     ),
                                   ),
-                                  // Person 2 fields (if exists)
+                                  // Person 2 Details
                                   DataCell(
                                     SizedBox(
-                                      width: 60,
+                                      width: 200,
                                       child: persons != null && persons.length > 1
                                           ? _buildEditableCell(
-                                        _controllers[moiId]!['person_1_init']!,
+                                        _controllers[moiId]!['person_1_details']!,
                                       )
                                           : const SizedBox(),
                                     ),
                                   ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: persons != null && persons.length > 1
-                                          ? _buildEditableCell(
-                                        _controllers[moiId]!['person_1_name']!,
-                                      )
-                                          : const SizedBox(),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: persons != null && persons.length > 1
-                                          ? _buildEditableCell(
-                                        _controllers[moiId]!['person_1_qualification']!,
-                                      )
-                                          : const SizedBox(),
-                                    ),
-                                  ),
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: persons != null && persons.length > 1
-                                          ? _buildEditableCell(
-                                        _controllers[moiId]!['person_1_job']!,
-                                      )
-                                          : const SizedBox(),
-                                    ),
-                                  ),
-                                  // Village and Living Place
+                                  // Village Name
                                   DataCell(
                                     SizedBox(
                                       width: 120,
@@ -450,6 +384,7 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
                                       ),
                                     ),
                                   ),
+                                  // Living City
                                   DataCell(
                                     SizedBox(
                                       width: 120,

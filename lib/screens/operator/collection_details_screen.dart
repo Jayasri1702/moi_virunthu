@@ -315,10 +315,17 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                _buildDetailRow('Init', person['init'] ?? 'N/A'),
-                _buildDetailRow('Name', person['name'] ?? 'N/A'),
-                _buildDetailRow('Qualification', person['qualification'] ?? 'N/A'),
-                _buildDetailRow('Job', person['job'] ?? 'N/A'),
+
+                // Person 1 has 'name' and 'job' fields
+                if (index == 0) ...[
+                  _buildDetailRow('Name', person['name'] ?? 'N/A'),
+                  _buildDetailRow('Job', person['job'] ?? 'N/A'),
+                ],
+
+                // Person 2 has 'details' field only
+                if (index == 1) ...[
+                  _buildDetailRow('Details', person['details'] ?? 'N/A'),
+                ],
               ],
             ),
           );

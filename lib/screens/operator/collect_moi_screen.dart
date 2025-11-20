@@ -1048,6 +1048,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               duration: Duration(seconds: 2),
             ),
           );
+          _phoneFocusNode.requestFocus();
           return false;
         }
 
