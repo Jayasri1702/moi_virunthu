@@ -173,162 +173,248 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             const SizedBox(height: 20),
 
             // Action Buttons
+            // Action Buttons - Grid Layout
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // And in the Collect Moi button:
-                  _buildActionButton('Collect Moi', () {
-                    final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
-                    eventDataWithOperator['operator_id'] = operatorId;
+                  // Transaction Section
+                  const Text(
+                    'Transaction',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Collect Moi', Icons.add, () {
+                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                          eventDataWithOperator['operator_id'] = operatorId;
 
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const CollectMoiScreen(),
-                        settings: RouteSettings(arguments: eventDataWithOperator),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CollectMoiScreen(),
+                              settings: RouteSettings(arguments: eventDataWithOperator),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Collection Details', Icons.person, () {
+                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                          eventDataWithOperator['operator_id'] = operatorId;
+
+                          Navigator.pushNamed(
+                            context,
+                            '/operator/collection-details',
+                            arguments: eventDataWithOperator,
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: 12),
-                  _buildActionButton('Cash Withdrawal', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/cash_withdrawal',
-                      arguments: {'id': eventData!['id'], 'operator_id': operatorId},
-                    );
-                  }),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Cash Withdrawal', Icons.money_off, () {
+                          Navigator.pushNamed(
+                            context,
+                            '/operator/cash_withdrawal',
+                            arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Exchange Deno', Icons.swap_horiz, () {
+                          Navigator.pushNamed(
+                            context,
+                            '/operator/exchange-denomination',
+                            arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  _buildActionButton('Exchange Denomination', () {
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/exchange-denomination',
-                      arguments: {'id': eventData!['id'], 'operator_id': operatorId},
-                    );
-                  }),
-
-                  const SizedBox(height: 12),
-                  _buildActionButton('Collection Details', () {
-                    final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
-                    eventDataWithOperator['operator_id'] = operatorId; // Add this line
-
-                    Navigator.pushNamed(
-                      context,
-                      '/operator/collection-details',
-                      arguments: eventDataWithOperator,
-                    );
-                  }),
-
-                  // ADD THIS BLOCK
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Uncle Re-order', Icons.sort_by_alpha, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const UncleReorderScreen(),
+                              settings: RouteSettings(arguments: eventData),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Correct Village', Icons.location_city, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CorrectVillageNamesScreen(),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
                   if (_isAdminView) ...[
                     const SizedBox(height: 12),
-                    _buildActionButton('Correct Person Data', () {
-                      Navigator.pushNamed(
-                        context,
-                        '/admin/correct-person-data',
-                        arguments: {
-                          'event_id': eventData!['id'],
-                          'operator_id': operatorId,
-                        },
-                      );
-                    }),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildGridButton('Correct Person', Icons.person_search, () {
+                            Navigator.pushNamed(
+                              context,
+                              '/admin/correct-person-data',
+                              arguments: {
+                                'event_id': eventData!['id'],
+                                'operator_id': operatorId,
+                              },
+                            );
+                          }),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(), // Empty placeholder
+                        ),
+                      ],
+                    ),
                   ],
 
-                  const SizedBox(height: 12),
-                  _buildActionButton('Correct Village Names', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const CorrectVillageNamesScreen(),
+                  const SizedBox(height: 24),
+
+                  // Report Section
+                  const Text(
+                    'Report',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Similar Entries', Icons.content_copy, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SimilarEntriesScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Uncle Re-order', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const UncleReorderScreen(),
-                        settings: RouteSettings(arguments: eventData), // Pass event data here
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Cash Deno', Icons.currency_rupee, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DenominationScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  _buildActionButton('Denomination', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DenominationScreen(
-                          eventId: eventData!['id'],
-                        ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Double Entries', Icons.filter_2, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => DoubleEntriesScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Cash Management', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CashManagementScreen(
-                          eventId: eventData!['id'],
-                          operatorId: operatorId,
-                        ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('User Wise', Icons.group, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => UserWiseCollectionScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  _buildActionButton('User wise collection', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => UserWiseCollectionScreen(
-                          eventId: eventData!['id'],
-                        ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Cash Management', Icons.account_balance_wallet, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CashManagementScreen(
+                                eventId: eventData!['id'],
+                                operatorId: operatorId,
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Similar Entries', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SimilarEntriesScreen(
-                          eventId: eventData!['id'], // ✅ Get from eventData map
-                        ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Modified Report', Icons.edit_note, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ModifiedReportScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
+                        }),
                       ),
-                    );
-                  }),
+                    ],
+                  ),
                   const SizedBox(height: 12),
-                  _buildActionButton('Double Entries', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DoubleEntriesScreen(
-                          eventId: eventData!['id'], // ✅ Get from eventData map
-                        ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Export Receipts', Icons.receipt_long, () {
+                          // Navigate to Export Receipts screen
+                        }),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Modified Report', () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ModifiedReportScreen(
-                          eventId: eventData!['id'],
-                        ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Final Moi Report', Icons.assessment, () {
+                          // Navigate to Final Moi Report screen
+                        }),
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Export Receipts', () {
-                    // Navigate to Export Receipts screen
-                  }),
-                  const SizedBox(height: 12),
-                  _buildActionButton('Final Moi Report', () {
-                    // Navigate to Final Moi Report screen
-                  }),
+                    ],
+                  ),
+
                   const SizedBox(height: 20),
                 ],
               ),
@@ -361,6 +447,61 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               ),
               textAlign: TextAlign.center,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridButton(String label, IconData icon, VoidCallback onPressed) {
+    return Container(
+      height: 110,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF5B21B6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.black,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
