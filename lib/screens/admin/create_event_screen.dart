@@ -48,12 +48,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   List<Map<String, dynamic>> _eventTypes = [];
   List<Map<String, dynamic>> _operators = [];
 
+  // In CreateEventScreen, replace the initState and _loadEventTypes methods:
+
   @override
   void initState() {
     super.initState();
-    _loadEventTypes();
-    _loadOperators();
 
+    // ✅ FIX: Load editing event data first, THEN load event types
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args != null && args is Map<String, dynamic>) {
@@ -61,11 +62,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           _editingEvent = args;
           _isEditMode = true;
         });
-        _populateFields();
+        // Load event types first, then populate fields
+        _loadEventTypesAndPopulate();
+      } else {
+        // Not editing, just load event types normally
+        _loadEventTypes();
       }
     });
+
+    _loadOperators();
   }
 
+  // ✅ NEW METHOD: Load event types and then populate fields
+  Future<void> _loadEventTypesAndPopulate() async {
+    try {
+      final data = await _auth.client
+          .from('event_types')
+          .select()
+          .order('name');
+
+      setState(() {
+        _eventTypes = List<Map<String, dynamic>>.from(data);
+
+        // ✅ DON'T set a default event type here when editing
+        // It will be set in _populateFields()
+      });
+
+      // Now populate the fields (including event type from saved data)
+      _populateFields();
+      _loadAssignedOperators();
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading event types: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ✅ UPDATE: Modified _loadEventTypes for non-edit mode
   Future<void> _loadEventTypes() async {
     try {
       final data = await _auth.client
@@ -75,7 +114,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       setState(() {
         _eventTypes = List<Map<String, dynamic>>.from(data);
-        if (_eventTypes.isNotEmpty) {
+
+        // Only set default when NOT editing
+        if (!_isEditMode && _eventTypes.isNotEmpty && _selectedEventType == null) {
           _selectedEventType = _eventTypes[0]['id'];
         }
       });
@@ -90,6 +131,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     }
   }
+
 
   Future<void> _loadOperators() async {
     try {
@@ -115,6 +157,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
+  // ✅ UPDATE: Modified _populateFields to properly set event type
   void _populateFields() {
     if (_editingEvent == null) return;
 
@@ -123,6 +166,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _title.text = _editingEvent!['title'] ?? '';
     _venue.text = _editingEvent!['venue'] ?? '';
     _city.text = _editingEvent!['city'] ?? '';
+    _eventFor.text= _editingEvent!['event_for'] ?? '';
     _totalComputers.text = _editingEvent!['total_computers']?.toString() ?? '0';
     _bookedAmount.text = _editingEvent!['booked_amount']?.toString() ?? '0.00';
     _advanceAmount.text = _editingEvent!['advance_amount']?.toString() ?? '0.00';
@@ -142,12 +186,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
     }
 
-    _selectedEventType = _editingEvent!['event_type'];
+    // ✅ FIX: Set the event type from saved data
+    // This now works because _eventTypes is already loaded
+    if (_editingEvent!['event_type'] != null) {
+      _selectedEventType = _editingEvent!['event_type'];
+    }
 
     final status = _editingEvent!['status']?.toString() ?? 'upcoming';
     _selectedStatus = status[0].toUpperCase() + status.substring(1).toLowerCase();
-
-    _loadAssignedOperators();
   }
 
   Future<void> _loadAssignedOperators() async {
@@ -209,6 +255,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             : null,
         'venue': _venue.text.trim().isEmpty ? null : _venue.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
+        'event_for':_eventFor.text.trim().isEmpty ? null : _remark.text.trim(),
         'total_computers': int.tryParse(_totalComputers.text) ?? 0,
         'booked_amount': double.tryParse(_bookedAmount.text) ?? 0,
         'advance_amount': double.tryParse(_advanceAmount.text) ?? 0,
@@ -851,6 +898,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             : null,
         'venue': _venue.text.trim().isEmpty ? null : _venue.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
+        'event_for':_eventFor.text.trim().isEmpty ? null : _remark.text.trim(),
+        'event_for': _eventFor.text.trim().isEmpty ? null : _eventFor.text.trim(), // ✅ ADD THIS LINE
         'total_computers': int.tryParse(_totalComputers.text) ?? 0,
         'booked_amount': double.tryParse(_bookedAmount.text) ?? 0,
         'advance_amount': double.tryParse(_advanceAmount.text) ?? 0,
@@ -859,6 +908,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
+        'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
+        'skip_print': _skipPrint, // ✅ ADD THIS LINE
       };
 
       String eventId;
@@ -904,7 +955,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           await _auth.client.from('event_assignments').insert(assignments);
         }
 
-        // Update state to edit mode after first save
         setState(() {
           _isEditMode = true;
           _editingEvent = {'id': eventId};
@@ -921,7 +971,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         }
       }
 
-      // Only exit if shouldExit is true
       if (mounted && shouldExit) {
         Navigator.pop(context, true);
       }

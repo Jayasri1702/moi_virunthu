@@ -482,7 +482,6 @@ class WithdrawalReceiptGenerator {
   <div class="header">Cash Drawn Receipt</div>
   
   <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
   
   <div class="divider"></div>
   

@@ -10,6 +10,7 @@ class EventExpensesScreen extends StatefulWidget {
 }
 
 class _EventExpensesScreenState extends State<EventExpensesScreen> {
+  Map<String, String> _unsavedSalaries = {};
   final _auth = AuthService();
   final _formKey = GlobalKey<FormState>();
 
@@ -46,6 +47,8 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
     });
   }
 
+// ✅ ALSO UPDATE the dispose method to handle the controllers properly:
+
   @override
   void dispose() {
     _balanceLiveController.dispose();
@@ -60,10 +63,12 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
     for (var controller in _operatorSalaryControllers.values) {
       controller.dispose();
     }
+    _operatorSalaryControllers.clear();
 
     super.dispose();
   }
 
+  // ✅ STEP 2: Replace the _loadEventData method with this:
   Future<void> _loadEventData() async {
     if (_event == null) return;
 
@@ -81,9 +86,9 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
       final assignments = await _auth.client
           .from('event_assignments')
           .select('''
-            *,
-            users!inner(id, full_name, phone)
-          ''')
+          *,
+          users!inner(id, full_name, phone)
+        ''')
           .eq('event_id', _event!['id']);
 
       setState(() {
@@ -101,13 +106,34 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
         _note1Controller.text = _event!['note1_cost']?.toString() ?? '';
         _note2Controller.text = _event!['note2_cost']?.toString() ?? '';
 
-        // Initialize operator salary controllers only
+        // ✅ Preserve current unsaved salary values before clearing controllers
+        for (var entry in _operatorSalaryControllers.entries) {
+          if (entry.value.text.isNotEmpty) {
+            _unsavedSalaries[entry.key] = entry.value.text;
+          }
+        }
+
+        // Dispose old controllers
+        for (var controller in _operatorSalaryControllers.values) {
+          controller.dispose();
+        }
         _operatorSalaryControllers.clear();
+
+        // Initialize operator salary controllers
         for (var operator in _operators) {
           final opId = operator['operator_id'];
-          _operatorSalaryControllers[opId] = TextEditingController(
-            text: operator['salary']?.toString() ?? '',
-          );
+
+          // Priority: 1. Unsaved value 2. Database value 3. Empty
+          String salaryValue = '';
+          if (_unsavedSalaries.containsKey(opId) && _unsavedSalaries[opId]!.isNotEmpty) {
+            // Use unsaved value if exists
+            salaryValue = _unsavedSalaries[opId]!;
+          } else if (operator['salary'] != null) {
+            // Use database value if exists
+            salaryValue = operator['salary'].toString();
+          }
+
+          _operatorSalaryControllers[opId] = TextEditingController(text: salaryValue);
         }
 
         _loading = false;
@@ -125,6 +151,7 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
     }
   }
 
+  // ✅ STEP 3: Update _saveExpenses to clear unsaved data after successful save:
   Future<void> _saveExpenses() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -158,9 +185,12 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
         'note1_cost': int.tryParse(_note1Controller.text) ?? 0,
         'note2_cost': int.tryParse(_note2Controller.text) ?? 0,
         'updated_at': DateTime.now().toIso8601String(),
-        'net_profit': _calculateNetProfit().toInt(),  // Add this line
+        'net_profit': _calculateNetProfit().toInt(),
       })
           .eq('id', _event!['id']);
+
+      // ✅ Clear unsaved salaries after successful save
+      _unsavedSalaries.clear();
 
       setState(() => _saving = false);
 
@@ -185,6 +215,7 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
       }
     }
   }
+
 
   double get _bookedAmount => _event?['booked_amount']?.toDouble() ?? 0;
   double get _advanceAmount => _event?['advance_amount']?.toDouble() ?? 0;
