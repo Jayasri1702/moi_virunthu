@@ -50,7 +50,7 @@ class WithdrawalReceiptGenerator {
           javaScriptEnabled: true,
           useHybridComposition: true,
         ),
-        initialSize: Size(302, 800), // ADD THIS LINE
+        initialSize: Size(302, 800),
         onLoadStop: (controller, url) async {
           try {
             await Future.delayed(const Duration(milliseconds: 1500));
@@ -308,6 +308,11 @@ class WithdrawalReceiptGenerator {
     final dateStr = DateFormat('dd-MM-yyyy').format(withdrawalDate);
     final timeStr = '${withdrawalTime.hour.toString().padLeft(2, '0')}.${withdrawalTime.minute.toString().padLeft(2, '0')} ${withdrawalTime.hour < 12 ? 'am' : 'pm'}';
 
+    // Use proper operator name, fallback to "Operator" if empty or null
+    final displayOperatorName = (operatorName.isEmpty || operatorName == 'Unknown')
+        ? 'Operator'
+        : operatorName;
+
     // Build denomination table
     String denomTable = '';
     List<int> denomKeys = [500, 200, 100, 50, 20, 10, 5, 1];
@@ -492,7 +497,7 @@ class WithdrawalReceiptGenerator {
     </div>
     <div class="right-section">
       <div>Typer</div>
-      <div>$operatorName</div>
+      <div>$displayOperatorName</div>
     </div>
   </div>
   

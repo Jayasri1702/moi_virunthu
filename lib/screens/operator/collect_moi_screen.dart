@@ -45,6 +45,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   int? _currentGroupId;
   List<Map<String, dynamic>> _groupedMois = [];
   Map<String, dynamic>? _originalData;
+  // Store the original auto-filled data to track changes
+  Map<String, dynamic>? _autoFilledData;
 
   @override
   void initState() {
@@ -351,14 +353,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _loadNextSerialNo() async {
-    if (_eventId == null || _operatorId == null) return;
+    if (_eventId == null) return;
 
     try {
+      // ✅ FIXED: Get highest serial number for the EVENT (not operator-specific)
       final response = await _supabase
           .from('mois')
           .select('serial_no')
           .eq('event_id', _eventId!)
-          .eq('operator_id', _operatorId!)
           .eq('is_deleted', false)
           .order('serial_no', ascending: false)
           .limit(1)
@@ -570,6 +572,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .maybeSingle();
 
       if (response != null) {
+        // Store the auto-filled data for comparison later
+        _autoFilledData = {
+          'living_place': response['living_place'],
+          'village_name': response['village_name'],
+          'persons': response['persons'],
+        };
+
         setState(() {
           // Fill living place and village
           if (response['living_place'] != null) {
@@ -599,6 +608,195 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error auto-filling from phone number: $e');
     }
+  }
+
+  // Check if auto-filled data was modified
+  bool _hasAutoFilledDataChanged() {
+    if (_autoFilledData == null) return false;
+
+    // Check if living place changed
+    String currentLivingPlace = _livingPlaceController.text.trim();
+    String originalLivingPlace = _autoFilledData!['living_place'] ?? '';
+    if (currentLivingPlace != originalLivingPlace) return true;
+
+    // Check if village name changed
+    String currentVillage = _villageController.text.trim();
+    String originalVillage = _autoFilledData!['village_name'] ?? '';
+    if (currentVillage != originalVillage) return true;
+
+    // Check if person data changed
+    if (_autoFilledData!['persons'] != null) {
+      List<dynamic> originalPersons = _autoFilledData!['persons'] as List;
+
+      if (originalPersons.isNotEmpty) {
+        var origP1 = originalPersons[0];
+        String origP1Name = origP1['name'] ?? '';
+        String origP1Job = origP1['job'] ?? '';
+
+        if (_person1Field1Controller.text.trim() != origP1Name) return true;
+        if (_person1Field2Controller.text.trim() != origP1Job) return true;
+      }
+
+      if (originalPersons.length > 1) {
+        var origP2 = originalPersons[1];
+        String origP2Details = origP2['details'] ?? '';
+
+        if (_person2Controller.text.trim() != origP2Details) return true;
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _updateAllEntriesWithPhoneNumber(String phoneNumber) async {
+    try {
+      // Build persons data
+      List<Map<String, dynamic>> personsData = [];
+      if (_person1Field1Controller.text.trim().isNotEmpty || _person1Field2Controller.text.trim().isNotEmpty) {
+        personsData.add({
+          'name': _person1Field1Controller.text.trim(),
+          'job': _person1Field2Controller.text.trim(),
+        });
+      }
+      if (_person2Controller.text.trim().isNotEmpty) {
+        personsData.add({
+          'details': _person2Controller.text.trim(),
+        });
+      }
+
+      // Update all entries with this phone number
+      final updateData = {
+        'living_place': _livingPlaceController.text.trim().isEmpty ? null : _livingPlaceController.text.trim(),
+        'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
+        'persons': personsData,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      await _supabase
+          .from('mois')
+          .update(updateData)
+          .eq('phone', phoneNumber)
+          .eq('is_deleted', false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ All entries with this phone number have been updated!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating entries: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating entries: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  Future<bool> _showGlobalUpdateConfirmation(String phoneNumber) async {
+    // Count how many entries will be affected
+    int affectedCount = 0;
+    try {
+      final response = await _supabase
+          .from('mois')
+          .select('id')
+          .eq('phone', phoneNumber)
+          .eq('is_deleted', false);
+
+      affectedCount = response.length;
+    } catch (e) {
+      print('Error counting entries: $e');
+    }
+
+    if (affectedCount <= 1) {
+      // Only current entry, no need to update globally
+      return false;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '📝 Update All Entries?',
+          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You have modified the auto-filled details for phone number: $phoneNumber',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                border: Border.all(color: Colors.orange, width: 2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '⚠️ This will affect $affectedCount existing entries with this phone number!',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Fields that will be updated:',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('• Village Name', style: TextStyle(fontSize: 11)),
+                  const Text('• Living Place', style: TextStyle(fontSize: 11)),
+                  const Text('• Person Details', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Do you want to update all existing entries with this phone number?',
+              style: TextStyle(fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.grey[200],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'NO, ONLY THIS ENTRY',
+              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.blue[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'YES, UPDATE ALL',
+              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   int _getTotalAmount() {
@@ -854,6 +1052,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (!_isEditMode) {
       await _loadNextSerialNo();
     }
+
+    // ✅ ADD THIS SECTION HERE - CHECK FOR GLOBAL UPDATE
+    String phoneNumber = _phoneController.text.trim();
+    if (phoneNumber.isNotEmpty && phoneNumber.length == 10 && _hasAutoFilledDataChanged()) {
+      final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
+
+      if (shouldUpdateAll) {
+        await _updateAllEntriesWithPhoneNumber(phoneNumber);
+      }
+    }
+    // ✅ END OF NEW CODE
 
     // Auto-add to group if user forgot to click Group button
     if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
@@ -2167,6 +2376,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: TextField(
                   controller: controller,
                   keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
+                  ],
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 14),
                   decoration: const InputDecoration(

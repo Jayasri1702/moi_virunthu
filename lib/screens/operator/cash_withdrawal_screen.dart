@@ -468,13 +468,28 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     // Check for duplicate withdrawal
     bool isDuplicate = await _checkDuplicateWithdrawal();
     if (isDuplicate) {
-      return; // Stop if duplicate found (dialog handles proceed/discard)
+      return; // Stop if duplicate found
     }
 
     try {
       final eventId = eventData?['id'];
       final operatorId = eventData?['operator_id'];
-      final operatorName = eventData?['operator_name'] ?? 'Unknown';
+
+      // Fetch operator name from users table
+      String operatorName = 'Operator';
+      try {
+        final userResponse = await _supabase
+            .from('users')
+            .select('full_name')
+            .eq('id', operatorId)
+            .single();
+
+        if (userResponse != null && userResponse['full_name'] != null) {
+          operatorName = userResponse['full_name'];
+        }
+      } catch (e) {
+        print('Error fetching operator name: $e');
+      }
 
       if (eventId == null || operatorId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -554,14 +569,10 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
-
-        // ✅ ADD THIS - Clear all fields after successful save
-        _clearAllFields();
       }
 
-// Reload balance after successful withdrawal
+      // Reload balance after successful withdrawal
       await _loadAvailableBalance();
-
     } catch (e) {
       print('Error saving withdrawal: $e');
       if (mounted) {
