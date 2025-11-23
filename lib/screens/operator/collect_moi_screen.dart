@@ -63,11 +63,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   void _initializeDenominations() {
-    // Start with only the first row (500)
     _denomRows.add({
-      'denomOptions': [500, 100, 10, 1],
-      'selectedDenom': 500,
+      'selectedDenom': null, // Empty by default
       'countController': TextEditingController(),
+      'denomController': TextEditingController(), // For user input
     });
 
     _denomRows[0]['countController'].addListener(_onDenomCountChanged);
@@ -82,70 +81,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   void _updateDenominationRows() {
-    // Check the last row - if it has a count and denomination is selected, add next row
     if (_denomRows.isEmpty) return;
 
     final lastRow = _denomRows[_denomRows.length - 1];
     final count = int.tryParse(lastRow['countController'].text) ?? 0;
     final selectedDenom = lastRow['selectedDenom'];
 
-    // If last row has a count entered, show the next row
-    if (count > 0 && !_hasRowWithDenom(_getNextDenomination(selectedDenom))) {
-      _addNextDenomRow(selectedDenom);
-    }
-  }
+    // If last row has denomination and count entered, add new empty row
+    if (count != 0 && selectedDenom != null) {
+      final controller = TextEditingController();
+      controller.addListener(_onDenomCountChanged);
 
-  int _getNextDenomination(int currentDenom) {
-    // Return the next logical denomination
-    if (currentDenom >= 500) return 200;
-    if (currentDenom >= 200) return 100;
-    if (currentDenom >= 100) return 50;
-    if (currentDenom >= 50) return 20;
-    if (currentDenom >= 20) return 10;
-    if (currentDenom >= 10) return 5;
-    if (currentDenom >= 5) return 1;
-    return 0; // No more denominations
-  }
-
-  void _addNextDenomRow(int currentDenom) {
-    int nextDenom = _getNextDenomination(currentDenom);
-    if (nextDenom == 0) return; // No more denominations to add
-
-    List<int> nextOptions = [];
-
-    // Define options based on next denomination
-    if (nextDenom == 200) {
-      nextOptions = [200, 20];
-    } else if (nextDenom == 100) {
-      nextOptions = [100, 10, 1];
-    } else if (nextDenom == 50) {
-      nextOptions = [50, 5];
-    } else if (nextDenom == 20) {
-      nextOptions = [20];
-    } else if (nextDenom == 10) {
-      nextOptions = [10, 1];
-    } else if (nextDenom == 5) {
-      nextOptions = [5];
-    } else if (nextDenom == 1) {
-      nextOptions = [1];
-    }
-
-    if (nextOptions.isEmpty) return;
-
-    final controller = TextEditingController();
-    controller.addListener(_onDenomCountChanged);
-
-    setState(() {
-      _denomRows.add({
-        'denomOptions': nextOptions,
-        'selectedDenom': nextDenom,
-        'countController': controller,
+      setState(() {
+        _denomRows.add({
+          'selectedDenom': null,
+          'countController': controller,
+          'denomController': TextEditingController(),
+        });
       });
-    });
-  }
-
-  bool _hasRowWithDenom(int denom) {
-    return _denomRows.any((row) => row['selectedDenom'] == denom);
+    }
   }
 
   Future<void> _loadArguments() async {
@@ -229,6 +183,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // Clear existing rows
         for (var row in _denomRows) {
           row['countController'].dispose();
+          if (row.containsKey('denomController')) {
+            row['denomController'].dispose();
+          }
         }
         _denomRows.clear();
 
@@ -244,30 +201,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           1: response['denom_1'] ?? 0,
         };
 
-        // Add rows based on saved data
+        // ✅ Add rows for ALL denominations (positive AND negative)
         savedDenoms.forEach((denom, count) {
-          if (count > 0) {
-            final controller = TextEditingController(text: count.toString());
-            controller.addListener(_onDenomCountChanged);
+          if (count != 0) { // ✅ Changed from count > 0 to count != 0
+            final countController = TextEditingController(text: count.toString());
+            countController.addListener(_onDenomCountChanged);
 
-            List<int> options = [];
-            if (denom >= 500) options = [500, 100, 10, 1];
-            else if (denom >= 100) options = [100, 50, 20, 10, 5, 1];
-            else if (denom >= 50) options = [50, 20, 10, 5, 1];
-            else if (denom >= 20) options = [20, 10, 5, 1];
-            else if (denom >= 10) options = [10, 5, 1];
-            else if (denom >= 5) options = [5, 1];
-            else options = [1];
+            final denomController = TextEditingController(text: denom.toString());
 
             _denomRows.add({
-              'denomOptions': options,
               'selectedDenom': denom,
-              'countController': controller,
+              'countController': countController,
+              'denomController': denomController,
             });
           }
         });
 
-        // If no denominations saved, initialize with default
+        // If no denominations saved, initialize with default empty row
         if (_denomRows.isEmpty) {
           _initializeDenominations();
         }
@@ -803,9 +753,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (_paymentMethod == 'CASH') {
       int total = 0;
       for (var row in _denomRows) {
-        int denom = row['selectedDenom'];
+        int? denom = row['selectedDenom']; // ✅ Can be null now
         int count = int.tryParse(row['countController'].text) ?? 0;
-        total += denom * count;
+
+        // ✅ Only calculate if denomination is selected
+        if (denom != null && count != 0) {
+          total += denom * count;
+        }
       }
       return total;
     } else {
@@ -822,7 +776,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   int _getTotalCount() {
     int count = 0;
     for (var row in _denomRows) {
-      count += int.tryParse(row['countController'].text) ?? 0;
+      int rowCount = int.tryParse(row['countController'].text) ?? 0;
+      int? denom = row['selectedDenom']; // ✅ Check denomination exists
+
+      // ✅ Only count if denomination is selected and count is positive
+      if (denom != null && rowCount > 0) {
+        count += rowCount;
+      }
     }
     return count;
   }
@@ -849,7 +809,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGroup() async {
-    if (!_validateForm()) return;
+    if (!await _validateForm()) return; // ✅ Add await
 
     // CASE 1: Editing an existing entry that's ALREADY in a group
     if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
@@ -1036,11 +996,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       'denom_1': 0,
     };
 
+    // ✅ ACCUMULATE counts for same denomination
     for (var row in _denomRows) {
-      int denom = row['selectedDenom'];
+      int? denom = row['selectedDenom'];
       int count = int.tryParse(row['countController'].text) ?? 0;
 
-      denomData['denom_$denom'] = count;
+      if (denom != null && count != 0) {
+        // ✅ Add to existing value instead of replacing
+        denomData['denom_$denom'] = (denomData['denom_$denom'] as int) + count;
+      }
     }
 
     await _supabase
@@ -1066,7 +1030,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     // Auto-add to group if user forgot to click Group button
     if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
-      if (!_validateForm()) return;
+      if (!await _validateForm()) return; // ✅ Add await
 
       try {
         await _saveMoi(_currentGroupId);
@@ -1101,7 +1065,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // Handle grouped entries - UPDATE MODE
     if (_groupedMois.isNotEmpty) {
       if (_isEditMode && _editingMoiId != null) {
-        if (!_validateForm()) return;
+        if (!await _validateForm()) return; // ✅ Add await
 
         // ✅ ADD THIS CHECK HERE - Compare current data with original
         if (_hasNoChanges()) {
@@ -1156,7 +1120,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     // Regular save for single entry
-    if (!_validateForm()) return;
+    if (!await _validateForm()) return; // ✅ Add await
 
 // CHECK FOR EXISTING ENTRY FIRST (only for new entries, not edit mode)
     if (!_isEditMode && _currentGroupId == null) {
@@ -1262,7 +1226,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   // Update the _validateForm() method
-  bool _validateForm() {
+  Future<bool> _validateForm() async {
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
 
@@ -1285,6 +1249,29 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
         );
         return false;
+      }
+    }
+
+    // Validate negative denominations
+    if (_paymentMethod == 'CASH') {
+      for (var row in _denomRows) {
+        int count = int.tryParse(row['countController'].text) ?? 0;
+        int? denom = row['selectedDenom'];
+
+        if (count < 0 && denom != null) {
+          int available = await _getAvailableBalance(denom);
+
+          if (count.abs() > available) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            return false;
+          }
+        }
       }
     }
 
@@ -1339,7 +1326,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // ✅ NEW: Amount validation - ALWAYS mandatory regardless of CASH or OTHERS
+    // Amount validation - ALWAYS mandatory regardless of CASH or OTHERS
     String enteredAmountText = _amountController.text.trim();
     if (enteredAmountText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1641,7 +1628,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGenerateSingleReceipt() async {
-    if (!_validateForm()) return;
+    if (!await _validateForm()) return; // ✅ Add await
 
     setState(() => _isLoading = true);
 
@@ -1742,6 +1729,76 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<int> _getAvailableBalance(int denomination) async {
+    try {
+      if (_eventId == null) return 0;
+
+      // Step 1: Get collected from MOI (CASH only)
+      final moiData = await _supabase
+          .from('moi_denominations')
+          .select('''
+          denom_$denomination,
+          mois!moi_denominations_moi_id_fkey (
+            payment_method,
+            is_deleted
+          )
+        ''')
+          .eq('event_id', _eventId!);
+
+      int collected = 0;
+      for (var entry in moiData) {
+        final moi = entry['mois'];
+        if (moi != null &&
+            moi['payment_method'] == 'CASH' &&
+            moi['is_deleted'] == false) {
+          collected += (entry['denom_$denomination'] ?? 0) as int;
+        }
+      }
+
+      // Step 2: Get withdrawn
+      final withdrawalData = await _supabase
+          .from('cash_withdrawals')
+          .select('''
+          cash_withdrawal_denominations (
+            denom_$denomination
+          )
+        ''')
+          .eq('event_id', _eventId!);
+
+      int withdrawn = 0;
+      for (var withdrawal in withdrawalData) {
+        final denomData = withdrawal['cash_withdrawal_denominations'];
+        if (denomData != null) {
+          withdrawn += (denomData['denom_$denomination'] ?? 0) as int;
+        }
+      }
+
+      // Step 3: Get exchanged (net)
+      final exchangeData = await _supabase
+          .from('cash_exchanges')
+          .select('''
+          cash_exchange_denominations (
+            denom_$denomination
+          )
+        ''')
+          .eq('event_id', _eventId!);
+
+      int exchanged = 0;
+      for (var exchange in exchangeData) {
+        final denomData = exchange['cash_exchange_denominations'];
+        if (denomData != null) {
+          exchanged += (denomData['denom_$denomination'] ?? 0) as int;
+        }
+      }
+
+      // Available = Collected - Withdrawn + Exchanged
+      return collected - withdrawn + exchanged;
+    } catch (e) {
+      print('Error getting available balance: $e');
+      return 0;
     }
   }
 
@@ -2350,16 +2407,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Widget _buildDenomRow(Map<String, dynamic> row, int index) {
     final controller = row['countController'] as TextEditingController;
-    final selectedDenom = row['selectedDenom'] as int;
+    final selectedDenom = row['selectedDenom'];
 
-    // Add a controller for denomination input if not exists
     if (!row.containsKey('denomController')) {
-      row['denomController'] = TextEditingController(text: selectedDenom.toString());
+      row['denomController'] = TextEditingController(
+          text: selectedDenom != null ? selectedDenom.toString() : ''
+      );
     }
     final denomController = row['denomController'] as TextEditingController;
 
     int count = int.tryParse(controller.text) ?? 0;
-    int total = selectedDenom * count;
+    int total = (selectedDenom ?? 0) * count;
+
+    // Check if we need to show availability
+    bool showAvailability = count < 0 && selectedDenom != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2369,29 +2430,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Container(
               width: 80,
               height: 35,
-              alignment: Alignment.center,  // ADD THIS
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black, width: 2),
                 color: Colors.white,
               ),
               child: TextField(
-                  controller: denomController,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    prefixText: '₹',
-                    prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
+                controller: denomController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  prefixText: '₹',
+                  prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  hintText: '0',
+                ),
                 onChanged: (value) {
                   if (value.isEmpty) {
                     setState(() {
-                      row['showDropdown'] = false;
-                      row['denomOptions'] = [500, 100, 10, 1];
-                      row['selectedDenom'] = 500;
+                      row['selectedDenom'] = null;
                     });
                     return;
                   }
@@ -2399,85 +2459,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   int? typedValue = int.tryParse(value);
                   if (typedValue == null) return;
 
-                  // ✅ UPDATED VALIDATION - Check if it's a valid starting digit or complete denomination
                   List<int> validDenoms = [1, 5, 10, 20, 50, 100, 200, 500];
-                  List<int> validStartDigits = [1, 2, 5]; // Valid first digits for denominations
 
-                  // If it's a single digit, check if it's a valid starting digit
-                  if (value.length == 1) {
-                    if (!validStartDigits.contains(typedValue)) {
-                      denomController.text = '';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Only denominations starting with 1, 2, or 5 are allowed'),
-                          backgroundColor: Colors.red,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
-                  } else {
-                    // For multi-digit entries, check if it's a valid denomination
-                    if (!validDenoms.contains(typedValue)) {
-                      denomController.text = '';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
-                          backgroundColor: Colors.red,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
+                  if (!validDenoms.contains(typedValue)) {
+                    denomController.clear();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                    return;
                   }
 
-                  // Find the maximum denomination from all previous rows
-                  int maxPrevDenom = 0;
-                  for (int i = 0; i < index; i++) {
-                    if (_denomRows[i]['selectedDenom'] > maxPrevDenom) {
-                      maxPrevDenom = _denomRows[i]['selectedDenom'];
-                    }
-                  }
-
-                  List<int> options = [];
-
-                  if (typedValue == 1) {
-                    options = [100, 10, 1];
-                  } else if (typedValue == 2) {
-                    options = [200, 20]; // ✅ ADD 2 here as well
-                  } else if (typedValue == 5) {
-                    options = [500, 50, 5];
-                  } else if (typedValue == 10) {
-                    options = [10];
-                  } else if (typedValue == 20) {
-                    options = [20]; // ✅ Should include 2 as option
-                  } else if (typedValue == 50) {
-                    options = [50, 5]; // ✅ Should include 5 as option
-                  } else if (typedValue == 100) {
-                    options = [100, 10, 1]; // ✅ Should include options
-                  } else if (typedValue == 200) {
-                    options = [200, 20]; // ✅ Should include options
-                  } else if (typedValue == 500) {
-                    options = [500, 50, 5]; // ✅ Should include options
-                  }
-
-                  // Filter out denominations >= maxPrevDenom
-                  if (maxPrevDenom > 0) {
-                    options = options.where((denom) => denom < maxPrevDenom).toList();
-                  }
-
-                  if (options.isNotEmpty) {
-                    setState(() {
-                      row['denomOptions'] = options;
-                      row['showDropdown'] = options.length > 1;
-                      // If only one option, auto-select it
-                      if (options.length == 1) {
-                        row['selectedDenom'] = options[0];
-                        denomController.text = options[0].toString();
-                        _updateDenominationRows();
-                      }
-                    });
-                  }
+                  setState(() {
+                    row['selectedDenom'] = typedValue;
+                  });
                 },
               ),
             ),
@@ -2487,7 +2485,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Expanded(
               child: Container(
                 height: 35,
-                alignment: Alignment.center,  // ADD THIS
+                alignment: Alignment.center,
                 decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
                 child: TextField(
                   controller: controller,
@@ -2499,8 +2497,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   style: const TextStyle(fontSize: 14),
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,  // KEEP THIS
-                    isDense: true,  // ADD THIS
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
                     hintText: '0',
                     hintStyle: TextStyle(color: Colors.grey),
                   ),
@@ -2513,12 +2511,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Container(
               width: 90,
               height: 35,
-              alignment: Alignment.center,  // ADD THIS if text still not centered
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.black, width: 2),
                 color: Colors.grey[200],
               ),
-              // Remove the Center widget and directly use:
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Padding(
@@ -2532,50 +2529,46 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           ],
         ),
-        // Dropdown appears below
-        if (row['showDropdown'] == true && row['denomOptions'] != null) ...[
-          const SizedBox(height: 4),
-          Container(
-            width: 80,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.black, width: 2),
-              color: Colors.white,
-            ),
-            child: Column(
-              children: (row['denomOptions'] as List<int>).map((denom) {
-                return InkWell(
-                  onTap: () {
-                    setState(() {
-                      row['selectedDenom'] = denom;
-                      denomController.text = denom.toString();
-                      row['showDropdown'] = false;
-                      _updateDenominationRows();
-                    });
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 1)),
-                    ),
-                    child: Text(
-                      '₹$denom',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                    ),
+
+        // Availability indicator (only for negative counts)
+        if (showAvailability)
+          FutureBuilder<int>(
+            future: _getAvailableBalance(selectedDenom!),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 2, left: 90),
+                  child: SizedBox(
+                    height: 12,
+                    width: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1),
                   ),
                 );
-              }).toList(),
-            ),
+              }
+
+              int available = snapshot.data ?? 0;
+              bool isSufficient = available.abs() >= count.abs();
+
+              return Padding(
+                padding: const EdgeInsets.only(top: 2, left: 90),
+                child: Text(
+                  'Available: $available',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isSufficient ? Colors.green[700] : Colors.red[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              );
+            },
           ),
-        ],
       ],
     );
   }
 
   // Update the _buildAmountSummary() widget
   Widget _buildAmountSummary() {
-    int totalAmount = _getTotalAmount();
+    int totalAmount = _getTotalAmount(); // Now safe with null check
     String amountInWords = totalAmount > 0 ? _numberToWords(totalAmount) : '';
 
     return Container(
