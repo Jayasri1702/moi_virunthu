@@ -1261,6 +1261,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         !amountChanged && !personsChanged;
   }
 
+  // Update the _validateForm() method
   bool _validateForm() {
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
@@ -1272,11 +1273,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return false;
     }
 
-
-    // ✅ UPDATE THIS SECTION - Phone validation for ALL cases (not just edit mode)
+    // Phone validation
     String phoneNumber = _phoneController.text.trim();
-
-    // Phone must be either empty OR exactly 10 digits
     if (phoneNumber.isNotEmpty) {
       if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1290,27 +1288,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-
-    // ADD THIS PHONE NUMBER VALIDATION (ONLY FOR EDIT MODE) ⬇️
-    // Phone number validation ONLY for critical edits (amount, payment method, denominations)
+    // Phone number validation for edit mode (critical fields)
     if (_isEditMode) {
-      // Check if user is editing amount, payment method, or denominations
       bool isEditingCriticalFields = false;
 
       if (_originalData != null) {
-        // Check if amount changed
         var originalAmount = _originalData!['amount'];
         int currentAmount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
         if (originalAmount != currentAmount) {
           isEditingCriticalFields = true;
         }
 
-        // Check if payment method changed
         if (_originalData!['payment_method'] != _paymentMethod) {
           isEditingCriticalFields = true;
         }
 
-        // Check if denominations changed (only if CASH)
         if (_paymentMethod == 'CASH' && _originalData!['payment_method'] == 'CASH') {
           int currentDenomTotal = _getTotalAmount();
           if (originalAmount != currentDenomTotal) {
@@ -1319,7 +1311,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // Only validate phone if critical fields are being edited
       if (isEditingCriticalFields) {
         String phoneNumber = _phoneController.text.trim();
 
@@ -1347,8 +1338,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
     }
-    // END OF PHONE NUMBER VALIDATION ⬆️
 
+    // ✅ NEW: Amount validation - ALWAYS mandatory regardless of CASH or OTHERS
+    String enteredAmountText = _amountController.text.trim();
+    if (enteredAmountText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Amount is mandatory! Please enter the amount.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false;
+    }
+
+    int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
+    if (enteredAmount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Amount cannot be zero!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false;
+    }
+
+    // CASH payment validation
     if (_paymentMethod == 'CASH') {
       int denomTotal = _getTotalAmount();
 
@@ -1359,31 +1375,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return false;
       }
 
-      // Only validate amount match if amount is manually entered
-      String enteredAmountText = _amountController.text.trim();
-      if (enteredAmountText.isNotEmpty) {
-        int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
+      // Validate amount matches denomination
+      if (denomTotal != enteredAmount) {
+        int difference = enteredAmount - denomTotal;
+        String message = difference > 0
+            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
 
-        if (denomTotal != enteredAmount) {
-          int difference = enteredAmount - denomTotal;
-          String message = difference > 0
-              ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
-              : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-          return false;
-        }
-      }
-    } else {
-      if (_amountController.text.trim().isEmpty || int.tryParse(_amountController.text.trim()) == null || int.tryParse(_amountController.text.trim())! == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter amount')),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
         );
         return false;
       }
@@ -1453,7 +1457,91 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _originalData = null;
     });
     await _loadNextSerialNo();
+    _phoneFocusNode.requestFocus(); // ✅ ADD THIS LINE
   }
+
+  // First, add this helper function to convert numbers to words at the top of your class (after the state variables)
+
+  String _numberToWords(int number) {
+    if (number == 0) return 'Zero';
+
+    final ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    final teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    final tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    String convertHundreds(int n) {
+      if (n == 0) return '';
+      if (n < 10) return ones[n];
+      if (n < 20) return teens[n - 10];
+      if (n < 100) {
+        int tensDigit = n ~/ 10;
+        int onesDigit = n % 10;
+        return '${tens[tensDigit]} ${ones[onesDigit]}'.trim();
+      }
+      int hundreds = n ~/ 100;
+      int remainder = n % 100;
+      return '${ones[hundreds]} Hundred ${convertHundreds(remainder)}'.trim();
+    }
+
+    if (number < 0) return 'Minus ${_numberToWords(-number)}';
+    if (number < 1000) return convertHundreds(number);
+
+    // Handle thousands
+    if (number < 100000) {
+      int thousands = number ~/ 1000;
+      int remainder = number % 1000;
+      String result = '${convertHundreds(thousands)} Thousand';
+      if (remainder > 0) result += ' ${convertHundreds(remainder)}';
+      return result.trim();
+    }
+
+    // Handle lakhs
+    if (number < 10000000) {
+      int lakhs = number ~/ 100000;
+      int remainder = number % 100000;
+      String result = '${convertHundreds(lakhs)} Lakh';
+      if (remainder >= 1000) {
+        int thousands = remainder ~/ 1000;
+        int finalRemainder = remainder % 1000;
+        result += ' ${convertHundreds(thousands)} Thousand';
+        if (finalRemainder > 0) result += ' ${convertHundreds(finalRemainder)}';
+      } else if (remainder > 0) {
+        result += ' ${convertHundreds(remainder)}';
+      }
+      return result.trim();
+    }
+
+    // Handle crores
+    int crores = number ~/ 10000000;
+    int remainder = number % 10000000;
+    String result = '${convertHundreds(crores)} Crore';
+
+    if (remainder >= 100000) {
+      int lakhs = remainder ~/ 100000;
+      int finalRemainder = remainder % 100000;
+      result += ' ${convertHundreds(lakhs)} Lakh';
+      if (finalRemainder >= 1000) {
+        int thousands = finalRemainder ~/ 1000;
+        int lastRemainder = finalRemainder % 1000;
+        result += ' ${convertHundreds(thousands)} Thousand';
+        if (lastRemainder > 0) result += ' ${convertHundreds(lastRemainder)}';
+      } else if (finalRemainder > 0) {
+        result += ' ${convertHundreds(finalRemainder)}';
+      }
+    } else if (remainder > 0) {
+      if (remainder >= 1000) {
+        int thousands = remainder ~/ 1000;
+        int lastRemainder = remainder % 1000;
+        result += ' ${convertHundreds(thousands)} Thousand';
+        if (lastRemainder > 0) result += ' ${convertHundreds(lastRemainder)}';
+      } else {
+        result += ' ${convertHundreds(remainder)}';
+      }
+    }
+
+    return result.trim();
+  }
+
 
   String _getPersonsDisplay(dynamic persons) {
     if (persons == null) return 'No name';
@@ -2174,7 +2262,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
+  // Update the _buildAmountField() widget
   Widget _buildAmountField() {
+    int amount = int.tryParse(_amountController.text) ?? 0;
+    String amountInWords = amount > 0 ? _numberToWords(amount) : '';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2188,7 +2280,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           Container(
             height: 40,
-            alignment: Alignment.center,  // ADD THIS
+            alignment: Alignment.center,
             decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: _amountController,
@@ -2197,11 +2289,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,  // CHANGE THIS
-                isDense: true,  // ADD THIS
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
               ),
+              onChanged: (value) {
+                setState(() {}); // Rebuild to update amount in words
+              },
             ),
           ),
+          if (amountInWords.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                border: Border.all(color: Colors.blue, width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '$amountInWords Rupees Only',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.blue[900],
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2457,28 +2573,57 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
+  // Update the _buildAmountSummary() widget
   Widget _buildAmountSummary() {
+    int totalAmount = _getTotalAmount();
+    String amountInWords = totalAmount > 0 ? _numberToWords(totalAmount) : '';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
       ),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          border: Border.all(color: Colors.black, width: 2),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Total Count: ${_getTotalCount()}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-            Text('Total Amount: ₹${_getTotalAmount()}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Total Count: ${_getTotalCount()}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                Text('Total Amount: ₹$totalAmount',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          if (amountInWords.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                border: Border.all(color: Colors.green, width: 1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '$amountInWords Rupees Only',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.green[900],
+                  fontStyle: FontStyle.italic,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
