@@ -408,7 +408,22 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     try {
       final eventId = eventData?['id'];
       final operatorId = eventData?['operator_id'];
-      final operatorName = eventData?['operator_name'] ?? 'Unknown';
+
+      // Fetch operator name from users table
+      String operatorName = 'Operator';
+      try {
+        final userResponse = await _supabase
+            .from('users')
+            .select('full_name')
+            .eq('id', operatorId)
+            .single();
+
+        if (userResponse != null && userResponse['full_name'] != null) {
+          operatorName = userResponse['full_name'];
+        }
+      } catch (e) {
+        print('Error fetching operator name: $e');
+      }
 
       if (eventId == null || operatorId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -476,7 +491,7 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         'denom_1': net1,
       });
 
-      // Generate exchange receipt
+      // Generate exchange receipt with proper operator name
       final receiptFile = await ExchangeReceiptGenerator.generateExchangeReceipt(
         context: context,
         operatorName: operatorName,

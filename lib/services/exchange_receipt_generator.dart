@@ -320,7 +320,6 @@ class ExchangeReceiptGenerator {
   <div class="header">Exchange Denomination Receipt</div>
   
   <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
   
   <div class="divider"></div>
   
@@ -356,7 +355,7 @@ class ExchangeReceiptGenerator {
   </table>
   
   <div class="footer">
-    <div class="thanks">நன்றி! (Thank You)</div>
+    <div class="thanks">நன்றி!</div>
   </div>
 </body>
 </html>

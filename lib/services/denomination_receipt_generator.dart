@@ -316,6 +316,15 @@ class DenominationReceiptGenerator {
       font-weight: bold;
     }
     
+    .header {
+      background-color: #1976D2;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    
     .summary-item {
       border: 2px solid black;
       border-top: none;
@@ -364,17 +373,14 @@ class DenominationReceiptGenerator {
   </style>
 </head>
 <body>
+<div class="header">Final Denomination Receipt</div>
   <div class="company-box">
     <div class="company-name">பேச்சி மொய் டெக்</div>
-    <div class="company-phone">9043606296, 9047556443</div>
   </div>
   
   <div class="customer-info">
-    <div class="info-line">பெண்ணியான்</div>
     <div class="info-line">$customerName</div>
     <div class="info-line">$eventTypeName</div>
-    <div class="info-line">இல்ல காதணி விழா</div>
-    <div class="info-line">செல்வி மஹாரால்</div>
     <div class="info-line">$venue</div>
     <div class="info-line">$contactNumber</div>
     <div class="info-line">நாள் : $dateStr</div>
