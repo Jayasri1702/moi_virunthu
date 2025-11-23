@@ -182,7 +182,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _loadDenominations(String moiId) async {
-    print('🔍 Loading denominations for MOI ID: $moiId'); // ✅ ADD
+    print('🔍 Loading denominations for MOI ID: $moiId');
 
     try {
       final response = await _supabase
@@ -191,10 +191,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .eq('moi_id', moiId)
           .maybeSingle();
 
-      print('📦 Denomination response: $response'); // ✅ ADD
+      print('📦 Denomination response: $response');
 
       if (response != null) {
-        // Clear existing rows
         for (var row in _denomRows) {
           row['countController'].dispose();
           if (row.containsKey('denomController')) {
@@ -203,7 +202,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
         _denomRows.clear();
 
-        // Reconstruct denomination rows from saved data
         Map<int, int> savedDenoms = {
           500: response['denom_500'] ?? 0,
           200: response['denom_200'] ?? 0,
@@ -215,9 +213,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           1: response['denom_1'] ?? 0,
         };
 
-        print('💰 Saved denominations: $savedDenoms'); // ✅ ADD
+        print('💰 Saved denominations: $savedDenoms');
 
-        // Sort and add rows in descending order
         List<int> sortedDenoms = savedDenoms.keys.toList()
           ..sort((a, b) => b.compareTo(a));
 
@@ -225,7 +222,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           int count = savedDenoms[denom]!;
 
           if (count != 0) {
-            print('➕ Adding row: ₹$denom × $count'); // ✅ ADD
+            print('➕ Adding row: ₹$denom × $count');
 
             final countController = TextEditingController(text: count.toString());
             countController.addListener(_onDenomCountChanged);
@@ -240,17 +237,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
         }
 
-        print('✅ Total rows added: ${_denomRows.length}'); // ✅ ADD
+        print('✅ Total rows added: ${_denomRows.length}');
 
-        // If no denominations saved, initialize with default empty row
-        if (_denomRows.isEmpty) {
-          print('⚠️ No denominations found, initializing empty'); // ✅ ADD
-          _initializeDenominations();
-        }
+        // ✅ ALWAYS add empty row at the end
+        final emptyCountController = TextEditingController();
+        emptyCountController.addListener(_onDenomCountChanged);
+
+        _denomRows.add({
+          'selectedDenom': null,
+          'countController': emptyCountController,
+          'denomController': TextEditingController(),
+        });
 
         setState(() {});
       } else {
-        print('❌ No denomination record found for MOI ID: $moiId'); // ✅ ADD
+        print('❌ No denomination record found for MOI ID: $moiId');
         _initializeDenominations();
         setState(() {});
       }
@@ -260,6 +261,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       setState(() {});
     }
   }
+
 
   Future<void> _loadGroupedMois() async {
     if (_currentGroupId == null) return;
@@ -293,7 +295,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _notesController.text = moiData['notes'] ?? '';
       _paymentMethod = moiData['payment_method'] ?? 'CASH';
       _isUncle = moiData['is_uncle'] ?? false;
-      _isEditMode = true; // ✅ Set edit mode
+      _isEditMode = true;
 
       if (moiData['persons'] != null) {
         List<dynamic> personsList = moiData['persons'] as List;
@@ -320,15 +322,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     });
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('📝 Entry loaded for editing. Make changes and click "Group" or "Save & Print"'),
-          backgroundColor: Colors.blue,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
+    // ✅ REMOVED: Success popup
   }
 
   Future<void> _loadNextSerialNo() async {
@@ -838,6 +832,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGroup() async {
+    // ✅ NEW: If editing an entry that's already in MOI Details (not making changes), show specific message
+    if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
+      if (_hasNoChanges()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ This entry is already in the group! Use "Add Entry" to add a new entry, or make changes and click "Group" to update it.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      // If there ARE changes, proceed with update
+      // (continue below to update logic)
+    }
+
     // Validate form (without denomination)
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
@@ -879,15 +890,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     try {
-      // ✅ CASE 1: Editing an existing entry in MOI Details
-      if (_isEditMode && _editingMoiId != null) {
-        // Check if there are changes
-        if (_hasNoChanges()) {
+      // ✅ CASE 1: Editing an existing entry in MOI Details (with changes)
+      if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
+        // ✅ Check if this would create a duplicate in the group
+        bool isDuplicate = _groupedMois.any((entry) {
+          if (entry['id'] == _editingMoiId) return false; // Skip current entry
+
+          return _areEntriesIdentical(entry, {
+            'phone': _phoneController.text.trim(),
+            'village_name': _villageController.text.trim(),
+            'living_place': _livingPlaceController.text.trim(),
+            'amount': int.tryParse(_amountController.text) ?? 0,
+            'is_uncle': _isUncle,
+            'persons': _buildPersonsData(),
+          });
+        });
+
+        if (isDuplicate) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No changes detected!'),
+              content: Text('⚠️ This entry already exists in MOI Details with the same details.'),
               backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
+              duration: Duration(seconds: 3),
             ),
           );
           return;
@@ -896,21 +920,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // Find and update the entry in _groupedMois list
         int index = _groupedMois.indexWhere((moi) => moi['id'] == _editingMoiId);
         if (index != -1) {
-          // Build updated data
-          List<Map<String, dynamic>> personsData = [];
-          if (_person1Field1Controller.text.trim().isNotEmpty ||
-              _person1Field2Controller.text.trim().isNotEmpty) {
-            personsData.add({
-              'name': _person1Field1Controller.text.trim(),
-              'job': _person1Field2Controller.text.trim(),
-            });
-          }
-          if (_person2Controller.text.trim().isNotEmpty) {
-            personsData.add({
-              'details': _person2Controller.text.trim(),
-            });
-          }
-
           setState(() {
             _groupedMois[index] = {
               ..._groupedMois[index],
@@ -920,8 +929,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'notes': _notesController.text.trim(),
               'amount': int.tryParse(_amountController.text) ?? 0,
               'is_uncle': _isUncle,
-              'persons': personsData,
-              'is_modified': true, // Flag to track modification
+              'persons': _buildPersonsData(),
+              'is_modified': true,
             };
           });
 
@@ -935,20 +944,41 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormForNextEntry();
           _phoneFocusNode.requestFocus();
 
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Entry updated in MOI Details!'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Entry updated in MOI Details!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
         return;
       }
 
       // ✅ CASE 2: Adding NEW entry to MOI Details (in memory only)
+
+      // Check if this entry already exists in the group
+      bool isDuplicate = _groupedMois.any((entry) {
+        return _areEntriesIdentical(entry, {
+          'phone': _phoneController.text.trim(),
+          'village_name': _villageController.text.trim(),
+          'living_place': _livingPlaceController.text.trim(),
+          'amount': int.tryParse(_amountController.text) ?? 0,
+          'is_uncle': _isUncle,
+          'persons': _buildPersonsData(),
+        });
+      });
+
+      if (isDuplicate) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ This entry already exists in MOI Details.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
 
       // Get or create group ID
       int groupId;
@@ -961,35 +991,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // Get next serial number
       await _loadNextSerialNo();
 
-      // Build persons data
-      List<Map<String, dynamic>> personsData = [];
-      if (_person1Field1Controller.text.trim().isNotEmpty ||
-          _person1Field2Controller.text.trim().isNotEmpty) {
-        personsData.add({
-          'name': _person1Field1Controller.text.trim(),
-          'job': _person1Field2Controller.text.trim(),
-        });
-      }
-      if (_person2Controller.text.trim().isNotEmpty) {
-        personsData.add({
-          'details': _person2Controller.text.trim(),
-        });
-      }
-
       // Create temporary entry (not saved to DB yet)
       final tempEntry = {
-        'id': 'temp_${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
+        'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
         'serial_no': _serialNo,
         'phone': _phoneController.text.trim(),
         'village_name': _villageController.text.trim(),
         'living_place': _livingPlaceController.text.trim(),
         'notes': _notesController.text.trim(),
         'amount': int.tryParse(_amountController.text) ?? 0,
-        'payment_method': 'CASH', // Always CASH for grouped
+        'payment_method': 'CASH',
         'is_uncle': _isUncle,
-        'persons': personsData,
+        'persons': _buildPersonsData(),
         'group_id': groupId,
-        'is_temp': true, // Flag for temporary entry
+        'is_temp': true,
       };
 
       setState(() {
@@ -1000,15 +1015,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       await _clearFormForNextEntry();
       _phoneFocusNode.requestFocus();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Entry added to MOI Details. Add more or enter denominations.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Entry added to MOI Details!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 1),
+        ),
+      );
     } catch (e) {
       print('Error in group operation: $e');
       if (mounted) {
@@ -1017,6 +1030,74 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
     }
+  }
+
+  // ✅ NEW: Helper method to build persons data
+  List<Map<String, dynamic>> _buildPersonsData() {
+    List<Map<String, dynamic>> personsData = [];
+
+    if (_person1Field1Controller.text.trim().isNotEmpty ||
+        _person1Field2Controller.text.trim().isNotEmpty) {
+      personsData.add({
+        'name': _person1Field1Controller.text.trim(),
+        'job': _person1Field2Controller.text.trim(),
+      });
+    }
+
+    if (_person2Controller.text.trim().isNotEmpty) {
+      personsData.add({
+        'details': _person2Controller.text.trim(),
+      });
+    }
+
+    return personsData;
+  }
+
+// ✅ NEW: Helper method to check if entries are identical
+  bool _areEntriesIdentical(Map<String, dynamic> entry1, Map<String, dynamic> entry2) {
+    // Compare basic fields
+    if (entry1['phone'] != entry2['phone']) return false;
+    if (entry1['village_name'] != entry2['village_name']) return false;
+    if (entry1['living_place'] != entry2['living_place']) return false;
+    if (entry1['is_uncle'] != entry2['is_uncle']) return false;
+
+    // Compare amount
+    int amount1 = 0;
+    if (entry1['amount'] is int) {
+      amount1 = entry1['amount'];
+    } else if (entry1['amount'] is double) {
+      amount1 = entry1['amount'].toInt();
+    } else if (entry1['amount'] != null) {
+      amount1 = int.tryParse(entry1['amount'].toString()) ?? 0;
+    }
+
+    int amount2 = 0;
+    if (entry2['amount'] is int) {
+      amount2 = entry2['amount'];
+    } else if (entry2['amount'] is double) {
+      amount2 = entry2['amount'].toInt();
+    } else if (entry2['amount'] != null) {
+      amount2 = int.tryParse(entry2['amount'].toString()) ?? 0;
+    }
+
+    if (amount1 != amount2) return false;
+
+    // Compare persons
+    List<dynamic> persons1 = entry1['persons'] ?? [];
+    List<dynamic> persons2 = entry2['persons'] ?? [];
+
+    if (persons1.length != persons2.length) return false;
+
+    for (int i = 0; i < persons1.length; i++) {
+      var p1 = persons1[i];
+      var p2 = persons2[i];
+
+      if (p1['name'] != p2['name']) return false;
+      if (p1['job'] != p2['job']) return false;
+      if (p1['details'] != p2['details']) return false;
+    }
+
+    return true;
   }
 
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
@@ -1135,13 +1216,24 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleSaveAndPrint() async {
-    // ✅ Check if we have grouped entries (final save mode)
+    // ✅ FIRST: Check if editing a single entry with no changes (before anything else)
+    if (_isEditMode && _editingMoiId != null && _currentGroupId == null && _hasNoChanges()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ No changes detected. Nothing to save.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     bool isFinalSave = _groupedMois.isNotEmpty;
 
     if (isFinalSave) {
-      // ✅ FINAL SAVE VALIDATION
+      // ✅ GROUPED ENTRIES SAVE MODE
 
-      // 1. Check if MOI Details has entries
+      // Final save validation
       if (_groupedMois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1152,7 +1244,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return;
       }
 
-      // 2. Calculate total from MOI Details
       int totalGroupAmount = 0;
       for (var entry in _groupedMois) {
         var amount = entry['amount'];
@@ -1165,11 +1256,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // 3. Check denomination (only for CASH payment)
       if (_paymentMethod == 'CASH') {
         int denomTotal = _getTotalAmount();
 
-        // Denomination is MANDATORY
         if (denomTotal == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1180,7 +1269,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           return;
         }
 
-        // Validate denomination matches group total
         if (totalGroupAmount != denomTotal) {
           int difference = totalGroupAmount - denomTotal;
           String message = difference > 0
@@ -1197,7 +1285,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           return;
         }
 
-        // Validate negative denominations
         for (var row in _denomRows) {
           int count = int.tryParse(row['countController'].text) ?? 0;
           int? denom = row['selectedDenom'];
@@ -1219,12 +1306,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      // ✅ ALL VALIDATIONS PASSED - Save all entries to database
       try {
         List<String> savedMoiIds = [];
 
         for (var entry in _groupedMois) {
-          // Prepare MOI data
           final moiData = {
             'event_id': _eventId,
             'operator_id': _operatorId,
@@ -1241,9 +1326,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             'updated_at': DateTime.now().toIso8601String(),
           };
 
-          // Check if entry needs to be created or updated
           if (entry['is_temp'] == true) {
-            // New entry - INSERT
             moiData['created_at'] = DateTime.now().toIso8601String();
 
             final response = await _supabase
@@ -1254,9 +1337,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
             savedMoiIds.add(response['id']);
           } else {
-            // Existing entry - UPDATE (if modified)
             if (entry['is_modified'] == true) {
-              moiData['old_data'] = entry; // Store old data
+              moiData['old_data'] = entry;
 
               await _supabase
                   .from('mois')
@@ -1270,27 +1352,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
         }
 
-        // ✅ Save denomination ONCE for the group (using first entry's ID)
         if (_paymentMethod == 'CASH' && savedMoiIds.isNotEmpty) {
           await _saveDenominationsForGroup(savedMoiIds[0]);
         }
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Saved ${_groupedMois.length} entries with denominations!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // ✅ Clear everything including denominations after successful save
           await _clearFormCompletely();
-
-          Navigator.pushReplacementNamed(
-            context,
-            '/operator/collection-details',
-            arguments: {'id': _eventId, 'operator_id': _operatorId},
-          );
+          _phoneFocusNode.requestFocus();
         }
       } catch (e) {
         print('Error saving grouped entries: $e');
@@ -1303,9 +1371,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // ✅ SINGLE ENTRY MODE (no grouping)
+    // ✅ SINGLE ENTRY MODE (not grouped)
 
-    // Validate form
+    // Single entry mode validation
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
 
@@ -1327,7 +1395,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // For single CASH entry, validate denomination
     if (_paymentMethod == 'CASH') {
       int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
       int denomTotal = _getTotalAmount();
@@ -1356,7 +1423,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // Check for global update
     String phoneNumber = _phoneController.text.trim();
     if (phoneNumber.isNotEmpty && phoneNumber.length == 10 && _hasAutoFilledDataChanged()) {
       final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
@@ -1365,31 +1431,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // Handle EDIT mode
+    // ✅ EDIT MODE: Update existing entry
     if (_isEditMode && _editingMoiId != null) {
-      if (_hasNoChanges()) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No changes detected.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
       try {
         await _saveMoi(null, forceUpdate: true);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Entry updated successfully!'), backgroundColor: Colors.green),
-          );
-
-          Navigator.pushReplacementNamed(
-            context,
-            '/operator/collection-details',
-            arguments: {'id': _eventId, 'operator_id': _operatorId},
-          );
+          // ✅ NO success message - just clear and stay on page
+          await _clearFormCompletely();
+          _phoneFocusNode.requestFocus();
         }
       } catch (e) {
         print('Error updating: $e');
@@ -1402,13 +1452,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // Save new single entry
-    // Save new single entry
+// Save new single entry
     try {
       await _saveMoi(null, forceUpdate: false);
 
       if (mounted) {
-        await _clearFormCompletely(); // ✅ Changed from _clearFormForNextEntry
+        // ✅ NO success message - just clear and stay on page
+        await _clearFormCompletely();
         _phoneFocusNode.requestFocus();
       }
     } catch (e) {
@@ -1420,6 +1470,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
   }
+
 
   Future<void> _saveDenominationsForGroup(String firstMoiId) async {
     // Build denomination data from rows
@@ -1460,22 +1511,42 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   bool _hasNoChanges() {
-    if (_originalData == null || !_isEditMode) return false;
+    if (_originalData == null) {
+      print('❌ _originalData is null');
+      return false;
+    }
 
-    // Compare all fields
+    if (!_isEditMode) {
+      print('❌ Not in edit mode');
+      return false;
+    }
+
+    print('🔍 Checking for changes...');
+    print('Original data: $_originalData');
+
     bool phoneChanged = (_originalData!['phone'] ?? '') != _phoneController.text.trim();
-    bool villageChanged = (_originalData!['village_name'] ?? '') != _villageController.text.trim();
-    bool livingPlaceChanged = (_originalData!['living_place'] ?? '') != _livingPlaceController.text.trim();
-    bool notesChanged = (_originalData!['notes'] ?? '') != _notesController.text.trim();
-    bool paymentMethodChanged = _originalData!['payment_method'] != _paymentMethod;
-    bool isUncleChanged = (_originalData!['is_uncle'] ?? false) != _isUncle;
+    print('Phone changed: $phoneChanged (${_originalData!['phone']} vs ${_phoneController.text.trim()})');
 
-    // Compare amount
+    bool villageChanged = (_originalData!['village_name'] ?? '') != _villageController.text.trim();
+    print('Village changed: $villageChanged (${_originalData!['village_name']} vs ${_villageController.text.trim()})');
+
+    bool livingPlaceChanged = (_originalData!['living_place'] ?? '') != _livingPlaceController.text.trim();
+    print('Living place changed: $livingPlaceChanged (${_originalData!['living_place']} vs ${_livingPlaceController.text.trim()})');
+
+    bool notesChanged = (_originalData!['notes'] ?? '') != _notesController.text.trim();
+    print('Notes changed: $notesChanged');
+
+    bool paymentMethodChanged = _originalData!['payment_method'] != _paymentMethod;
+    print('Payment method changed: $paymentMethodChanged');
+
+    bool isUncleChanged = (_originalData!['is_uncle'] ?? false) != _isUncle;
+    print('Uncle changed: $isUncleChanged');
+
     var originalAmount = _originalData!['amount'];
     int currentAmount = int.tryParse(_amountController.text) ?? 0;
     bool amountChanged = originalAmount != currentAmount;
+    print('Amount changed: $amountChanged ($originalAmount vs $currentAmount)');
 
-    // Compare persons
     bool personsChanged = false;
     if (_originalData!['persons'] != null) {
       List<dynamic> originalPersons = _originalData!['persons'] as List;
@@ -1500,25 +1571,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       personsChanged = currentP1Name != origP1Name ||
           currentP1Job != origP1Job ||
           currentP2Details != origP2Details;
+
+      print('Person 1 name changed: ${currentP1Name != origP1Name} ($origP1Name vs $currentP1Name)');
+      print('Person 1 job changed: ${currentP1Job != origP1Job} ($origP1Job vs $currentP1Job)');
+      print('Person 2 details changed: ${currentP2Details != origP2Details} ($origP2Details vs $currentP2Details)');
     } else {
       personsChanged = _person1Field1Controller.text.trim().isNotEmpty ||
           _person1Field2Controller.text.trim().isNotEmpty ||
           _person2Controller.text.trim().isNotEmpty;
+      print('Persons changed (no original): $personsChanged');
     }
 
-    // ✅ NEW: Check if denominations changed (for CASH payment)
-    bool denominationsChanged = false;
-    if (_paymentMethod == 'CASH' && _originalData!['payment_method'] == 'CASH') {
-      int currentDenomTotal = _getTotalAmount();
-      if (originalAmount != currentDenomTotal) {
-        denominationsChanged = true;
-      }
-    }
+    bool hasNoChanges = !phoneChanged && !villageChanged && !livingPlaceChanged &&
+        !notesChanged && !paymentMethodChanged && !isUncleChanged &&
+        !amountChanged && !personsChanged;
+
+    print('✅ Final result - Has NO changes: $hasNoChanges');
 
     // Return true if NO changes detected
-    return !phoneChanged && !villageChanged && !livingPlaceChanged &&
-        !notesChanged && !paymentMethodChanged && !isUncleChanged &&
-        !amountChanged && !personsChanged && !denominationsChanged;
+    return hasNoChanges;
   }
 
   // Update the _validateForm() method
@@ -3036,158 +3107,159 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               padding: const EdgeInsets.all(10),
               itemCount: _groupedMois.length,
               separatorBuilder: (context, index) => const Divider(color: Colors.black, thickness: 1, height: 12),
-              itemBuilder: (context, index) {
-                final moi = _groupedMois[index];
-                final isCurrentlyEditing = _editingMoiId == moi['id'];
+                itemBuilder: (context, index) {
+                  final moi = _groupedMois[index];
+                  final isCurrentlyEditing = _editingMoiId == moi['id'];
 
-                // ✅ Format amount as integer
-                var amountValue = moi['amount'];
-                int displayAmount = 0;
-                if (amountValue is int) {
-                  displayAmount = amountValue;
-                } else if (amountValue is double) {
-                  displayAmount = amountValue.toInt();
-                } else if (amountValue != null) {
-                  displayAmount = int.tryParse(amountValue.toString()) ?? 0;
-                }
+                  // ✅ Format amount as integer
+                  var amountValue = moi['amount'];
+                  int displayAmount = 0;
+                  if (amountValue is int) {
+                    displayAmount = amountValue;
+                  } else if (amountValue is double) {
+                    displayAmount = amountValue.toInt();
+                  } else if (amountValue != null) {
+                    displayAmount = int.tryParse(amountValue.toString()) ?? 0;
+                  }
 
-                return Dismissible(
-                  key: Key(moi['id']),
-                  direction: DismissDirection.horizontal,
-                  confirmDismiss: (direction) async {
-                    return await showDialog<bool>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (context) => AlertDialog(
-                        title: const Text(
-                          '🗑️ Delete Entry',
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                        ),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Do you want to delete this entry from the group?',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 12),
-                            Text('Serial No: O${moi['serial_no']}'),
-                            Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
-                            if (moi['village_name'] != null)
-                              Text('Village: ${moi['village_name']}'),
-                            Text('Amount: ₹$displayAmount'),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.grey[200],
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            ),
-                            child: const Text(
-                              'CANCEL',
-                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                            ),
+                  return Dismissible(
+                    key: Key('${moi['id']}_$index'), // ✅ FIXED: Use compound key with index
+                    direction: DismissDirection.horizontal,
+                    confirmDismiss: (direction) async {
+                      return await showDialog<bool>(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => AlertDialog(
+                          title: const Text(
+                            '🗑️ Delete Entry',
+                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                           ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.red[100],
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            ),
-                            child: const Text(
-                              'DELETE',
-                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                            ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Do you want to delete this entry from the group?',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 12),
+                              Text('Serial No: O${moi['serial_no']}'),
+                              Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
+                              if (moi['village_name'] != null)
+                                Text('Village: ${moi['village_name']}'),
+                              Text('Amount: ₹$displayAmount'),
+                            ],
                           ),
-                        ],
-                      ),
-                    );
-                  },
-                  onDismissed: (direction) async {
-                    await _handleDeleteFromGroup(moi);
-                  },
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(left: 20),
-                    child: const Icon(Icons.delete, color: Colors.white, size: 30),
-                  ),
-                  secondaryBackground: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete, color: Colors.white, size: 30),
-                  ),
-                  child: InkWell(
-                    onTap: () => _loadGroupedEntryForEdit(moi),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: isCurrentlyEditing
-                            ? Colors.blue.shade50
-                            : (moi['is_temp'] == true ? Colors.yellow[50] : Colors.transparent),
-                        border: isCurrentlyEditing
-                            ? Border.all(color: Colors.blue, width: 2)
-                            : (moi['is_temp'] == true ? Border.all(color: Colors.orange, width: 1) : null),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _getPersonsDisplay(moi['persons']),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                    color: isCurrentlyEditing ? Colors.blue : Colors.black,
-                                  ),
-                                ),
-                                if (moi['village_name'] != null)
-                                  Text(
-                                    moi['village_name'],
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (isCurrentlyEditing)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                borderRadius: BorderRadius.circular(10),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              style: TextButton.styleFrom(
+                                backgroundColor: Colors.grey[200],
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                               ),
                               child: const Text(
-                                'EDITING',
-                                style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                'CANCEL',
+                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                               ),
                             ),
-                          Text(
-                            '₹$displayAmount',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: isCurrentlyEditing ? Colors.blue : Colors.green,
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: TextButton.styleFrom(
+                                backgroundColor: Colors.red[100],
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              ),
+                              child: const Text(
+                                'DELETE',
+                                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      );
+                    },
+                    onDismissed: (direction) async {
+                      // ✅ Create a local copy before async operation
+                      final moiToDelete = Map<String, dynamic>.from(moi);
+                      await _handleDeleteFromGroup(moiToDelete);
+                    },
+                    background: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 20),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                    ),
+                    secondaryBackground: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                    ),
+                    child: InkWell(
+                      onTap: () => _loadGroupedEntryForEdit(moi),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: isCurrentlyEditing
+                              ? Colors.blue.shade50
+                              : (moi['is_temp'] == true ? Colors.yellow[50] : Colors.transparent),
+                          border: isCurrentlyEditing
+                              ? Border.all(color: Colors.blue, width: 2)
+                              : (moi['is_temp'] == true ? Border.all(color: Colors.orange, width: 1) : null),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _getPersonsDisplay(moi['persons']),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: isCurrentlyEditing ? Colors.blue : Colors.black,
+                                    ),
+                                  ),
+                                  if (moi['village_name'] != null)
+                                    Text(
+                                      moi['village_name'],
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isCurrentlyEditing)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'EDITING',
+                                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            Text(
+                              '₹$displayAmount',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: isCurrentlyEditing ? Colors.blue : Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ),
+                  );
+                },
+            ),),
 
           // ✅ NEW: Total Count and Total Amount at bottom
           if (_groupedMois.isNotEmpty)
@@ -3226,64 +3298,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleDeleteFromGroup(Map<String, dynamic> moi) async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          '🗑️ Delete Entry',
-          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Do you want to delete this entry from the group?',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Text('Serial No: O${moi['serial_no']}'),
-            Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
-            Text('Amount: ₹${moi['amount']}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.grey[200],
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: const Text(
-              'CANCEL',
-              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              backgroundColor: Colors.red[100],
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            ),
-            child: const Text(
-              'DELETE',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
+    try {
+      // If temporary entry, just remove from list
+      if (moi['is_temp'] == true) {
+        setState(() {
+          _groupedMois.removeWhere((entry) => entry['id'] == moi['id']);
 
-    if (shouldDelete == true) {
-      try {
-        // Mark as deleted
-        await _supabase
-            .from('mois')
-            .update({'is_deleted': true, 'updated_at': DateTime.now().toIso8601String()})
-            .eq('id', moi['id']);
+          // If no more entries, clear group
+          if (_groupedMois.isEmpty) {
+            _currentGroupId = null;
+          }
+        });
 
-        // If this was the entry being edited, clear edit mode
         if (_editingMoiId == moi['id']) {
           setState(() {
             _isEditMode = false;
@@ -3293,28 +3319,61 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormForNextEntry();
         }
 
-        // Reload the group
-        await _loadGroupedMois();
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Entry deleted from group'),
-              backgroundColor: Colors.red,
+              content: Text('✅ Entry removed from group'),
+              backgroundColor: Colors.green,
               duration: Duration(seconds: 2),
             ),
           );
         }
-      } catch (e) {
-        print('Error deleting entry: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error deleting entry: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
+        return;
+      }
+
+      // For saved entries, mark as deleted in database
+      await _supabase
+          .from('mois')
+          .update({'is_deleted': true, 'updated_at': DateTime.now().toIso8601String()})
+          .eq('id', moi['id']);
+
+      // Remove from local list
+      setState(() {
+        _groupedMois.removeWhere((entry) => entry['id'] == moi['id']);
+
+        // If no more entries, clear group
+        if (_groupedMois.isEmpty) {
+          _currentGroupId = null;
         }
+      });
+
+      if (_editingMoiId == moi['id']) {
+        setState(() {
+          _isEditMode = false;
+          _editingMoiId = null;
+          _originalData = null;
+        });
+        await _clearFormForNextEntry();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Entry deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error deleting entry: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting entry: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
