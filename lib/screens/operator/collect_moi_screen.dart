@@ -31,6 +31,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Denomination controllers with dropdown support
   final List<Map<String, dynamic>> _denomRows = [];
 
+  // In state variables section, add:
+  final _amountFocusNode = FocusNode();
+  final _firstDenomFocusNode = FocusNode(); // For Ctrl+D shortcut
+
   // State variables
   String? _eventId;
   String? _operatorId;
@@ -159,25 +163,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       } else {
         _amountController.text = '0';
       }
-
     });
 
+    // ✅ FIXED ORDER: Load group entries FIRST, then load denominations
     if (_currentGroupId != null) {
-      await _loadGroupedMois();
-    }
+      await _loadGroupedMois(); // Load group entries first
 
-    if (_paymentMethod == 'CASH') {
-      await _loadDenominations(moiData['id']);
+      // ✅ Now load denominations from FIRST entry in group
+      if (_paymentMethod == 'CASH' && _groupedMois.isNotEmpty) {
+        await _loadDenominations(_groupedMois[0]['id']);
+      }
+    } else {
+      // ✅ For single entry, load its denomination directly
+      if (_paymentMethod == 'CASH') {
+        await _loadDenominations(moiData['id']);
+      }
     }
   }
 
   Future<void> _loadDenominations(String moiId) async {
+    print('🔍 Loading denominations for MOI ID: $moiId'); // ✅ ADD
+
     try {
       final response = await _supabase
           .from('moi_denominations')
           .select('*')
           .eq('moi_id', moiId)
           .maybeSingle();
+
+      print('📦 Denomination response: $response'); // ✅ ADD
 
       if (response != null) {
         // Clear existing rows
@@ -201,9 +215,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           1: response['denom_1'] ?? 0,
         };
 
-        // ✅ Add rows for ALL denominations (positive AND negative)
-        savedDenoms.forEach((denom, count) {
-          if (count != 0) { // ✅ Changed from count > 0 to count != 0
+        print('💰 Saved denominations: $savedDenoms'); // ✅ ADD
+
+        // Sort and add rows in descending order
+        List<int> sortedDenoms = savedDenoms.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+
+        for (int denom in sortedDenoms) {
+          int count = savedDenoms[denom]!;
+
+          if (count != 0) {
+            print('➕ Adding row: ₹$denom × $count'); // ✅ ADD
+
             final countController = TextEditingController(text: count.toString());
             countController.addListener(_onDenomCountChanged);
 
@@ -215,17 +238,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'denomController': denomController,
             });
           }
-        });
+        }
+
+        print('✅ Total rows added: ${_denomRows.length}'); // ✅ ADD
 
         // If no denominations saved, initialize with default empty row
         if (_denomRows.isEmpty) {
+          print('⚠️ No denominations found, initializing empty'); // ✅ ADD
           _initializeDenominations();
         }
 
         setState(() {});
+      } else {
+        print('❌ No denomination record found for MOI ID: $moiId'); // ✅ ADD
+        _initializeDenominations();
+        setState(() {});
       }
     } catch (e) {
-      print('Error loading denominations: $e');
+      print('❌ Error loading denominations: $e');
+      _initializeDenominations();
+      setState(() {});
     }
   }
 
@@ -261,7 +293,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _notesController.text = moiData['notes'] ?? '';
       _paymentMethod = moiData['payment_method'] ?? 'CASH';
       _isUncle = moiData['is_uncle'] ?? false;
-      _isEditMode = true;
+      _isEditMode = true; // ✅ Set edit mode
 
       if (moiData['persons'] != null) {
         List<dynamic> personsList = moiData['persons'] as List;
@@ -275,6 +307,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _person2Controller.text = person2['details'] ?? '';
         }
       }
+
       var amountValue = moiData['amount'];
       if (amountValue != null) {
         if (amountValue is double) {
@@ -287,14 +320,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     });
 
-    if (_paymentMethod == 'CASH') {
-      await _loadDenominations(moiData['id']);
-    }
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Entry loaded for editing. Make changes and click "Save & Print"'),
+          content: Text('📝 Entry loaded for editing. Make changes and click "Group" or "Save & Print"'),
           backgroundColor: Colors.blue,
           duration: Duration(seconds: 2),
         ),
@@ -809,75 +838,119 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGroup() async {
-    if (!await _validateForm()) return; // ✅ Add await
+    // Validate form (without denomination)
+    bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
+        _person2Controller.text.trim().isNotEmpty;
 
-    // CASE 1: Editing an existing entry that's ALREADY in a group
-    if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This entry is already in a group! Use "Save & Print" to update it, or click "Add Entry" to add a new entry to the group.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
+    if (!hasValidPerson) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add at least one person with a name'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
-    // CASE 2: Editing an existing standalone entry (not in group) - Convert to group
-    if (_isEditMode && _editingMoiId != null && _currentGroupId == null) {
-      try {
-        int groupId = await _getNextGroupId();
+    // Check if amount is entered
+    if (_amountController.text.trim().isEmpty || int.tryParse(_amountController.text) == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter amount before adding to group!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-        final moiData = {
-          'group_id': groupId,
-          'updated_at': DateTime.now().toIso8601String(),
-          'old_data': _originalData,
-        };
-
-        await _supabase
-            .from('mois')
-            .update(moiData)
-            .eq('id', _editingMoiId!);
-
-        setState(() {
-          _currentGroupId = groupId;
-        });
-
-        await _loadGroupedMois();
-        await _clearFormForNextEntry();
-        _phoneFocusNode.requestFocus(); // ✅ ADD THIS
-
-        return;
-      } catch (e) {
-        print('Error converting to group: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-          );
-        }
+    // Phone validation (optional)
+    String phoneNumber = _phoneController.text.trim();
+    if (phoneNumber.isNotEmpty) {
+      if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone number must be exactly 10 digits or leave it empty!'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
         return;
       }
     }
 
-    // CASE 3: Adding a NEW entry to an existing or new group
     try {
-      // CHECK FOR EXISTING ENTRY FIRST
-      final existingEntries = await _checkExistingEntry();
-
-      if (existingEntries.isNotEmpty) {
-        final shouldProceed = await _showExistingEntryDialog(existingEntries);
-
-        if (!shouldProceed) {
-          // User chose DISCARD - clear the form
-          _handleClear();
+      // ✅ CASE 1: Editing an existing entry in MOI Details
+      if (_isEditMode && _editingMoiId != null) {
+        // Check if there are changes
+        if (_hasNoChanges()) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No changes detected!'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
           return;
         }
+
+        // Find and update the entry in _groupedMois list
+        int index = _groupedMois.indexWhere((moi) => moi['id'] == _editingMoiId);
+        if (index != -1) {
+          // Build updated data
+          List<Map<String, dynamic>> personsData = [];
+          if (_person1Field1Controller.text.trim().isNotEmpty ||
+              _person1Field2Controller.text.trim().isNotEmpty) {
+            personsData.add({
+              'name': _person1Field1Controller.text.trim(),
+              'job': _person1Field2Controller.text.trim(),
+            });
+          }
+          if (_person2Controller.text.trim().isNotEmpty) {
+            personsData.add({
+              'details': _person2Controller.text.trim(),
+            });
+          }
+
+          setState(() {
+            _groupedMois[index] = {
+              ..._groupedMois[index],
+              'phone': _phoneController.text.trim(),
+              'village_name': _villageController.text.trim(),
+              'living_place': _livingPlaceController.text.trim(),
+              'notes': _notesController.text.trim(),
+              'amount': int.tryParse(_amountController.text) ?? 0,
+              'is_uncle': _isUncle,
+              'persons': personsData,
+              'is_modified': true, // Flag to track modification
+            };
+          });
+
+          // Clear edit mode
+          setState(() {
+            _isEditMode = false;
+            _editingMoiId = null;
+            _originalData = null;
+          });
+
+          await _clearFormForNextEntry();
+          _phoneFocusNode.requestFocus();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Entry updated in MOI Details!'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        }
+        return;
       }
 
-      await _loadNextSerialNo();
+      // ✅ CASE 2: Adding NEW entry to MOI Details (in memory only)
 
+      // Get or create group ID
       int groupId;
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
@@ -885,17 +958,56 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         groupId = await _getNextGroupId();
       }
 
-      final moiId = await _saveMoi(groupId, forceUpdate: false);
+      // Get next serial number
+      await _loadNextSerialNo();
 
-      if (moiId != null) {
-        setState(() {
-          _currentGroupId = groupId;
+      // Build persons data
+      List<Map<String, dynamic>> personsData = [];
+      if (_person1Field1Controller.text.trim().isNotEmpty ||
+          _person1Field2Controller.text.trim().isNotEmpty) {
+        personsData.add({
+          'name': _person1Field1Controller.text.trim(),
+          'job': _person1Field2Controller.text.trim(),
         });
+      }
+      if (_person2Controller.text.trim().isNotEmpty) {
+        personsData.add({
+          'details': _person2Controller.text.trim(),
+        });
+      }
 
-        await _loadGroupedMois();
-        await _clearFormForNextEntry();
-        _phoneFocusNode.requestFocus(); // ✅ ADD THIS
+      // Create temporary entry (not saved to DB yet)
+      final tempEntry = {
+        'id': 'temp_${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
+        'serial_no': _serialNo,
+        'phone': _phoneController.text.trim(),
+        'village_name': _villageController.text.trim(),
+        'living_place': _livingPlaceController.text.trim(),
+        'notes': _notesController.text.trim(),
+        'amount': int.tryParse(_amountController.text) ?? 0,
+        'payment_method': 'CASH', // Always CASH for grouped
+        'is_uncle': _isUncle,
+        'persons': personsData,
+        'group_id': groupId,
+        'is_temp': true, // Flag for temporary entry
+      };
 
+      setState(() {
+        _currentGroupId = groupId;
+        _groupedMois.add(tempEntry);
+      });
+
+      await _clearFormForNextEntry();
+      _phoneFocusNode.requestFocus();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Entry added to MOI Details. Add more or enter denominations.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       print('Error in group operation: $e');
@@ -929,7 +1041,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       'event_id': _eventId,
       'operator_id': _operatorId,
       'serial_no': _serialNo,
-      'amount': _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+      // ✅ FIXED: Always take from _amountController, store as integer
+      'amount': int.tryParse(_amountController.text) ?? 0,
       'payment_method': _paymentMethod,
       'persons': personsData,
       'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
@@ -996,53 +1109,182 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       'denom_1': 0,
     };
 
-    // ✅ ACCUMULATE counts for same denomination
+    // Accumulate counts for same denomination
     for (var row in _denomRows) {
       int? denom = row['selectedDenom'];
       int count = int.tryParse(row['countController'].text) ?? 0;
 
       if (denom != null && count != 0) {
-        // ✅ Add to existing value instead of replacing
         denomData['denom_$denom'] = (denomData['denom_$denom'] as int) + count;
       }
     }
 
-    await _supabase
-        .from('moi_denominations')
-        .upsert(denomData);
+    // ✅ For grouped entries, save denomination only for the FIRST entry
+    if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+      // Use the first entry's ID as the reference for denominations
+      String firstMoiId = _groupedMois[0]['id'];
+      await _supabase
+          .from('moi_denominations')
+          .upsert({...denomData, 'moi_id': firstMoiId});
+    } else {
+      // For single entry, use its own ID
+      await _supabase
+          .from('moi_denominations')
+          .upsert(denomData);
+    }
   }
 
   Future<void> _handleSaveAndPrint() async {
-    if (!_isEditMode) {
-      await _loadNextSerialNo();
-    }
+    // ✅ Check if we have grouped entries (final save mode)
+    bool isFinalSave = _groupedMois.isNotEmpty;
 
-    // ✅ ADD THIS SECTION HERE - CHECK FOR GLOBAL UPDATE
-    String phoneNumber = _phoneController.text.trim();
-    if (phoneNumber.isNotEmpty && phoneNumber.length == 10 && _hasAutoFilledDataChanged()) {
-      final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
+    if (isFinalSave) {
+      // ✅ FINAL SAVE VALIDATION
 
-      if (shouldUpdateAll) {
-        await _updateAllEntriesWithPhoneNumber(phoneNumber);
+      // 1. Check if MOI Details has entries
+      if (_groupedMois.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one entry to MOI Details!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
-    }
-    // ✅ END OF NEW CODE
 
-    // Auto-add to group if user forgot to click Group button
-    if (_currentGroupId != null && _hasFormData() && !_isEditMode) {
-      if (!await _validateForm()) return; // ✅ Add await
+      // 2. Calculate total from MOI Details
+      int totalGroupAmount = 0;
+      for (var entry in _groupedMois) {
+        var amount = entry['amount'];
+        if (amount is int) {
+          totalGroupAmount += amount;
+        } else if (amount is double) {
+          totalGroupAmount += amount.toInt();
+        } else if (amount != null) {
+          totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
+        }
+      }
 
+      // 3. Check denomination (only for CASH payment)
+      if (_paymentMethod == 'CASH') {
+        int denomTotal = _getTotalAmount();
+
+        // Denomination is MANDATORY
+        if (denomTotal == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter denomination details before saving!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // Validate denomination matches group total
+        if (totalGroupAmount != denomTotal) {
+          int difference = totalGroupAmount - denomTotal;
+          String message = difference > 0
+              ? 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+              : 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+
+        // Validate negative denominations
+        for (var row in _denomRows) {
+          int count = int.tryParse(row['countController'].text) ?? 0;
+          int? denom = row['selectedDenom'];
+
+          if (count < 0 && denom != null) {
+            int available = await _getAvailableBalance(denom);
+
+            if (count.abs() > available) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+              return;
+            }
+          }
+        }
+      }
+
+      // ✅ ALL VALIDATIONS PASSED - Save all entries to database
       try {
-        await _saveMoi(_currentGroupId);
-        await _loadGroupedMois();
+        List<String> savedMoiIds = [];
+
+        for (var entry in _groupedMois) {
+          // Prepare MOI data
+          final moiData = {
+            'event_id': _eventId,
+            'operator_id': _operatorId,
+            'serial_no': entry['serial_no'],
+            'amount': entry['amount'],
+            'payment_method': _paymentMethod,
+            'persons': entry['persons'],
+            'village_name': entry['village_name'],
+            'living_place': entry['living_place'],
+            'phone': entry['phone'],
+            'is_uncle': entry['is_uncle'] ?? false,
+            'notes': entry['notes'],
+            'group_id': _currentGroupId,
+            'updated_at': DateTime.now().toIso8601String(),
+          };
+
+          // Check if entry needs to be created or updated
+          if (entry['is_temp'] == true) {
+            // New entry - INSERT
+            moiData['created_at'] = DateTime.now().toIso8601String();
+
+            final response = await _supabase
+                .from('mois')
+                .insert(moiData)
+                .select()
+                .single();
+
+            savedMoiIds.add(response['id']);
+          } else {
+            // Existing entry - UPDATE (if modified)
+            if (entry['is_modified'] == true) {
+              moiData['old_data'] = entry; // Store old data
+
+              await _supabase
+                  .from('mois')
+                  .update(moiData)
+                  .eq('id', entry['id']);
+
+              savedMoiIds.add(entry['id']);
+            } else {
+              savedMoiIds.add(entry['id']);
+            }
+          }
+        }
+
+        // ✅ Save denomination ONCE for the group (using first entry's ID)
+        if (_paymentMethod == 'CASH' && savedMoiIds.isNotEmpty) {
+          await _saveDenominationsForGroup(savedMoiIds[0]);
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Entry automatically added to group and saved!'),
+            SnackBar(
+              content: Text('✅ Saved ${_groupedMois.length} entries with denominations!'),
               backgroundColor: Colors.green,
             ),
           );
+
+          // ✅ Clear everything including denominations after successful save
+          await _clearFormCompletely();
 
           Navigator.pushReplacementNamed(
             context,
@@ -1050,110 +1292,124 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             arguments: {'id': _eventId, 'operator_id': _operatorId},
           );
         }
-        return;
       } catch (e) {
-        print('Error auto-saving to group: $e');
+        print('Error saving grouped entries: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
           );
         }
-        return;
-      }
-    }
-
-    // Handle grouped entries - UPDATE MODE
-    if (_groupedMois.isNotEmpty) {
-      if (_isEditMode && _editingMoiId != null) {
-        if (!await _validateForm()) return; // ✅ Add await
-
-        // ✅ ADD THIS CHECK HERE - Compare current data with original
-        if (_hasNoChanges()) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No changes detected. Nothing to update.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          return;
-        }
-
-        try {
-          await _saveMoi(_currentGroupId, forceUpdate: true);
-          await _loadGroupedMois();
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Entry updated successfully!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-
-            Navigator.pushReplacementNamed(
-              context,
-              '/operator/collection-details',
-              arguments: {'id': _eventId, 'operator_id': _operatorId},
-            );
-          }
-          return;
-        } catch (e) {
-          print('Error updating: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-            );
-          }
-          return;
-        }
-      }
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/operator/collection-details',
-          arguments: {'id': _eventId, 'operator_id': _operatorId},
-        );
       }
       return;
     }
 
-    // Regular save for single entry
-    if (!await _validateForm()) return; // ✅ Add await
+    // ✅ SINGLE ENTRY MODE (no grouping)
 
-// CHECK FOR EXISTING ENTRY FIRST (only for new entries, not edit mode)
-    if (!_isEditMode && _currentGroupId == null) {
-      final existingEntries = await _checkExistingEntry();
-      // ... existing code
+    // Validate form
+    bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
+        _person2Controller.text.trim().isNotEmpty;
+
+    if (!hasValidPerson) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please add at least one person with a name')),
+      );
+      return;
     }
 
-// ✅ ADD THIS CHECK HERE - For single MOI edit mode
-    if (_isEditMode && _hasNoChanges()) {
+    String enteredAmountText = _amountController.text.trim();
+    if (enteredAmountText.isEmpty || int.tryParse(enteredAmountText) == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No changes detected. Nothing to update.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
+          content: Text('Amount is mandatory!'),
+          backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    try {
-      await _saveMoi(_currentGroupId, forceUpdate: _isEditMode);
-      if (mounted) {
+    // For single CASH entry, validate denomination
+    if (_paymentMethod == 'CASH') {
+      int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
+      int denomTotal = _getTotalAmount();
 
-        if (_isEditMode) {
+      if (denomTotal == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter denomination details')),
+        );
+        return;
+      }
+
+      if (denomTotal != enteredAmount) {
+        int difference = enteredAmount - denomTotal;
+        String message = difference > 0
+            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Check for global update
+    String phoneNumber = _phoneController.text.trim();
+    if (phoneNumber.isNotEmpty && phoneNumber.length == 10 && _hasAutoFilledDataChanged()) {
+      final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
+      if (shouldUpdateAll) {
+        await _updateAllEntriesWithPhoneNumber(phoneNumber);
+      }
+    }
+
+    // Handle EDIT mode
+    if (_isEditMode && _editingMoiId != null) {
+      if (_hasNoChanges()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No changes detected.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      try {
+        await _saveMoi(null, forceUpdate: true);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Entry updated successfully!'), backgroundColor: Colors.green),
+          );
+
           Navigator.pushReplacementNamed(
             context,
             '/operator/collection-details',
             arguments: {'id': _eventId, 'operator_id': _operatorId},
           );
-        } else {
-          await _clearFormForNextEntry();
-          _phoneFocusNode.requestFocus(); // ✅ ADD THIS
         }
+      } catch (e) {
+        print('Error updating: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+      return;
+    }
+
+    // Save new single entry
+    // Save new single entry
+    try {
+      await _saveMoi(null, forceUpdate: false);
+
+      if (mounted) {
+        await _clearFormCompletely(); // ✅ Changed from _clearFormForNextEntry
+        _phoneFocusNode.requestFocus();
       }
     } catch (e) {
       print('Error saving: $e');
@@ -1163,6 +1419,38 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
     }
+  }
+
+  Future<void> _saveDenominationsForGroup(String firstMoiId) async {
+    // Build denomination data from rows
+    Map<String, dynamic> denomData = {
+      'moi_id': firstMoiId,
+      'event_id': _eventId!,
+      'operator_id': _operatorId!,
+      'denom_500': 0,
+      'denom_200': 0,
+      'denom_100': 0,
+      'denom_50': 0,
+      'denom_20': 0,
+      'denom_10': 0,
+      'denom_5': 0,
+      'denom_1': 0,
+    };
+
+    // Accumulate counts
+    for (var row in _denomRows) {
+      int? denom = row['selectedDenom'];
+      int count = int.tryParse(row['countController'].text) ?? 0;
+
+      if (denom != null && count != 0) {
+        denomData['denom_$denom'] = (denomData['denom_$denom'] as int) + count;
+      }
+    }
+
+    // Save denomination (linked to first MOI entry)
+    await _supabase
+        .from('moi_denominations')
+        .upsert(denomData);
   }
 
   bool _hasFormData() {
@@ -1184,7 +1472,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     // Compare amount
     var originalAmount = _originalData!['amount'];
-    int currentAmount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
+    int currentAmount = int.tryParse(_amountController.text) ?? 0;
     bool amountChanged = originalAmount != currentAmount;
 
     // Compare persons
@@ -1213,20 +1501,118 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           currentP1Job != origP1Job ||
           currentP2Details != origP2Details;
     } else {
-      // If original had no persons but current has
       personsChanged = _person1Field1Controller.text.trim().isNotEmpty ||
           _person1Field2Controller.text.trim().isNotEmpty ||
           _person2Controller.text.trim().isNotEmpty;
     }
 
+    // ✅ NEW: Check if denominations changed (for CASH payment)
+    bool denominationsChanged = false;
+    if (_paymentMethod == 'CASH' && _originalData!['payment_method'] == 'CASH') {
+      int currentDenomTotal = _getTotalAmount();
+      if (originalAmount != currentDenomTotal) {
+        denominationsChanged = true;
+      }
+    }
+
     // Return true if NO changes detected
     return !phoneChanged && !villageChanged && !livingPlaceChanged &&
         !notesChanged && !paymentMethodChanged && !isUncleChanged &&
-        !amountChanged && !personsChanged;
+        !amountChanged && !personsChanged && !denominationsChanged;
   }
 
   // Update the _validateForm() method
   Future<bool> _validateForm() async {
+    /// ✅ Check if we have grouped entries (final save mode)
+    bool isFinalSave = _groupedMois.isNotEmpty;
+
+    if (isFinalSave) {
+      // ✅ FINAL SAVE VALIDATION - Only check MOI Details and Denomination
+
+      // 1. Check if MOI Details has at least one entry
+      if (_groupedMois.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one entry to MOI Details before saving!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return false;
+      }
+
+      // 2. Check denomination only if CASH payment (not Cheque/Advance/UPI)
+      if (_paymentMethod == 'CASH') {
+        int denomTotal = _getTotalAmount();
+
+        // Calculate total from MOI Details
+        int totalGroupAmount = 0;
+        for (var entry in _groupedMois) {
+          var amount = entry['amount'];
+          if (amount is int) {
+            totalGroupAmount += amount;
+          } else if (amount is double) {
+            totalGroupAmount += amount.toInt();
+          } else if (amount != null) {
+            totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
+          }
+        }
+
+        // Denomination is MANDATORY for CASH
+        if (denomTotal == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please enter denomination details before saving!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return false;
+        }
+
+        // Validate denomination matches group total
+        if (totalGroupAmount != denomTotal) {
+          int difference = totalGroupAmount - denomTotal;
+          String message = difference > 0
+              ? 'Group total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
+              : 'Group total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          return false;
+        }
+
+        // Validate negative denominations
+        for (var row in _denomRows) {
+          int count = int.tryParse(row['countController'].text) ?? 0;
+          int? denom = row['selectedDenom'];
+
+          if (count < 0 && denom != null) {
+            int available = await _getAvailableBalance(denom);
+
+            if (count.abs() > available) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
+                  backgroundColor: Colors.red,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+              return false;
+            }
+          }
+        }
+      }
+
+      return true; // ✅ Final save validation passed
+    }
+
+    // ✅ GROUPING VALIDATION - Only check person name and amount
+
+    // 1. Check at least one person has a name
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
 
@@ -1237,7 +1623,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return false;
     }
 
-    // Phone validation
+    // 2. Phone validation (optional, only if entered)
     String phoneNumber = _phoneController.text.trim();
     if (phoneNumber.isNotEmpty) {
       if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
@@ -1252,81 +1638,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // Validate negative denominations
-    if (_paymentMethod == 'CASH') {
-      for (var row in _denomRows) {
-        int count = int.tryParse(row['countController'].text) ?? 0;
-        int? denom = row['selectedDenom'];
-
-        if (count < 0 && denom != null) {
-          int available = await _getAvailableBalance(denom);
-
-          if (count.abs() > available) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-            return false;
-          }
-        }
-      }
-    }
-
-    // Phone number validation for edit mode (critical fields)
-    if (_isEditMode) {
-      bool isEditingCriticalFields = false;
-
-      if (_originalData != null) {
-        var originalAmount = _originalData!['amount'];
-        int currentAmount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
-        if (originalAmount != currentAmount) {
-          isEditingCriticalFields = true;
-        }
-
-        if (_originalData!['payment_method'] != _paymentMethod) {
-          isEditingCriticalFields = true;
-        }
-
-        if (_paymentMethod == 'CASH' && _originalData!['payment_method'] == 'CASH') {
-          int currentDenomTotal = _getTotalAmount();
-          if (originalAmount != currentDenomTotal) {
-            isEditingCriticalFields = true;
-          }
-        }
-      }
-
-      if (isEditingCriticalFields) {
-        String phoneNumber = _phoneController.text.trim();
-
-        if (phoneNumber.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Phone number is mandatory when editing amount, payment method, or denominations!'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          _phoneFocusNode.requestFocus();
-          return false;
-        }
-
-        if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Phone number must be exactly 10 digits!'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          return false;
-        }
-      }
-    }
-
-    // Amount validation - ALWAYS mandatory regardless of CASH or OTHERS
+    // 3. Amount validation - mandatory for grouping
     String enteredAmountText = _amountController.text.trim();
     if (enteredAmountText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1351,37 +1663,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return false;
     }
 
-    // CASH payment validation
-    if (_paymentMethod == 'CASH') {
-      int denomTotal = _getTotalAmount();
-
-      if (denomTotal == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter denomination details')),
-        );
-        return false;
-      }
-
-      // Validate amount matches denomination
-      if (denomTotal != enteredAmount) {
-        int difference = enteredAmount - denomTotal;
-        String message = difference > 0
-            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
-            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        return false;
-      }
-    }
-
-    return true;
+    return true; // ✅ Grouping validation passed
   }
+
 
   Future<void> _clearFormForNextEntry() async {
     await _loadNextSerialNo();
@@ -1396,12 +1680,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _person1Field2Controller.clear();
     _person2Controller.clear();
 
-    // Clear denomination rows
-    for (var row in _denomRows) {
-      row['countController'].dispose();
-    }
-    _denomRows.clear();
-    _initializeDenominations();
+    // ✅ DON'T clear denominations - keep them intact
+    // ✅ DON'T clear _denomRows
+    // ✅ DON'T clear _currentGroupId or _groupedMois
 
     setState(() {
       _paymentMethod = 'CASH';
@@ -1412,10 +1693,43 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     });
   }
 
-  void _handleAddEntry() {
-    _clearFormForNextEntry();
-    _phoneFocusNode.requestFocus(); // ✅ ADD THIS
+  Future<void> _clearFormCompletely() async {
+    await _loadNextSerialNo();
 
+    _phoneController.clear();
+    _villageController.clear();
+    _livingPlaceController.clear();
+    _notesController.clear();
+    _amountController.clear();
+
+    _person1Field1Controller.clear();
+    _person1Field2Controller.clear();
+    _person2Controller.clear();
+
+    // ✅ Clear denomination rows completely
+    for (var row in _denomRows) {
+      row['countController'].dispose();
+      if (row.containsKey('denomController')) {
+        row['denomController'].dispose();
+      }
+    }
+    _denomRows.clear();
+    _initializeDenominations();
+
+    setState(() {
+      _paymentMethod = 'CASH';
+      _isUncle = false;
+      _isEditMode = false;
+      _editingMoiId = null;
+      _originalData = null;
+      _currentGroupId = null;
+      _groupedMois.clear();
+    });
+  }
+
+  void _handleAddEntry() async {
+    await _clearFormForNextEntry(); // ✅ Uses the version that keeps denominations
+    _phoneFocusNode.requestFocus();
   }
 
   void _handleClear() async {
@@ -1977,6 +2291,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _handleSaveAndPrint();
               return KeyEventResult.handled;
             }
+            // In the Focus widget's onKeyEvent, add:
+// After Ctrl+G handler, add Ctrl+Enter handler:
+            if (event.logicalKey == LogicalKeyboardKey.enter &&
+                HardwareKeyboard.instance.isControlPressed) {
+              _handleGroup();
+              return KeyEventResult.handled;
+            }
+
+// Add Ctrl+D handler for denomination:
+            if (event.logicalKey == LogicalKeyboardKey.keyD &&
+                HardwareKeyboard.instance.isControlPressed) {
+              // Focus first denomination field
+              if (_denomRows.isNotEmpty) {
+                FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+              }
+              return KeyEventResult.handled;
+            }
             // Check for Ctrl+G
             if (event.logicalKey == LogicalKeyboardKey.keyG &&
                 (event.logicalKey.keyLabel == 'g' || event.logicalKey.keyLabel == 'G') &&
@@ -2089,13 +2420,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             const SizedBox(height: 12),
             _buildAmountField(),
             const SizedBox(height: 12),
+
+            // ✅ MOVED HERE - MOI Details after Amount, before Denomination
+            if (_groupedMois.isNotEmpty) _buildMoiDetails(),
+            const SizedBox(height: 12),
+            // ✅ Denomination comes after MOI Details
             if (_paymentMethod == 'CASH') _buildDenominations(),
             const SizedBox(height: 12),
             if (_paymentMethod == 'CASH') _buildAmountSummary(),
             const SizedBox(height: 12),
-            if (_groupedMois.isNotEmpty) _buildMoiDetails(),
-            const SizedBox(height: 12),
             _buildActionButtons(),
+
           ],
         ),
       ),
@@ -2341,6 +2676,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: _amountController,
+              focusNode: _amountFocusNode,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -2461,15 +2797,27 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
                   List<int> validDenoms = [1, 5, 10, 20, 50, 100, 200, 500];
 
+                  // ✅ FIXED: Check if the typed value exactly matches a valid denomination
                   if (!validDenoms.contains(typedValue)) {
-                    denomController.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
+                    // Only show error if user has finished typing (not while typing "200")
+                    // Check if the current value could potentially become a valid denomination
+                    bool couldBeValid = validDenoms.any((denom) => denom.toString().startsWith(value));
+
+                    if (!couldBeValid) {
+                      denomController.clear();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      setState(() {
+                        row['selectedDenom'] = null;
+                      });
+                      return;
+                    }
+                    // If could be valid (e.g., typed "2" which could become "20" or "200"), don't set yet
                     return;
                   }
 
@@ -2489,6 +2837,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
                 child: TextField(
                   controller: controller,
+                  focusNode: index == 0 ? _firstDenomFocusNode : null,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
@@ -2622,6 +2971,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Widget _buildMoiDetails() {
+    // ✅ Calculate totals
+    int totalCount = _groupedMois.length;
+    int totalAmount = 0;
+
+    for (var entry in _groupedMois) {
+      var amount = entry['amount'];
+      if (amount is int) {
+        totalAmount += amount;
+      } else if (amount is double) {
+        totalAmount += amount.toInt();
+      } else if (amount != null) {
+        totalAmount += int.tryParse(amount.toString()) ?? 0;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -2631,6 +2995,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2657,6 +3022,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ],
             ),
           ),
+
+          // List of entries
           Container(
             constraints: const BoxConstraints(maxHeight: 180),
             child: _groupedMois.isEmpty
@@ -2673,70 +3040,186 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 final moi = _groupedMois[index];
                 final isCurrentlyEditing = _editingMoiId == moi['id'];
 
-                return InkWell(
-                  // ✅ ADD DOUBLE-CLICK TO DELETE
-                  onDoubleTap: () => _handleDeleteFromGroup(moi),
-                  onTap: () => _loadGroupedEntryForEdit(moi),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: isCurrentlyEditing ? Colors.blue.shade50 : Colors.transparent,
-                      border: isCurrentlyEditing ? Border.all(color: Colors.blue, width: 2) : null,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _getPersonsDisplay(moi['persons']),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                  color: isCurrentlyEditing ? Colors.blue : Colors.black,
-                                ),
-                              ),
-                              if (moi['village_name'] != null)
-                                Text(
-                                  moi['village_name'],
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
-                                  ),
-                                ),
-                            ],
-                          ),
+                // ✅ Format amount as integer
+                var amountValue = moi['amount'];
+                int displayAmount = 0;
+                if (amountValue is int) {
+                  displayAmount = amountValue;
+                } else if (amountValue is double) {
+                  displayAmount = amountValue.toInt();
+                } else if (amountValue != null) {
+                  displayAmount = int.tryParse(amountValue.toString()) ?? 0;
+                }
+
+                return Dismissible(
+                  key: Key(moi['id']),
+                  direction: DismissDirection.horizontal,
+                  confirmDismiss: (direction) async {
+                    return await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => AlertDialog(
+                        title: const Text(
+                          '🗑️ Delete Entry',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                         ),
-                        if (isCurrentlyEditing)
-                          Container(
-                            margin: const EdgeInsets.only(right: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.blue,
-                              borderRadius: BorderRadius.circular(10),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Do you want to delete this entry from the group?',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 12),
+                            Text('Serial No: O${moi['serial_no']}'),
+                            Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
+                            if (moi['village_name'] != null)
+                              Text('Village: ${moi['village_name']}'),
+                            Text('Amount: ₹$displayAmount'),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.grey[200],
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                             ),
                             child: const Text(
-                              'EDITING',
-                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              'CANCEL',
+                              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
                             ),
                           ),
-                        Text(
-                          '₹${moi['amount']}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: isCurrentlyEditing ? Colors.blue : Colors.green,
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.red[100],
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            ),
+                            child: const Text(
+                              'DELETE',
+                              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
+                    );
+                  },
+                  onDismissed: (direction) async {
+                    await _handleDeleteFromGroup(moi);
+                  },
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(left: 20),
+                    child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                  ),
+                  secondaryBackground: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                  ),
+                  child: InkWell(
+                    onTap: () => _loadGroupedEntryForEdit(moi),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: isCurrentlyEditing
+                            ? Colors.blue.shade50
+                            : (moi['is_temp'] == true ? Colors.yellow[50] : Colors.transparent),
+                        border: isCurrentlyEditing
+                            ? Border.all(color: Colors.blue, width: 2)
+                            : (moi['is_temp'] == true ? Border.all(color: Colors.orange, width: 1) : null),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getPersonsDisplay(moi['persons']),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                    color: isCurrentlyEditing ? Colors.blue : Colors.black,
+                                  ),
+                                ),
+                                if (moi['village_name'] != null)
+                                  Text(
+                                    moi['village_name'],
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (isCurrentlyEditing)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'EDITING',
+                                style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          Text(
+                            '₹$displayAmount',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isCurrentlyEditing ? Colors.blue : Colors.green,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
               },
             ),
           ),
+
+          // ✅ NEW: Total Count and Total Amount at bottom
+          if (_groupedMois.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                border: const Border(top: BorderSide(color: Colors.black, width: 2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Total Count: $totalCount',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  Text(
+                    'Total Amount: ₹$totalAmount',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -2971,6 +3454,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   void dispose() {
     _phoneController.dispose();
     _phoneFocusNode.dispose(); // ✅ ADD THIS
+    _amountFocusNode.dispose(); // ✅ ADD
+    _firstDenomFocusNode.dispose(); // ✅ ADD
     _villageController.dispose();
     _livingPlaceController.dispose();
     _notesController.dispose();
