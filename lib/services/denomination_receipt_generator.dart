@@ -382,6 +382,7 @@ class DenominationReceiptGenerator {
     <div class="info-line">$customerName</div>
     <div class="info-line">$eventTypeName</div>
     <div class="info-line">$venue</div>
+    <div class="info-line">$city</div>
     <div class="info-line">$contactNumber</div>
     <div class="info-line">நாள் : $dateStr</div>
   </div>
