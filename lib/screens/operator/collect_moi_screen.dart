@@ -1215,6 +1215,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+
   Future<void> _handleSaveAndPrint() async {
     // ✅ FIRST: Check if editing a single entry with no changes (before anything else)
     if (_isEditMode && _editingMoiId != null && _currentGroupId == null && _hasNoChanges()) {
@@ -1356,6 +1357,82 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _saveDenominationsForGroup(savedMoiIds[0]);
         }
 
+        // ✅ NEW: Show receipt type selection dialog for group
+        if (mounted) {
+          final receiptType = await showDialog<String>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text(
+                'Generate Receipt',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: const Text(
+                'How would you like to generate the receipts?',
+                style: TextStyle(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'single'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.blue[50],
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text(
+                    'Single Receipt',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'group'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.green[50],
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text(
+                    'Group Receipt',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'cancel'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.grey[200],
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (receiptType == null || receiptType == 'cancel') {
+            // User cancelled, just clear form
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+            return;
+          }
+
+          // Generate receipt based on selection
+          if (receiptType == 'single') {
+            await _generateSplitGroupReceipts();
+          } else if (receiptType == 'group') {
+            await _generateConsolidatedGroupReceipt();
+          }
+        }
+
         if (mounted) {
           await _clearFormCompletely();
           _phoneFocusNode.requestFocus();
@@ -1437,7 +1514,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         await _saveMoi(null, forceUpdate: true);
 
         if (mounted) {
-          // ✅ NO success message - just clear and stay on page
           await _clearFormCompletely();
           _phoneFocusNode.requestFocus();
         }
@@ -1452,12 +1528,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-// Save new single entry
+    // Save new single entry
     try {
       await _saveMoi(null, forceUpdate: false);
 
       if (mounted) {
-        // ✅ NO success message - just clear and stay on page
         await _clearFormCompletely();
         _phoneFocusNode.requestFocus();
       }
@@ -1470,6 +1545,149 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
   }
+
+  Future<void> _generateSplitGroupReceipts() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Generating ${_groupedMois.length} receipts...'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      List<Map<String, dynamic>> entriesWithDenoms = [];
+      for (var entry in _groupedMois) {
+        Map<String, dynamic> entryData = Map.from(entry);
+        if (entry['payment_method'] == 'CASH') {
+          entryData['denominations'] = await _getDenominations(entry['id']);
+        }
+        entriesWithDenoms.add(entryData);
+      }
+
+      final files = await MoiReceiptGenerator.generateSplitGroupReceipts(
+        context: context,
+        operatorName: operatorName,
+        eventDate: eventDetails['event_date'],
+        eventTime: eventDetails['event_time'],
+        groupEntries: entriesWithDenoms,
+      );
+
+      if (files.isNotEmpty && mounted) {
+        Navigator.pushNamed(
+          context,
+          '/operator/moi-receipt-preview',
+          arguments: {
+            'receipt_type': 'split',
+            'receipt_files': files,
+          },
+        );
+      } else {
+        throw Exception('Failed to generate receipts');
+      }
+    } catch (e) {
+      print('Error generating split receipts: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+// ✅ NEW: Generate consolidated group receipt
+  Future<void> _generateConsolidatedGroupReceipt() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      double totalAmount = 0.0;
+      Map<int, int> totalDenominations = {
+        500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+      };
+
+      for (var entry in _groupedMois) {
+        var amountValue = entry['amount'];
+        if (amountValue is int) {
+          totalAmount += amountValue.toDouble();
+        } else if (amountValue is double) {
+          totalAmount += amountValue;
+        } else if (amountValue is num) {
+          totalAmount += amountValue.toDouble();
+        }
+
+        if (entry['payment_method'] == 'CASH') {
+          final denoms = await _getDenominations(entry['id']);
+          if (denoms != null) {
+            denoms.forEach((denom, count) {
+              totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+            });
+          }
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Generating group receipt...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final file = await MoiReceiptGenerator.generateGroupMoiReceipt(
+        context: context,
+        groupId: _currentGroupId!,
+        operatorName: operatorName,
+        eventDate: eventDetails['event_date'],
+        eventTime: eventDetails['event_time'],
+        groupEntries: _groupedMois,
+        totalAmount: totalAmount,
+        totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+      );
+
+      if (file != null && mounted) {
+        Navigator.pushNamed(
+          context,
+          '/operator/moi-receipt-preview',
+          arguments: {
+            'receipt_type': 'group',
+            'receipt_file': file,
+          },
+        );
+      } else {
+        throw Exception('Failed to generate group receipt');
+      }
+    } catch (e) {
+      print('Error generating group receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
 
 
   Future<void> _saveDenominationsForGroup(String firstMoiId) async {
@@ -3424,28 +3642,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ),
         const SizedBox(height: 8),
 
-        // Receipt generation buttons
-        if (_currentGroupId != null && _groupedMois.isNotEmpty) ...[
-          Container(
-            width: double.infinity,
-            height: 42,
-            decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _handleGenerateGroupReceipt,
-                child: const Center(
-                  child: Text(
-                    'Generate Group Receipt',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
+        // ✅ REMOVED: Generate Group Receipt button (now integrated into Save & Print)
 
+        // Generate single receipt only for non-grouped entries
         if (_currentGroupId == null && (_isEditMode || _hasFormData())) ...[
           Container(
             width: double.infinity,
