@@ -52,6 +52,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Store the original auto-filled data to track changes
   Map<String, dynamic>? _autoFilledData;
 
+  // Event details for receipt footer
+  String? _customerName;
+  String? _city;
+  String? _customerPhone;
+
   @override
   void initState() {
     super.initState();
@@ -106,11 +111,34 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  Future<void> _loadEventDetails() async {
+    if (_eventId == null) return;
+
+    try {
+      final response = await _supabase
+          .from('events')
+          .select('customer_name, city, customer_phone')
+          .eq('id', _eventId!)
+          .single();
+
+      setState(() {
+        _customerName = response['customer_name'];
+        _city = response['city'];
+        _customerPhone = response['customer_phone'];
+      });
+    } catch (e) {
+      print('Error loading event details: $e');
+    }
+  }
+
+
   Future<void> _loadArguments() async {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
       _eventId = args['id'];
       _operatorId = args['operator_id'];
+      // ✅ NEW: Load event details for receipt footer
+      await _loadEventDetails();
 
       if (args['edit_mode'] == true && args['moi_data'] != null) {
         _isEditMode = true;
@@ -1215,7 +1243,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-
   Future<void> _handleSaveAndPrint() async {
     // ✅ FIRST: Check if editing a single entry with no changes (before anything else)
     if (_isEditMode && _editingMoiId != null && _currentGroupId == null && _hasNoChanges()) {
@@ -1357,7 +1384,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _saveDenominationsForGroup(savedMoiIds[0]);
         }
 
-        // ✅ NEW: Show receipt type selection dialog for group
+        // ✅ Show receipt type selection dialog for group
         if (mounted) {
           final receiptType = await showDialog<String>(
             context: context,
@@ -1508,29 +1535,95 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    // ✅ EDIT MODE: Update existing entry
-    if (_isEditMode && _editingMoiId != null) {
-      try {
-        await _saveMoi(null, forceUpdate: true);
+    // Save single entry
+    try {
+      String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
 
-        if (mounted) {
-          await _clearFormCompletely();
-          _phoneFocusNode.requestFocus();
+      // ✅ Generate receipt after saving
+      if (moiId != null && mounted) {
+        final operatorName = await _getOperatorName();
+        final eventDetails = await _getEventDetails();
+
+        // ✅ Build denominations from current form
+        // ✅ Build denominations from current form
+        // ✅ Build denominations from current form
+        Map<int, int>? denominations;
+        if (_paymentMethod == 'CASH') {
+          print('🎯 Payment method is CASH, building denominations...');
+          print('🎯 Number of _denomRows: ${_denomRows.length}');
+
+          denominations = {
+            500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+          };
+
+          for (var row in _denomRows) {
+            int? denom = row['selectedDenom'];
+            int count = int.tryParse(row['countController'].text) ?? 0;
+            print('🎯 Row: denom=$denom, count=$count');
+            if (denom != null && count != 0) {
+              denominations[denom] = (denominations[denom] ?? 0) + count;
+            }
+          }
+
+          print('🔍 Denominations BEFORE validation: $denominations');
+
+          // ✅ CRITICAL: Check if we have any non-zero denominations
+          bool hasNonZeroDenoms = denominations.values.any((count) => count != 0);
+          print('🔍 Has non-zero denominations: $hasNonZeroDenoms');
+
+          if (!hasNonZeroDenoms) {
+            print('⚠️ WARNING: All denominations are zero in Save&Print! Setting to null.');
+            denominations = null;
+          } else {
+            print('✅ Valid denominations found: $denominations');
+          }
         }
-      } catch (e) {
-        print('Error updating: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+
+        print('🔍 FINAL denominations being passed to receipt generator: $denominations');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Generating receipt...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 1),
+          ),
+        );
+
+        print('🎯 About to call generateSingleMoiReceipt with:');
+        print('   - paymentMethod: $_paymentMethod');
+        print('   - denominations: $denominations');
+
+        final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
+          context: context,
+          serialNo: _serialNo!,
+          operatorName: operatorName,
+          eventDate: eventDetails['event_date'],
+          eventTime: eventDetails['event_time'],
+          villageName: _villageController.text.trim(),
+          livingPlace: _livingPlaceController.text.trim(),
+          person1Name: _person1Field1Controller.text.trim(),
+          person1Job: _person1Field2Controller.text.trim(),
+          person2Details: _person2Controller.text.trim(),
+          phone: _phoneController.text.trim(),
+          amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+          paymentMethod: _paymentMethod,
+          denominations: denominations,
+          customerName: _customerName,
+          city: _city,
+          customerPhone: _customerPhone,
+        );
+
+        if (file != null && mounted) {
+          Navigator.pushNamed(
+            context,
+            '/operator/moi-receipt-preview',
+            arguments: {
+              'receipt_type': 'single',
+              'receipt_file': file,
+            },
           );
         }
       }
-      return;
-    }
-
-    // Save new single entry
-    try {
-      await _saveMoi(null, forceUpdate: false);
 
       if (mounted) {
         await _clearFormCompletely();
@@ -1578,6 +1671,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventDate: eventDetails['event_date'],
         eventTime: eventDetails['event_time'],
         groupEntries: entriesWithDenoms,
+        customerName: _customerName,  // ✅ NEW
+        city: _city,                  // ✅ NEW
+        customerPhone: _customerPhone, // ✅ NEW
       );
 
       if (files.isNotEmpty && mounted) {
@@ -1659,6 +1755,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         groupEntries: _groupedMois,
         totalAmount: totalAmount,
         totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+        customerName: _customerName,  // ✅ NEW
+        city: _city,                  // ✅ NEW
+        customerPhone: _customerPhone, // ✅ NEW
       );
 
       if (file != null && mounted) {
@@ -2231,11 +2330,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGenerateSingleReceipt() async {
-    if (!await _validateForm()) return; // ✅ Add await
+    print('🎯 _handleGenerateSingleReceipt called');
+
+    if (!await _validateForm()) return;
 
     setState(() => _isLoading = true);
 
     try {
+      print('🎯 Payment method: $_paymentMethod');
+      print('🎯 Is edit mode: $_isEditMode');
+      print('🎯 Editing MOI ID: $_editingMoiId');
+      print('🎯 Current group ID: $_currentGroupId');
+
       String? moiId = _editingMoiId;
       if (moiId == null) {
         moiId = await _saveMoi(_currentGroupId, forceUpdate: false);
@@ -2247,10 +2353,51 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       final operatorName = await _getOperatorName();
       final eventDetails = await _getEventDetails();
 
+      print('🎯 Before denomination check - Payment method: $_paymentMethod');
+
       Map<int, int>? denominations;
       if (_paymentMethod == 'CASH') {
-        denominations = await _getDenominations(moiId);
+        print('🎯 Inside CASH denomination block');
+        print('🎯 Building denominations from form (_denomRows)');
+        print('🎯 Number of denom rows: ${_denomRows.length}');
+
+        denominations = {
+          500: 0,
+          200: 0,
+          100: 0,
+          50: 0,
+          20: 0,
+          10: 0,
+          5: 0,
+          1: 0,
+        };
+
+        for (var row in _denomRows) {
+          int? denom = row['selectedDenom'];
+          int count = int.tryParse(row['countController'].text) ?? 0;
+
+          print('🎯 Processing row: denom=$denom, count=$count');
+
+          if (denom != null && count != 0) {
+            denominations[denom] = (denominations[denom] ?? 0) + count;
+          }
+        }
+
+        print('✅ Denominations built from form: $denominations');
+
+        // ✅ CRITICAL: Check if denominations map has any non-zero values
+        bool hasNonZeroDenoms = denominations.values.any((count) => count != 0);
+        print('🔍 Has non-zero denominations: $hasNonZeroDenoms');
+
+        if (!hasNonZeroDenoms) {
+          print('⚠️ WARNING: All denominations are zero!');
+          denominations = null; // Don't pass empty denominations
+        }
+      } else {
+        print('🎯 Payment method is NOT CASH: $_paymentMethod');
       }
+
+      print('🔍 Final denominations being passed to receipt generator: $denominations');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2262,34 +2409,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
 
-      // Parse person1Name (split by dot)
-      String person1Name = _person1Field1Controller.text.trim();
-      String person1Init = '';
-      String person1NameOnly = person1Name;
-      if (person1Name.contains('.')) {
-        List<String> parts = person1Name.split('.');
-        person1Init = parts[0].trim();
-        person1NameOnly = parts.length > 1 ? parts.sublist(1).join('.').trim() : person1Name;
-      }
-
-// Parse person1Job (no splitting needed, pass as-is or split if needed)
-      String person1Job = _person1Field2Controller.text.trim();
-
-// Parse person2Details
-      String person2Details = _person2Controller.text.trim();
-      String person2Init = '';
-      String person2NameOnly = '';
-      if (person2Details.isNotEmpty && person2Details.contains(',')) {
-        List<String> parts = person2Details.split(',');
-        String namePart = parts[0].trim();
-        if (namePart.contains('.')) {
-          List<String> nameParts = namePart.split('.');
-          person2Init = nameParts[0].trim();
-          person2NameOnly = nameParts.length > 1 ? nameParts.sublist(1).join('.').trim() : namePart;
-        } else {
-          person2NameOnly = namePart;
-        }
-      }
+      print('🎯 About to call generateSingleMoiReceipt with:');
+      print('   - paymentMethod: $_paymentMethod');
+      print('   - denominations: $denominations');
 
       final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
         context: context,
@@ -2299,14 +2421,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventTime: eventDetails['event_time'],
         villageName: _villageController.text.trim(),
         livingPlace: _livingPlaceController.text.trim(),
-        person1Init: person1Init,
-        person1Name: person1NameOnly,
-        person2Init: person2Init,
-        person2Name: person2NameOnly.isNotEmpty ? person2NameOnly : null,
+        person1Name: _person1Field1Controller.text.trim(),
+        person1Job: _person1Field2Controller.text.trim(),
+        person2Details: _person2Controller.text.trim(),
         phone: _phoneController.text.trim(),
         amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
         paymentMethod: _paymentMethod,
         denominations: denominations,
+        customerName: _customerName,
+        city: _city,
+        customerPhone: _customerPhone,
       );
 
       if (file != null && mounted) {
@@ -2322,6 +2446,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         throw Exception('Failed to generate receipt');
       }
     } catch (e) {
+      print('❌ Error in _handleGenerateSingleReceipt: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -2491,6 +2616,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           groupEntries: _groupedMois,
           totalAmount: totalAmount,
           totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+          customerName: _customerName,  // ✅ NEW
+          city: _city,                  // ✅ NEW
+          customerPhone: _customerPhone, // ✅ NEW
         );
 
         if (file != null && mounted) {
@@ -2531,6 +2659,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           eventDate: eventDetails['event_date'],
           eventTime: eventDetails['event_time'],
           groupEntries: entriesWithDenoms,
+          customerName: _customerName,  // ✅ NEW
+          city: _city,                  // ✅ NEW
+          customerPhone: _customerPhone, // ✅ NEW
         );
 
         if (files.isNotEmpty && mounted) {

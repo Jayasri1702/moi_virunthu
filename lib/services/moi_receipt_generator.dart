@@ -16,14 +16,17 @@ class MoiReceiptGenerator {
     required TimeOfDay eventTime,
     String? villageName,
     String? livingPlace,
-    String? person1Init,
     String? person1Name,
-    String? person2Init,
-    String? person2Name,
+    String? person1Job,
+    String? person2Details,
     String? phone,
     required num amount,
     required String paymentMethod,
     Map<int, int>? denominations,
+    // ✅ NEW: Event details for footer
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) async {
     try {
       // Use different template based on payment method
@@ -35,14 +38,16 @@ class MoiReceiptGenerator {
         eventTime: eventTime,
         villageName: villageName,
         livingPlace: livingPlace,
-        person1Init: person1Init,
         person1Name: person1Name,
-        person2Init: person2Init,
-        person2Name: person2Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
         phone: phone,
         amount: amount,
         paymentMethod: paymentMethod,
         denominations: denominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
       )
           : _generateSingleMoiHtmlOthers(
         serialNo: serialNo,
@@ -51,13 +56,15 @@ class MoiReceiptGenerator {
         eventTime: eventTime,
         villageName: villageName,
         livingPlace: livingPlace,
-        person1Init: person1Init,
         person1Name: person1Name,
-        person2Init: person2Init,
-        person2Name: person2Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
         phone: phone,
         amount: amount,
         paymentMethod: paymentMethod,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
       );
 
       final output = await getTemporaryDirectory();
@@ -71,27 +78,25 @@ class MoiReceiptGenerator {
       HeadlessInAppWebView? headlessWebView;
 
       headlessWebView = HeadlessInAppWebView(
-          initialData: InAppWebViewInitialData(data: htmlContent),
-          initialSettings: InAppWebViewSettings(
-            javaScriptEnabled: true,
-            useHybridComposition: true,
-          ),
-          initialSize: Size(302, 800), // ADD THIS LINE
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
         onLoadStop: (controller, url) async {
           try {
             await Future.delayed(const Duration(milliseconds: 1500));
 
-            // Get the actual content height
             final contentHeight = await controller.evaluateJavascript(
                 source: "document.body.scrollHeight"
             );
 
-            int height = 800; // default
+            int height = 800;
             if (contentHeight != null) {
               height = int.tryParse(contentHeight.toString()) ?? 800;
             }
 
-            // Resize to actual content
             await headlessWebView?.setSize(Size(302, height.toDouble()));
             await Future.delayed(const Duration(milliseconds: 500));
 
@@ -101,9 +106,8 @@ class MoiReceiptGenerator {
               final pdf = pw.Document();
               final image = pw.MemoryImage(screenshot);
 
-              // Calculate PDF height based on content
               final pdfWidth = 80 * PdfPageFormat.mm;
-              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
+              final pdfHeight = (height / 302) * pdfWidth;
 
               pdf.addPage(
                 pw.Page(
@@ -118,10 +122,10 @@ class MoiReceiptGenerator {
               await file.writeAsBytes(await pdf.save());
               generatedFile = file;
               pdfGenerated = true;
-              print('Denomination receipt PDF generated: $filePath');
+              print('Single receipt PDF generated: $filePath');
             }
           } catch (e) {
-            print('Error generating denomination receipt PDF: $e');
+            print('Error generating single receipt PDF: $e');
           } finally {
             if (headlessWebView != null) {
               await headlessWebView.dispose();
@@ -155,193 +159,7 @@ class MoiReceiptGenerator {
     }
   }
 
-  // Generate consolidated group MOI receipt
-  static Future<File?> generateGroupMoiReceipt({
-    required BuildContext context,
-    required int groupId,
-    required String operatorName,
-    required DateTime eventDate,
-    required TimeOfDay eventTime,
-    required List<Map<String, dynamic>> groupEntries,
-    required num totalAmount,
-    Map<int, int>? totalDenominations,
-  }) async {
-    try {
-      // Check if any entry has OTHERS payment method
-      bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
-
-      final htmlContent = hasOthersPayment
-          ? _generateGroupMoiHtmlOthers(
-        groupId: groupId,
-        operatorName: operatorName,
-        eventDate: eventDate,
-        eventTime: eventTime,
-        groupEntries: groupEntries,
-        totalAmount: totalAmount,
-      )
-          : _generateGroupMoiHtml(
-        groupId: groupId,
-        operatorName: operatorName,
-        eventDate: eventDate,
-        eventTime: eventTime,
-        groupEntries: groupEntries,
-        totalAmount: totalAmount,
-        totalDenominations: totalDenominations,
-      );
-
-      final output = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'moi_group_${groupId}_$timestamp.pdf';
-      final filePath = '${output.path}/$fileName';
-
-      File? generatedFile;
-      bool pdfGenerated = false;
-
-      HeadlessInAppWebView? headlessWebView;
-
-      headlessWebView = HeadlessInAppWebView(
-        initialData: InAppWebViewInitialData(data: htmlContent),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          useHybridComposition: true,
-        ),
-        onLoadStop: (controller, url) async {
-          try {
-            await Future.delayed(const Duration(milliseconds: 1500));
-
-            final screenshot = await controller.takeScreenshot();
-
-            if (screenshot != null) {
-              final pdf = pw.Document();
-              final image = pw.MemoryImage(screenshot);
-
-              pdf.addPage(
-                pw.Page(
-                  pageFormat: PdfPageFormat(
-                    80 * PdfPageFormat.mm,
-                    297 * PdfPageFormat.mm,
-                    marginAll: 0,
-                  ),
-                  build: (pw.Context context) {
-                    return pw.Center(
-                      child: pw.Image(image, fit: pw.BoxFit.contain),
-                    );
-                  },
-                ),
-              );
-
-              final file = File(filePath);
-              await file.writeAsBytes(await pdf.save());
-              generatedFile = file;
-              pdfGenerated = true;
-              print('Group MOI PDF generated: $filePath');
-            }
-          } catch (e) {
-            print('Error generating group MOI PDF: $e');
-          } finally {
-            if (headlessWebView != null) {
-              await headlessWebView.dispose();
-            }
-          }
-        },
-        onConsoleMessage: (controller, consoleMessage) {
-          print('WebView Console: ${consoleMessage.message}');
-        },
-      );
-
-      await headlessWebView.run();
-
-      int attempts = 0;
-      while (attempts < 30 && !pdfGenerated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (pdfGenerated) {
-          final file = File(filePath);
-          if (await file.exists() && await file.length() > 0) {
-            generatedFile = file;
-            break;
-          }
-        }
-        attempts++;
-      }
-
-      return generatedFile;
-    } catch (e) {
-      print('Error in generateGroupMoiReceipt: $e');
-      return null;
-    }
-  }
-
-  // Generate split group receipts (individual receipts for each entry)
-  static Future<List<File>> generateSplitGroupReceipts({
-    required BuildContext context,
-    required String operatorName,
-    required DateTime eventDate,
-    required TimeOfDay eventTime,
-    required List<Map<String, dynamic>> groupEntries,
-  }) async {
-    List<File> generatedFiles = [];
-
-    for (var entry in groupEntries) {
-      // Parse persons data
-      String? person1Init;
-      String? person1Name;
-      String? person2Init;
-      String? person2Name;
-
-      if (entry['persons'] != null) {
-        List<dynamic> personsList = entry['persons'] as List;
-        if (personsList.isNotEmpty) {
-          person1Init = personsList[0]['init'];
-          person1Name = personsList[0]['name'];
-        }
-        if (personsList.length > 1) {
-          person2Init = personsList[1]['init'];
-          person2Name = personsList[1]['name'];
-        }
-      }
-
-      // Parse denominations if payment is CASH
-      Map<int, int>? denominations;
-      if (entry['payment_method'] == 'CASH' && entry['denominations'] != null) {
-        denominations = {
-          500: entry['denominations']['denom_500'] ?? 0,
-          200: entry['denominations']['denom_200'] ?? 0,
-          100: entry['denominations']['denom_100'] ?? 0,
-          50: entry['denominations']['denom_50'] ?? 0,
-          20: entry['denominations']['denom_20'] ?? 0,
-          10: entry['denominations']['denom_10'] ?? 0,
-          5: entry['denominations']['denom_5'] ?? 0,
-          1: entry['denominations']['denom_1'] ?? 0,
-        };
-      }
-
-      final file = await generateSingleMoiReceipt(
-        context: context,
-        serialNo: entry['serial_no'],
-        operatorName: operatorName,
-        eventDate: eventDate,
-        eventTime: eventTime,
-        villageName: entry['village_name'],
-        livingPlace: entry['living_place'],
-        person1Init: person1Init,
-        person1Name: person1Name,
-        person2Init: person2Init,
-        person2Name: person2Name,
-        phone: entry['phone'],
-        amount: entry['amount'],
-        paymentMethod: entry['payment_method'],
-        denominations: denominations,
-      );
-
-      if (file != null) {
-        generatedFiles.add(file);
-      }
-    }
-
-    return generatedFiles;
-  }
-
-  // HTML template for single MOI receipt
+  // HTML template for single MOI receipt (CASH)
   static String _generateSingleMoiHtml({
     required int serialNo,
     required String operatorName,
@@ -349,87 +167,101 @@ class MoiReceiptGenerator {
     required TimeOfDay eventTime,
     String? villageName,
     String? livingPlace,
-    String? person1Init,
     String? person1Name,
-    String? person2Init,
-    String? person2Name,
+    String? person1Job,
+    String? person2Details,
     String? phone,
     required num amount,
     required String paymentMethod,
     Map<int, int>? denominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
-    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime
-        .minute.toString().padLeft(2, '0')} ${eventTime.hour < 12
-        ? 'am'
-        : 'pm'}';
+    // ✅ FIXED: Use current date/time for receipt generation
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd-MM-yyyy').format(now);
+    final timeStr = DateFormat('hh.mm a').format(now);
 
     // Build person display
     String personDisplay = '';
     if (person1Name != null && person1Name.isNotEmpty) {
-      personDisplay += '${person1Init ?? ''}.${person1Name ?? ''}\n';
+      personDisplay += '$person1Name\n';
+      if (person1Job != null && person1Job.isNotEmpty) {
+        personDisplay += '$person1Job\n';
+      }
     }
-    if (person2Name != null && person2Name.isNotEmpty) {
-      personDisplay += '${person2Init ?? ''}.${person2Name ?? ''}';
+    if (person2Details != null && person2Details.isNotEmpty) {
+      personDisplay += person2Details;
     }
 
-    // Build denomination table
+    // ✅ FIXED: Build denomination table with received/return logic
     String denomTable = '';
-    num receivedAmount = 0; // CHANGED from int to num
-    num returnAmount = 0; // CHANGED from int to num
+    num receivedAmount = 0;
+    num returnAmount = 0;
 
     if (paymentMethod == 'CASH' && denominations != null) {
       List<int> denomKeys = [500, 200, 100, 50, 20, 10, 5, 1];
 
+      // Separate positive (received) and negative (return) denominations
+      Map<int, int> receivedDenoms = {};
+      Map<int, int> returnDenoms = {};
+
       for (int denom in denomKeys) {
         int count = denominations[denom] ?? 0;
         if (count > 0) {
-          num total = denom * count; // CHANGED from int to num
-          receivedAmount += total;
-          denomTable += '''
-            <tr>
-              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
-              <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
-              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
-              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
-            </tr>
-          ''';
+          receivedDenoms[denom] = count;
+          receivedAmount += denom * count;
+        } else if (count < 0) {
+          returnDenoms[denom] = count.abs();
+          returnAmount += denom * count.abs();
         }
       }
 
-      // Calculate return
-      returnAmount = receivedAmount - amount;
-
-      if (receivedAmount > 0) {
-        denomTable += '''
-          <tr>
-            <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">Received</td>
-            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$receivedAmount</td>
-          </tr>
-        ''';
-      }
-
-      if (returnAmount > 0) {
-        denomTable += '''
-          <tr>
-            <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">Return</td>
-            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$returnAmount</td>
-          </tr>
-        ''';
-
-        // Calculate return denominations
-        num remaining = returnAmount;
+      // ✅ Build received table
+      if (receivedDenoms.isNotEmpty) {
         for (int denom in denomKeys) {
-          if (remaining >= denom) {
-            int count = remaining ~/ denom;
-            remaining = remaining % denom;
+          if (receivedDenoms.containsKey(denom)) {
+            int count = receivedDenoms[denom]!;
+            num total = denom * count;
             denomTable += '''
               <tr>
                 <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
                 <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
                 <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
-                <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">${denom *
-                count}</td>
+                <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
+              </tr>
+            ''';
+          }
+        }
+
+        denomTable += '''
+          <tr>
+            <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #e8f5e9;">Received</td>
+            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #e8f5e9;">$receivedAmount</td>
+          </tr>
+        ''';
+      }
+
+      // ✅ Build return table
+      if (returnDenoms.isNotEmpty) {
+        denomTable += '''
+          <tr>
+            <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #fff3e0;">Return</td>
+            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #fff3e0;">$returnAmount</td>
+          </tr>
+        ''';
+
+        for (int denom in denomKeys) {
+          if (returnDenoms.containsKey(denom)) {
+            int count = returnDenoms[denom]!;
+            num total = denom * count;
+            denomTable += '''
+              <tr>
+                <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
+                <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
+                <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
+                <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
               </tr>
             ''';
           }
@@ -571,7 +403,6 @@ class MoiReceiptGenerator {
   <div class="header">Single Receipt</div>
   
   <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
   
   <div class="divider"></div>
   
@@ -588,18 +419,12 @@ class MoiReceiptGenerator {
   
   <div class="serial-no">வ.எண் : $serialNo</div>
   
-  ${villageName != null && villageName.isNotEmpty
-        ? '<div class="village-info">$villageName</div>'
-        : ''}
-  ${livingPlace != null && livingPlace.isNotEmpty
-        ? '<div class="village-info">$livingPlace</div>'
-        : ''}
+  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
   
   <div class="person-details">$personDisplay</div>
   
-  ${phone != null && phone.isNotEmpty
-        ? '<div class="phone">($phone)</div>'
-        : ''}
+  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   
   <div class="amount-label">தொகை</div>
   <div class="amount">₹${amount.round()}</div>
@@ -612,25 +437,441 @@ class MoiReceiptGenerator {
   <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்...</div>
-    ${person1Name != null ? '<div class="person-details">${person1Init ??
-        ''}.${person1Name}</div>' : ''}
-    ${villageName != null && villageName.isNotEmpty
-        ? '<div class="village-info">$villageName</div>'
-        : ''}
-    ${phone != null && phone.isNotEmpty
-        ? '<div class="phone">$phone</div>'
-        : ''}
+    ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
   </div>
 </body>
 </html>
 ''';
   }
 
-  // Replace the _generateGroupMoiHtml method in moi_receipt_generator.dart
-// Starting from around line 486
+  // HTML template for single MOI receipt (OTHERS - Cheque/Advance/UPI)
+  static String _generateSingleMoiHtmlOthers({
+    required int serialNo,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    String? villageName,
+    String? livingPlace,
+    String? person1Name,
+    String? person1Job,
+    String? person2Details,
+    String? phone,
+    required num amount,
+    required String paymentMethod,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) {
+    // ✅ FIXED: Use current date/time
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd-MM-yyyy').format(now);
+    final timeStr = DateFormat('hh.mm a').format(now);
 
-  // Replace the _generateGroupMoiHtml method in moi_receipt_generator.dart
-// Starting from around line 486
+    // Build person display
+    String personDisplay = '';
+    if (person1Name != null && person1Name.isNotEmpty) {
+      personDisplay += '$person1Name\n';
+      if (person1Job != null && person1Job.isNotEmpty) {
+        personDisplay += '$person1Job\n';
+      }
+    }
+    if (person2Details != null && person2Details.isNotEmpty) {
+      personDisplay += person2Details;
+    }
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Noto Sans Tamil', sans-serif;
+      width: 302px;
+      padding: 10px;
+      text-align: center;
+      background: white;
+    }
+    
+    .header {
+      background-color: #1976D2;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .company-name {
+      font-size: 22px;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #000;
+    }
+    
+    .company-phone {
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #000;
+    }
+    
+    .divider {
+      border-top: 2px solid black;
+      margin: 10px 0;
+    }
+    
+    .date-time-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+      font-size: 14px;
+      border: 2px solid black;
+      padding: 8px;
+    }
+    
+    .left-section {
+      text-align: left;
+    }
+    
+    .right-section {
+      text-align: right;
+      font-weight: bold;
+    }
+    
+    .serial-no {
+      font-size: 18px;
+      font-weight: bold;
+      margin: 12px 0;
+      text-align: center;
+    }
+    
+    .person-details {
+      font-size: 16px;
+      margin: 8px 0;
+      white-space: pre-line;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+    
+    .village-info {
+      font-size: 15px;
+      margin: 6px 0;
+      font-weight: 500;
+    }
+    
+    .phone {
+      font-size: 16px;
+      margin: 8px 0;
+      font-weight: bold;
+    }
+    
+    .amount-label {
+      font-size: 16px;
+      font-weight: bold;
+      margin-top: 12px;
+    }
+    
+    .amount {
+      font-size: 28px;
+      font-weight: bold;
+      margin: 10px 0;
+      color: #000;
+    }
+    
+    .payment-method-box {
+      border: 2px solid black;
+      padding: 12px;
+      margin: 15px 0;
+      font-size: 16px;
+      font-weight: bold;
+      background-color: #f5f5f5;
+    }
+    
+    .footer {
+      margin-top: 15px;
+      font-size: 15px;
+      border-top: 2px solid black;
+      padding-top: 12px;
+    }
+    
+    .thanks {
+      margin: 8px 0;
+      font-weight: bold;
+    }
+    
+    .with-love {
+      font-size: 14px;
+      margin: 6px 0;
+    }
+    
+    .footer-person {
+      font-size: 16px;
+      font-weight: bold;
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">Check / Advance / UPI Receipt</div>
+  
+  <div class="company-name">பேச்சி மொய் டெக்</div>
+  
+  <div class="divider"></div>
+  
+  <div class="date-time-row">
+    <div class="left-section">
+      <div>$dateStr</div>
+      <div>$timeStr</div>
+    </div>
+    <div class="right-section">
+      <div>Typer</div>
+      <div>$operatorName</div>
+    </div>
+  </div>
+  
+  <div class="serial-no">வ.எண் : $serialNo</div>
+  
+  <div class="person-details">$personDisplay</div>
+  
+  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+  
+  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+  
+  <div class="amount-label">தொகை</div>
+  <div class="amount">₹${amount.round()}</div>
+  
+  <div class="payment-method-box">Check / Advance / UPI</div>
+  
+  <div class="footer">
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்...</div>
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-person">$customerName</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
+</body>
+</html>
+''';
+  }
+
+  // Generate split group receipts (individual receipts for each entry)
+  static Future<List<File>> generateSplitGroupReceipts({
+    required BuildContext context,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    required List<Map<String, dynamic>> groupEntries,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) async {
+    List<File> generatedFiles = [];
+
+    for (var entry in groupEntries) {
+      // ✅ FIXED: Parse persons data correctly
+      String? person1Name;
+      String? person1Job;
+      String? person2Details;
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          person1Name = personsList[0]['name'];
+          person1Job = personsList[0]['job'];
+        }
+        if (personsList.length > 1) {
+          person2Details = personsList[1]['details'];
+        }
+      }
+
+      // Parse denominations if payment is CASH
+      Map<int, int>? denominations;
+      if (entry['payment_method'] == 'CASH' && entry['denominations'] != null) {
+        denominations = {
+          500: entry['denominations']['denom_500'] ?? 0,
+          200: entry['denominations']['denom_200'] ?? 0,
+          100: entry['denominations']['denom_100'] ?? 0,
+          50: entry['denominations']['denom_50'] ?? 0,
+          20: entry['denominations']['denom_20'] ?? 0,
+          10: entry['denominations']['denom_10'] ?? 0,
+          5: entry['denominations']['denom_5'] ?? 0,
+          1: entry['denominations']['denom_1'] ?? 0,
+        };
+      }
+
+      final file = await generateSingleMoiReceipt(
+        context: context,
+        serialNo: entry['serial_no'],
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: entry['village_name'],
+        livingPlace: entry['living_place'],
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: entry['phone'],
+        amount: entry['amount'],
+        paymentMethod: entry['payment_method'],
+        denominations: denominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+      );
+
+      if (file != null) {
+        generatedFiles.add(file);
+      }
+    }
+
+    return generatedFiles;
+  }
+
+  // Generate consolidated group MOI receipt
+  static Future<File?> generateGroupMoiReceipt({
+    required BuildContext context,
+    required int groupId,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    required List<Map<String, dynamic>> groupEntries,
+    required num totalAmount,
+    Map<int, int>? totalDenominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) async {
+    try {
+      bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
+
+      final htmlContent = hasOthersPayment
+          ? _generateGroupMoiHtmlOthers(
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        groupEntries: groupEntries,
+        totalAmount: totalAmount,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+      )
+          : _generateGroupMoiHtml(
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        groupEntries: groupEntries,
+        totalAmount: totalAmount,
+        totalDenominations: totalDenominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+      );
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_group_${groupId}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? generatedFile;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+// Get the actual content height
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800; // default
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+// Resize to actual content
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+            if (screenshot != null) {
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              // Calculate PDF height based on content
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Center(
+                      child: pw.Image(image, fit: pw.BoxFit.contain),
+                    );
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              generatedFile = file;
+              pdfGenerated = true;
+              print('Group MOI PDF generated: $filePath');
+            }
+          } catch (e) {
+            print('Error generating group MOI PDF: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) {
+          final file = File(filePath);
+          if (await file.exists() && await file.length() > 0) {
+            generatedFile = file;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      return generatedFile;
+    } catch (e) {
+      print('Error in generateGroupMoiReceipt: $e');
+      return null;
+    }
+  }
 
   static String _generateGroupMoiHtml({
     required int groupId,
@@ -640,14 +881,14 @@ class MoiReceiptGenerator {
     required List<Map<String, dynamic>> groupEntries,
     required num totalAmount,
     Map<int, int>? totalDenominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
-    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime
-        .minute.toString().padLeft(2, '0')} ${eventTime.hour < 12
-        ? 'am'
-        : 'pm'}';
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd-MM-yyyy').format(now);
+    final timeStr = DateFormat('hh.mm a').format(now);
 
-    // Build entries list
     String entriesHtml = '';
     for (var entry in groupEntries) {
       String personDisplay = '';
@@ -666,7 +907,6 @@ class MoiReceiptGenerator {
       String villageName = entry['village_name'] ?? '';
       String livingPlace = entry['living_place'] ?? '';
 
-      // Safely handle amount - convert to int for display
       var amountValue = entry['amount'];
       int amount = 0;
       if (amountValue is int) {
@@ -681,12 +921,8 @@ class MoiReceiptGenerator {
       <div class="entry-block">
         <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
         <div class="person-name">$personDisplay</div>
-        ${villageName.isNotEmpty
-          ? '<div class="village-info">$villageName</div>'
-          : ''}
-        ${livingPlace.isNotEmpty
-          ? '<div class="village-info">$livingPlace</div>'
-          : ''}
+        ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+        ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
         <div class="amount-label">தொகை</div>
         <div class="entry-amount">₹$amount</div>
       </div>
@@ -694,59 +930,75 @@ class MoiReceiptGenerator {
     ''';
     }
 
-    // Build denomination table for total
     String denomTable = '';
     if (totalDenominations != null) {
       List<int> denomKeys = [500, 200, 100, 50, 20, 10, 5, 1];
 
+      Map<int, int> receivedDenoms = {};
+      Map<int, int> returnDenoms = {};
+      num receivedAmount = 0;
+      num returnAmount = 0;
+
       for (int denom in denomKeys) {
         int count = totalDenominations[denom] ?? 0;
         if (count > 0) {
-          int total = denom * count;
-          denomTable += '''
-          <tr>
-            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
-            <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
-            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
-            <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
-          </tr>
-        ''';
+          receivedDenoms[denom] = count;
+          receivedAmount += denom * count;
+        } else if (count < 0) {
+          returnDenoms[denom] = count.abs();
+          returnAmount += denom * count.abs();
         }
       }
 
-      // Calculate received amount safely
-      int receivedAmount = 0;
-      totalDenominations.forEach((denom, count) {
-        receivedAmount += (denom * count);
-      });
+      if (receivedDenoms.isNotEmpty) {
+        for (int denom in denomKeys) {
+          if (receivedDenoms.containsKey(denom)) {
+            int count = receivedDenoms[denom]!;
+            int total = denom * count;
+            denomTable += '''
+            <tr>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
+            </tr>
+          ''';
+          }
+        }
 
-      if (receivedAmount > 0) {
         denomTable += '''
-  <tr>
-    <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">Received</td>
-    <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$receivedAmount</td>
-  </tr>
-''';
+        <tr>
+          <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #e8f5e9;">Received</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #e8f5e9;">$receivedAmount</td>
+        </tr>
+      ''';
+      }
+
+      if (returnDenoms.isNotEmpty) {
+        denomTable += '''
+        <tr>
+          <td colspan="3" style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #fff3e0;">Return</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold; background-color: #fff3e0;">$returnAmount</td>
+        </tr>
+      ''';
+
+        for (int denom in denomKeys) {
+          if (returnDenoms.containsKey(denom)) {
+            int count = returnDenoms[denom]!;
+            int total = denom * count;
+            denomTable += '''
+            <tr>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
+              <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
+            </tr>
+          ''';
+          }
+        }
       }
     }
 
-    // Get first entry's details for footer
-    String footerName = '';
-    String footerVillage = '';
-    String footerPhone = '';
-
-    if (groupEntries.isNotEmpty) {
-      var firstEntry = groupEntries.first;
-      if (firstEntry['persons'] != null &&
-          (firstEntry['persons'] as List).isNotEmpty) {
-        var person = (firstEntry['persons'] as List).first;
-        footerName = '${person['init'] ?? ''}.${person['name'] ?? ''}';
-      }
-      footerVillage = firstEntry['village_name'] ?? '';
-      footerPhone = firstEntry['phone'] ?? '';
-    }
-
-    // Convert totalAmount to int for display
     int displayTotal = totalAmount.round();
 
     return '''
@@ -905,8 +1157,7 @@ class MoiReceiptGenerator {
   <div class="header">Group Moi Receipt</div>
   
   <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
-  
+
   <div class="divider"></div>
   
   <div class="date-time-row">
@@ -935,229 +1186,9 @@ class MoiReceiptGenerator {
   <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்...</div>
-    ${footerName.isNotEmpty ? '<div class="footer-name">$footerName</div>' : ''}
-    ${footerVillage.isNotEmpty
-        ? '<div class="village-info">$footerVillage</div>'
-        : ''}
-    ${footerPhone.isNotEmpty
-        ? '<div class="village-info">$footerPhone</div>'
-        : ''}
-  </div>
-</body>
-</html>
-''';
-  }
-
-
-  // Add this method to moi_receipt_generator.dart after _generateSingleMoiHtml
-
-  static String _generateSingleMoiHtmlOthers({
-    required int serialNo,
-    required String operatorName,
-    required DateTime eventDate,
-    required TimeOfDay eventTime,
-    String? villageName,
-    String? livingPlace,
-    String? person1Init,
-    String? person1Name,
-    String? person2Init,
-    String? person2Name,
-    String? phone,
-    required num amount,
-    required String paymentMethod,
-  }) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
-    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime.minute.toString().padLeft(2, '0')} ${eventTime.hour < 12 ? 'am' : 'pm'}';
-
-    // Build person display
-    String personDisplay = '';
-    if (person1Name != null && person1Name.isNotEmpty) {
-      personDisplay += '${person1Init ?? ''}.${person1Name ?? ''}\n';
-    }
-    if (person2Name != null && person2Name.isNotEmpty) {
-      personDisplay += '${person2Init ?? ''}.${person2Name ?? ''}';
-    }
-
-    return '''
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 10px;
-      text-align: center;
-      background: white;
-    }
-    
-    .header {
-      background-color: #1976D2;
-      color: white;
-      font-size: 18px;
-      font-weight: bold;
-      padding: 10px;
-      margin-bottom: 10px;
-    }
-    
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-    }
-    
-    .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
-    
-    .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
-    
-    .serial-no {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 12px 0;
-      text-align: center;
-    }
-    
-    .person-details {
-      font-size: 16px;
-      margin: 8px 0;
-      white-space: pre-line;
-      line-height: 1.5;
-      font-weight: 500;
-    }
-    
-    .village-info {
-      font-size: 15px;
-      margin: 6px 0;
-      font-weight: 500;
-    }
-    
-    .phone {
-      font-size: 16px;
-      margin: 8px 0;
-      font-weight: bold;
-    }
-    
-    .amount-label {
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 12px;
-    }
-    
-    .amount {
-      font-size: 28px;
-      font-weight: bold;
-      margin: 10px 0;
-      color: #000;
-    }
-    
-    .payment-method-box {
-      border: 2px solid black;
-      padding: 12px;
-      margin: 15px 0;
-      font-size: 16px;
-      font-weight: bold;
-      background-color: #f5f5f5;
-    }
-    
-    .footer {
-      margin-top: 15px;
-      font-size: 15px;
-      border-top: 2px solid black;
-      padding-top: 12px;
-    }
-    
-    .thanks {
-      margin: 8px 0;
-      font-weight: bold;
-    }
-    
-    .with-love {
-      font-size: 14px;
-      margin: 6px 0;
-    }
-    
-    .footer-person {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 6px 0;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">Check / Advance / UPI Receipt</div>
-  
-  <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
-  
-  <div class="divider"></div>
-  
-  <div class="date-time-row">
-    <div class="left-section">
-      <div>$dateStr</div>
-      <div>$timeStr</div>
-    </div>
-    <div class="right-section">
-      <div>Typer</div>
-      <div>$operatorName</div>
-    </div>
-  </div>
-  
-  <div class="serial-no">வ.எண் : $serialNo</div>
-  
-  <div class="person-details">$personDisplay</div>
-  
-  ${person1Init != null && person1Init.isNotEmpty ? '<div class="village-info">${person1Init}.${person1Name ?? ''}</div>' : ''}
-  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
-  
-  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
-  
-  <div class="amount-label">தொகை</div>
-  <div class="amount">₹${amount.round().toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{2})+(\d)(?!\d))'), (Match m) => '${m[1]},')}}</div>
-  
-  <div class="payment-method-box">Check / Advance / UPI</div>
-  
-  <div class="footer">
-    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-    <div class="with-love">அன்புடன்...</div>
-    ${person1Name != null ? '<div class="footer-person">${person1Init ?? ''}.${person1Name}</div>' : ''}
-    ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-    ${phone != null && phone.isNotEmpty ? '<div class="phone">$phone</div>' : ''}
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="village-info">$customerPhone</div>' : ''}
   </div>
 </body>
 </html>
@@ -1171,11 +1202,14 @@ class MoiReceiptGenerator {
     required TimeOfDay eventTime,
     required List<Map<String, dynamic>> groupEntries,
     required num totalAmount,
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
-    final timeStr = '${eventTime.hour.toString().padLeft(2, '0')}.${eventTime.minute.toString().padLeft(2, '0')} ${eventTime.hour < 12 ? 'am' : 'pm'}';
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd-MM-yyyy').format(now);
+    final timeStr = DateFormat('hh.mm a').format(now);
 
-    // Build entries list
     String entriesHtml = '';
     for (var entry in groupEntries) {
       String personDisplay = '';
@@ -1215,21 +1249,6 @@ class MoiReceiptGenerator {
       </div>
       <div class="divider"></div>
     ''';
-    }
-
-    // Get first entry's details for footer
-    String footerName = '';
-    String footerVillage = '';
-    String footerPhone = '';
-
-    if (groupEntries.isNotEmpty) {
-      var firstEntry = groupEntries.first;
-      if (firstEntry['persons'] != null && (firstEntry['persons'] as List).isNotEmpty) {
-        var person = (firstEntry['persons'] as List).first;
-        footerName = '${person['init'] ?? ''}.${person['name'] ?? ''}';
-      }
-      footerVillage = firstEntry['village_name'] ?? '';
-      footerPhone = firstEntry['phone'] ?? '';
     }
 
     int displayTotal = totalAmount.round();
@@ -1387,7 +1406,6 @@ class MoiReceiptGenerator {
   <div class="header">Group Check / Advance / UPI Receipt</div>
   
   <div class="company-name">பேச்சி மொய் டெக்</div>
-  <div class="company-phone">9043606296, 9047556443</div>
   
   <div class="divider"></div>
   
@@ -1416,13 +1434,12 @@ class MoiReceiptGenerator {
   <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்...</div>
-    ${footerName.isNotEmpty ? '<div class="footer-name">$footerName</div>' : ''}
-    ${footerVillage.isNotEmpty ? '<div class="village-info">$footerVillage</div>' : ''}
-    ${footerPhone.isNotEmpty ? '<div class="village-info">$footerPhone</div>' : ''}
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="village-info">$customerPhone</div>' : ''}
   </div>
 </body>
 </html>
 ''';
   }
 }
-
