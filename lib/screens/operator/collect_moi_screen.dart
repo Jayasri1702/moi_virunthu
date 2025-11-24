@@ -1384,80 +1384,190 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _saveDenominationsForGroup(savedMoiIds[0]);
         }
 
-        // ✅ Show receipt type selection dialog for group
-        if (mounted) {
-          final receiptType = await showDialog<String>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text(
-                'Generate Receipt',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              content: const Text(
-                'How would you like to generate the receipts?',
-                style: TextStyle(fontSize: 14),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'single'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.blue[50],
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text(
-                    'Single Receipt',
-                    style: TextStyle(
-                      color: Colors.blue,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'group'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.green[50],
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text(
-                    'Group Receipt',
-                    style: TextStyle(
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'cancel'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey[200],
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
+        // ✅ Check if group has only one entry
+        String? receiptType;
+        if (_groupedMois.length == 1) {
+          // Directly generate single receipt for one entry with current form denominations
+          setState(() => _isLoading = true);
 
-          if (receiptType == null || receiptType == 'cancel') {
-            // User cancelled, just clear form
-            await _clearFormCompletely();
-            _phoneFocusNode.requestFocus();
-            return;
-          }
+          try {
+            final operatorName = await _getOperatorName();
+            final eventDetails = await _getEventDetails();
 
-          // Generate receipt based on selection
-          if (receiptType == 'single') {
-            await _generateSplitGroupReceipts();
-          } else if (receiptType == 'group') {
-            await _generateConsolidatedGroupReceipt();
+            // ✅ Build denominations from current form (same as group receipt)
+            Map<int, int>? denominations;
+            if (_paymentMethod == 'CASH') {
+              denominations = {
+                500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+              };
+
+              for (var row in _denomRows) {
+                int? denom = row['selectedDenom'];
+                int count = int.tryParse(row['countController'].text) ?? 0;
+                if (denom != null && count != 0) {
+                  denominations[denom] = (denominations[denom] ?? 0) + count;
+                }
+              }
+
+              // Check if we have any non-zero denominations
+              bool hasNonZeroDenoms = denominations.values.any((count) => count != 0);
+              if (!hasNonZeroDenoms) {
+                denominations = null;
+              }
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Generating receipt...'),
+                  backgroundColor: Colors.blue,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            }
+
+            var entry = _groupedMois[0];
+
+            // Parse persons data
+            String? person1Name;
+            String? person1Job;
+            String? person2Details;
+            if (entry['persons'] != null) {
+              List<dynamic> personsList = entry['persons'] as List;
+              if (personsList.isNotEmpty) {
+                person1Name = personsList[0]['name'];
+                person1Job = personsList[0]['job'];
+              }
+              if (personsList.length > 1) {
+                person2Details = personsList[1]['details'];
+              }
+            }
+
+            final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
+              context: context,
+              serialNo: entry['serial_no'],
+              operatorName: operatorName,
+              eventDate: eventDetails['event_date'],
+              eventTime: eventDetails['event_time'],
+              villageName: entry['village_name'],
+              livingPlace: entry['living_place'],
+              person1Name: person1Name,
+              person1Job: person1Job,
+              person2Details: person2Details,
+              phone: entry['phone'],
+              amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+              paymentMethod: _paymentMethod,
+              denominations: denominations,  // ✅ Using form denominations
+              customerName: _customerName,
+              city: _city,
+              customerPhone: _customerPhone,
+            );
+
+            if (file != null && mounted) {
+              Navigator.pushNamed(
+                context,
+                '/operator/moi-receipt-preview',
+                arguments: {
+                  'receipt_type': 'single',
+                  'receipt_file': file,
+                },
+              );
+            }
+
+            if (mounted) {
+              await _clearFormCompletely();
+              _phoneFocusNode.requestFocus();
+            }
+          } catch (e) {
+            print('Error generating single receipt: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } finally {
+            setState(() => _isLoading = false);
           }
+          return;  // ✅ Exit early, don't show dialog
+        } else {
+          // Show receipt type selection dialog for multiple entries
+          if (mounted) {
+            receiptType = await showDialog<String>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                title: const Text(
+                  'Generate Receipt',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                content: const Text(
+                  'How would you like to generate the receipts?',
+                  style: TextStyle(fontSize: 14),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'single'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.blue[50],
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text(
+                      'Single Receipt',
+                      style: TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'group'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.green[50],
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text(
+                      'Group Receipt',
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'cancel'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+
+        if (receiptType == null || receiptType == 'cancel') {
+          // User cancelled, just clear form
+          await _clearFormCompletely();
+          _phoneFocusNode.requestFocus();
+          return;
+        }
+
+// Generate receipt based on selection
+        if (receiptType == 'single') {
+          await _generateSplitGroupReceipts();
+        } else if (receiptType == 'group') {
+          await _generateConsolidatedGroupReceipt();
         }
 
         if (mounted) {
