@@ -9,6 +9,8 @@ import 'similar_entries_screen.dart';
 import 'double_entries_screen.dart';
 import 'modified_report_screen.dart';
 import 'cash_managements_screen.dart';
+import '../../services/receipt_generator.dart';
+import 'package:printing/printing.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -432,6 +434,20 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),  // ✅ CORRECT - Outside the Row
+                  Row(                          // ✅ CORRECT - Separate Row
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
+                          _showSampleReceipt();
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(), // Empty placeholder
+                      ),
+                    ],
+                  ),
 
                   const SizedBox(height: 20),
                 ],
@@ -525,4 +541,172 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       ),
     );
   }
+
+  Future<void> _showSampleReceipt() async {
+    try {
+      final eventTypeName = eventData!['event_types']?['name'] ?? 'Event';
+      final customerName = eventData!['customer_name'] ?? 'N/A';
+      final venue = eventData!['venue'] ?? 'N/A';
+      final city = eventData!['city'] ?? 'N/A';
+      final contactNumber = eventData!['customer_phone'] ?? '';
+
+      DateTime eventDate;
+      try {
+        eventDate = DateTime.parse(eventData!['event_date']);
+      } catch (e) {
+        eventDate = DateTime.now();
+      }
+
+      TimeOfDay? eventTime;
+      if (eventData!['event_time'] != null) {
+        final timeParts = eventData!['event_time'].split(':');
+        eventTime = TimeOfDay(
+          hour: int.parse(timeParts[0]),
+          minute: int.parse(timeParts[1]),
+        );
+      }
+
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final file = await ReceiptGenerator.generateReceiptPDF(
+        context: context,
+        customerName: customerName,
+        venue: venue,
+        city: city,
+        contactNumber: contactNumber,
+        eventTypeName: eventTypeName,
+        selectedDate: eventDate,
+        selectedTime: eventTime,
+      );
+
+      // Close loading indicator
+      if (mounted) Navigator.pop(context);
+
+      if (file != null && mounted) {
+        // Read the PDF file
+        final pdfBytes = await file.readAsBytes();
+
+        // Show receipt in a dialog with print option
+        showDialog(
+          context: context,
+          builder: (context) => Dialog(
+            child: Container(
+              width: 400,
+              constraints: const BoxConstraints(maxHeight: 700),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header with close button
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Sample Receipt',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // PDF Preview
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: PdfPreview(
+                        build: (format) => pdfBytes,
+                        allowPrinting: false,
+                        allowSharing: false,
+                        canChangePageFormat: false,
+                        canChangeOrientation: false,
+                        canDebug: false,
+                        pdfFileName: 'receipt_$customerName.pdf',
+                        actions: const [], // Remove default toolbar actions
+                      ),
+                    ),
+                  ),
+                  // Custom Print Button at bottom
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        top: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Printing.layoutPdf(
+                          onLayout: (format) => pdfBytes,
+                        );
+                      },
+                      icon: const Icon(Icons.print, size: 24),
+                      label: const Text(
+                        'Print Receipt',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFB846D7),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to generate receipt'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading if still showing
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating receipt: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+
 }
