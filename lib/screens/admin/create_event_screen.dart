@@ -989,8 +989,237 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
+  // Add these methods in _CreateEventScreenState class
+
+// Method to check if operator can be removed
+  Future<bool> _canRemoveOperator(String operatorId) async {
+    try {
+      // Check if operator has collected any MOI entries for this event
+      final moiEntries = await _auth.client
+          .from('mois')
+          .select('id')
+          .eq('event_id', _editingEvent!['id'])
+          .eq('operator_id', operatorId)
+          .eq('is_deleted', false)
+          .limit(1);
+
+      // If MOI entries exist, operator cannot be removed
+      if (moiEntries.isNotEmpty) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      print('Error checking operator MOI entries: $e');
+      return false;
+    }
+  }
+
+// Method to show error dialog when operator removal fails
+  Future<void> _showOperatorRemovalError(String operatorName, String operatorId) async {
+    // Get count of MOI entries
+    int moiCount = 0;
+    try {
+      final moiEntries = await _auth.client
+          .from('mois')
+          .select('id')
+          .eq('event_id', _editingEvent!['id'])
+          .eq('operator_id', operatorId)
+          .eq('is_deleted', false);
+
+      moiCount = moiEntries.length;
+    } catch (e) {
+      print('Error counting MOI entries: $e');
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Cannot Remove Operator',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Operator: $operatorName',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                border: Border.all(color: Colors.orange, width: 2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'This operator has already collected MOI entries!',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Total MOI Entries: $moiCount',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'To remove this operator:',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                border: Border.all(color: Colors.blue, width: 1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('1. ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          'Mark this event as "Completed"',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 6),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('2. ', style: TextStyle(fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          'Then you can remove the operator',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.grey[200],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text(
+              'OK',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Updated _updateOperatorAssignment method with validation
   Future<void> _updateOperatorAssignment(String eventId) async {
     try {
+      // Get current assignments from database
+      final currentAssignments = await _auth.client
+          .from('event_assignments')
+          .select('operator_id')
+          .eq('event_id', eventId);
+
+      Set<String> currentOperatorIds = currentAssignments
+          .map((a) => a['operator_id'] as String)
+          .toSet();
+
+      Set<String> newOperatorIds = _selectedOperators.toSet();
+
+      // Find operators being removed
+      Set<String> removedOperators = currentOperatorIds.difference(newOperatorIds);
+
+      // Check if event is completed
+      bool isEventCompleted = _selectedStatus.toLowerCase() == 'completed';
+
+      // Validate each removed operator
+      for (String operatorId in removedOperators) {
+        // If event is NOT completed, check if operator has MOI entries
+        if (!isEventCompleted) {
+          bool canRemove = await _canRemoveOperator(operatorId);
+
+          if (!canRemove) {
+            // Get operator name
+            final operator = _operators.firstWhere(
+                  (op) => op['id'] == operatorId,
+              orElse: () => {'full_name': 'Unknown Operator'},
+            );
+
+            // Show error dialog
+            await _showOperatorRemovalError(operator['full_name'], operatorId);
+
+            // Revert the selection (add back the removed operator)
+            setState(() {
+              _selectedOperators.add(operatorId);
+            });
+
+            return; // Stop the update process
+          }
+        }
+        // If event IS completed, allow removal without checking MOI entries
+      }
+
+      // If validation passed, proceed with update
       await _auth.client
           .from('event_assignments')
           .delete()
@@ -1005,9 +1234,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         await _auth.client.from('event_assignments').insert(assignments);
       }
     } catch (e) {
-      // Handle error
+      print('Error updating operator assignments: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating operators: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
+
+
 
   void _clear() {
     _customerName.clear();
@@ -1356,6 +1595,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
                             const SizedBox(height: 16),
 
+                            // UPDATED: Operators section in build method with validation on chip deletion
+// Replace the operators section around line 1210-1270 with this:
+
                             _buildFormRow(
                               label: 'Operators',
                               required: false,
@@ -1381,7 +1623,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                           return Chip(
                                             label: Text(operator['full_name'], style: const TextStyle(fontSize: 13)),
                                             deleteIcon: const Icon(Icons.close, size: 16),
-                                            onDeleted: () {
+                                            onDeleted: () async {
+                                              // ✅ VALIDATION: Check if we're in edit mode and operator has MOI entries
+                                              if (_isEditMode && _editingEvent != null) {
+                                                bool isEventCompleted = _selectedStatus.toLowerCase() == 'completed';
+
+                                                if (!isEventCompleted) {
+                                                  bool canRemove = await _canRemoveOperator(operatorId);
+
+                                                  if (!canRemove) {
+                                                    await _showOperatorRemovalError(operator['full_name'], operatorId);
+                                                    return; // Don't remove
+                                                  }
+                                                }
+                                              }
+
+                                              // Remove operator if validation passed
                                               setState(() {
                                                 _selectedOperators.remove(operatorId);
                                               });
@@ -1415,18 +1672,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                       );
                                     }).toList(),
                                     onChanged: (value) {
-                                      print('DEBUG: Dropdown value selected: $value');
-                                      print('DEBUG: Current _selectedOperators BEFORE: $_selectedOperators');
-
                                       if (value != null && !_selectedOperators.contains(value)) {
                                         setState(() {
                                           _selectedOperators.add(value);
-                                          print('DEBUG: Operator added successfully');
-                                          print('DEBUG: Current _selectedOperators AFTER: $_selectedOperators');
-                                          print('DEBUG: Total operators now: ${_selectedOperators.length}');
                                         });
-                                      } else {
-                                        print('DEBUG: Operator NOT added. value=$value, already exists=${_selectedOperators.contains(value)}');
                                       }
                                     },
                                   ),
