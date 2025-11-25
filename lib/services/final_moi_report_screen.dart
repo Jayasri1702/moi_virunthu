@@ -55,10 +55,28 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           setState(() {
             _generatedContent = response.body;
           });
+        } else if (returnType == 'xlsx') {
+          // Save Excel file
+          final output = await getTemporaryDirectory();
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final filePath = '${output.path}/final_moi_report_$timestamp.xlsx';
+          final file = File(filePath);
+
+          await file.writeAsBytes(response.bodyBytes);
+
+          if (await file.exists()) {
+            final fileSize = await file.length();
+            if (kDebugMode) print('Excel file created: ${file.path}, size: $fileSize bytes');
+
+            setState(() {
+              _generatedFile = file;
+            });
+          } else {
+            throw Exception('Failed to create Excel file');
+          }
         } else if (returnType == 'pdf') {
-          // Save PDF bytes temporarily - we'll convert from HTML instead
           setState(() {
-            _generatedContent = response.body; // Store as content for now
+            _generatedContent = response.body;
           });
         }
       } else {
@@ -96,28 +114,23 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         // Convert text to PDF and print
         final pdfBytes = await _convertTextToPdf(_generatedContent!);
         await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+      } else if (_selectedFormat == 'xlsx') {
+        // For Excel, suggest opening in spreadsheet app
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please share the Excel file and print from your spreadsheet app'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
-        // For PDF format, we need to fetch as HTML first and then convert
-        // Let's get HTML version instead
-        final response = await http.post(
-          Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/report-generator'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer 65d9708252d6947d42e757bc7558acce87b52c2067ef5663e1dc0b29843b1e2a',
-          },
-          body: json.encode({
-            'event_id': widget.eventId,
-            'return_type': 'html',
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final pdfBytes = await _convertHtmlToPdf(response.body);
-          if (pdfBytes != null) {
-            await Printing.layoutPdf(onLayout: (format) => pdfBytes);
-          } else {
-            throw Exception('Failed to convert HTML to PDF');
-          }
+        // Convert HTML to PDF for printing
+        final pdfBytes = await _convertHtmlToPdf(_generatedContent!);
+        if (pdfBytes != null) {
+          await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+        } else {
+          throw Exception('Failed to convert HTML to PDF');
         }
       }
     } catch (e) {
@@ -138,47 +151,55 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     try {
       setState(() => _isLoading = true);
 
-      if (_selectedFormat == 'pdf') {
-        // Generate PDF from HTML for sharing
-        final response = await http.post(
-          Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/report-generator'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer 65d9708252d6947d42e757bc7558acce87b52c2067ef5663e1dc0b29843b1e2a',
-          },
-          body: json.encode({
-            'event_id': widget.eventId,
-            'return_type': 'html',
-          }),
+      if (_selectedFormat == 'xlsx' && _generatedFile != null) {
+        // Share Excel file with proper MIME type
+        await Share.shareXFiles(
+          [XFile(
+            _generatedFile!.path,
+            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            name: 'final_moi_report.xlsx',
+          )],
+          text: 'Final Moi Report',
+          subject: 'Final Moi Report',
         );
+      } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
+        // Generate PDF from HTML for sharing
+        final pdfBytes = await _convertHtmlToPdf(_generatedContent!);
+        if (pdfBytes != null) {
+          final output = await getTemporaryDirectory();
+          final timestamp = DateTime.now().millisecondsSinceEpoch;
+          final filePath = '${output.path}/final_moi_report_$timestamp.pdf';
+          final file = File(filePath);
+          await file.writeAsBytes(pdfBytes);
 
-        if (response.statusCode == 200) {
-          final pdfBytes = await _convertHtmlToPdf(response.body);
-          if (pdfBytes != null) {
-            final output = await getTemporaryDirectory();
-            final timestamp = DateTime.now().millisecondsSinceEpoch;
-            final filePath = '${output.path}/final_moi_report_$timestamp.pdf';
-            final file = File(filePath);
-            await file.writeAsBytes(pdfBytes);
-
-            await Share.shareXFiles(
-              [XFile(file.path)],
-              text: 'Final Moi Report',
-            );
-          }
+          await Share.shareXFiles(
+            [XFile(
+              file.path,
+              mimeType: 'application/pdf',
+              name: 'final_moi_report.pdf',
+            )],
+            text: 'Final Moi Report',
+            subject: 'Final Moi Report',
+          );
         }
       } else if (_generatedContent != null) {
-        // Save content to temporary file
+        // Save content to temporary file (HTML or TXT)
         final output = await getTemporaryDirectory();
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final extension = _selectedFormat == 'html' ? 'html' : 'txt';
+        final mimeType = _selectedFormat == 'html' ? 'text/html' : 'text/plain';
         final filePath = '${output.path}/final_moi_report_$timestamp.$extension';
         final file = File(filePath);
         await file.writeAsString(_generatedContent!);
 
         await Share.shareXFiles(
-          [XFile(file.path)],
+          [XFile(
+            file.path,
+            mimeType: mimeType,
+            name: 'final_moi_report.$extension',
+          )],
           text: 'Final Moi Report',
+          subject: 'Final Moi Report',
         );
       }
     } catch (e) {
@@ -206,7 +227,6 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       HeadlessInAppWebView? headlessWebView;
 
-      // Wrap content with proper A4 styling optimized for printing
       final styledHtml = '''
 <!DOCTYPE html>
 <html>
@@ -299,7 +319,6 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       page-break-after: always;
     }
     
-    /* Ensure better fit */
     img {
       max-width: 100%;
       height: auto;
@@ -319,13 +338,11 @@ $htmlContent
           useHybridComposition: true,
           useShouldOverrideUrlLoading: false,
         ),
-        initialSize: const Size(794, 1123), // A4 width
+        initialSize: const Size(794, 1123),
         onLoadStop: (controller, url) async {
           try {
-            // Wait for content to render
             await Future.delayed(const Duration(milliseconds: 2500));
 
-            // Get the actual content height
             final contentHeight = await controller.evaluateJavascript(
                 source: "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight)"
             );
@@ -333,30 +350,25 @@ $htmlContent
             int totalHeight = 1123;
             if (contentHeight != null) {
               totalHeight = int.tryParse(contentHeight.toString()) ?? 1123;
-              print('Content height: $totalHeight pixels');
+              if (kDebugMode) print('Content height: $totalHeight pixels');
             }
 
-            // Calculate pages
-            final pageHeight = 1123; // A4 height
+            final pageHeight = 1123;
             final pagesNeeded = (totalHeight / pageHeight).ceil();
-            print('Pages needed: $pagesNeeded');
+            if (kDebugMode) print('Pages needed: $pagesNeeded');
 
             final pdf = pw.Document();
 
-            // Capture each page separately
             for (int pageIndex = 0; pageIndex < pagesNeeded; pageIndex++) {
-              // Scroll to the page position
               final scrollY = pageIndex * pageHeight;
               await controller.evaluateJavascript(
                   source: "window.scrollTo(0, $scrollY);"
               );
               await Future.delayed(const Duration(milliseconds: 300));
 
-              // Set size to capture one page
               await headlessWebView?.setSize(Size(794, pageHeight.toDouble()));
               await Future.delayed(const Duration(milliseconds: 300));
 
-              // Take screenshot of this page
               final screenshot = await controller.takeScreenshot();
 
               if (screenshot != null) {
@@ -371,7 +383,7 @@ $htmlContent
                     },
                   ),
                 );
-                print('Added page ${pageIndex + 1} of $pagesNeeded');
+                if (kDebugMode) print('Added page ${pageIndex + 1} of $pagesNeeded');
               }
             }
 
@@ -380,9 +392,9 @@ $htmlContent
             await file.writeAsBytes(pdfBytes);
             generatedFile = file;
             pdfGenerated = true;
-            print('PDF generated successfully: ${pdfBytes.length} bytes with $pagesNeeded pages');
+            if (kDebugMode) print('PDF generated successfully: ${pdfBytes.length} bytes with $pagesNeeded pages');
           } catch (e) {
-            print('Error generating PDF: $e');
+            if (kDebugMode) print('Error generating PDF: $e');
           } finally {
             if (headlessWebView != null) {
               await headlessWebView.dispose();
@@ -390,13 +402,12 @@ $htmlContent
           }
         },
         onConsoleMessage: (controller, consoleMessage) {
-          print('WebView Console: ${consoleMessage.message}');
+          if (kDebugMode) print('WebView Console: ${consoleMessage.message}');
         },
       );
 
       await headlessWebView.run();
 
-      // Wait for PDF generation (longer timeout for multi-page)
       int attempts = 0;
       while (attempts < 60 && !pdfGenerated) {
         await Future.delayed(const Duration(milliseconds: 500));
@@ -405,14 +416,14 @@ $htmlContent
 
       if (pdfGenerated && generatedFile != null) {
         final bytes = await generatedFile!.readAsBytes();
-        print('Reading PDF file: ${bytes.length} bytes');
+        if (kDebugMode) print('Reading PDF file: ${bytes.length} bytes');
         return bytes;
       }
 
-      print('PDF generation timed out or failed');
+      if (kDebugMode) print('PDF generation timed out or failed');
       return null;
     } catch (e) {
-      print('Error converting HTML to PDF: $e');
+      if (kDebugMode) print('Error converting HTML to PDF: $e');
       return null;
     }
   }
@@ -459,7 +470,6 @@ $htmlContent
       ),
       body: Column(
         children: [
-          // Format Selection
           if (_generatedContent == null && _generatedFile == null) ...[
             Expanded(
               child: Center(
@@ -489,11 +499,13 @@ $htmlContent
                         ),
                       ),
                       const SizedBox(height: 32),
-                      _buildFormatButton('HTML', 'html', Icons.code),
+                      _buildFormatButton('HTML', 'html', Icons.code, const Color(0xFFB846D7)),
                       const SizedBox(height: 16),
-                      _buildFormatButton('PDF', 'pdf', Icons.picture_as_pdf),
+                      _buildFormatButton('Excel', 'xlsx', Icons.table_chart, const Color(0xFF217346)),
                       const SizedBox(height: 16),
-                      _buildFormatButton('Text', 'txt', Icons.text_fields),
+                      _buildFormatButton('PDF', 'pdf', Icons.picture_as_pdf, const Color(0xFFB846D7)),
+                      const SizedBox(height: 16),
+                      _buildFormatButton('Text', 'txt', Icons.text_fields, const Color(0xFFB846D7)),
                     ],
                   ),
                 ),
@@ -516,7 +528,6 @@ $htmlContent
               ),
             ),
           ] else ...[
-            // Report Content
             Expanded(
               child: Container(
                 margin: const EdgeInsets.all(16),
@@ -536,7 +547,6 @@ $htmlContent
               ),
             ),
 
-            // Action Buttons
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -552,35 +562,39 @@ $htmlContent
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _printReport,
-                      icon: const Icon(Icons.print, size: 24),
-                      label: const Text(
-                        'Print',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFB846D7),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  if (_selectedFormat != 'xlsx') ...[
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _printReport,
+                        icon: const Icon(Icons.print, size: 24),
+                        label: const Text(
+                          'Print',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFB846D7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: _isLoading ? null : _shareReport,
                       icon: const Icon(Icons.share, size: 24),
-                      label: const Text(
-                        'Share',
-                        style: TextStyle(fontSize: 16),
+                      label: Text(
+                        _selectedFormat == 'xlsx' ? 'Open/Share' : 'Share',
+                        style: const TextStyle(fontSize: 16),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF8F8F8F),
+                        backgroundColor: _selectedFormat == 'xlsx'
+                            ? const Color(0xFF217346)
+                            : const Color(0xFF8F8F8F),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -598,7 +612,7 @@ $htmlContent
     );
   }
 
-  Widget _buildFormatButton(String label, String format, IconData icon) {
+  Widget _buildFormatButton(String label, String format, IconData icon, Color color) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -609,7 +623,7 @@ $htmlContent
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFB846D7),
+          backgroundColor: color,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 20),
           shape: RoundedRectangleBorder(
@@ -626,6 +640,31 @@ $htmlContent
         initialData: InAppWebViewInitialData(data: _generatedContent!),
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
+        ),
+      );
+    } else if (_selectedFormat == 'xlsx' && _generatedFile != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.table_chart, size: 64, color: Color(0xFF217346)),
+            const SizedBox(height: 16),
+            const Text(
+              'Excel Report Generated',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'File: ${_generatedFile!.path.split('/').last}',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Use the Share button to open in Excel',
+              style: TextStyle(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       );
     } else if (_selectedFormat == 'txt' && _generatedContent != null) {
