@@ -11,6 +11,7 @@ import 'modified_report_screen.dart';
 import 'cash_managements_screen.dart';
 import '../../services/receipt_generator.dart';
 import 'package:printing/printing.dart';
+import '../../services/final_moi_report_screen.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -429,7 +430,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: _buildGridButton('Final Moi Report', Icons.assessment, () {
-                          // Navigate to Final Moi Report screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => FinalMoiReportScreen(
+                                eventId: eventData!['id'],
+                              ),
+                            ),
+                          );
                         }),
                       ),
                     ],
