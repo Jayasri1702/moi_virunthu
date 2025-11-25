@@ -206,7 +206,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       HeadlessInAppWebView? headlessWebView;
 
-      // Wrap content with proper A4 styling
+      // Wrap content with proper A4 styling optimized for printing
       final styledHtml = '''
 <!DOCTYPE html>
 <html>
@@ -214,6 +214,11 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -221,48 +226,83 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
     
     body {
-      width: 210mm;
-      padding: 10mm;
+      width: 794px;
       font-family: Arial, sans-serif;
       background: white;
+      font-size: 10px;
+      line-height: 1.3;
+      padding: 20px;
     }
     
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
-      font-size: 11px;
+      margin: 8px 0;
+      font-size: 9px;
+      page-break-inside: auto;
+    }
+    
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
     }
     
     th, td {
       border: 1px solid #000;
-      padding: 6px 4px;
+      padding: 4px 3px;
       text-align: center;
+      word-wrap: break-word;
     }
     
     th {
       background-color: #6B4C9A;
       color: white;
       font-weight: bold;
+      font-size: 10px;
     }
     
-    h1, h2, h3 {
-      margin: 10px 0;
+    h1 {
+      font-size: 18px;
+      margin: 8px 0;
+      color: #333;
+      text-align: center;
+    }
+    
+    h2 {
+      font-size: 14px;
+      margin: 6px 0;
+      color: #333;
+    }
+    
+    h3 {
+      font-size: 12px;
+      margin: 5px 0;
       color: #333;
     }
     
     .summary {
-      margin: 15px 0;
-      padding: 10px;
+      margin: 10px 0;
+      padding: 8px;
       background: #f5f5f5;
       border: 2px solid #000;
+      page-break-inside: avoid;
     }
     
     .summary-row {
       display: flex;
       justify-content: space-between;
-      padding: 5px 0;
-      font-size: 12px;
+      padding: 3px 0;
+      font-size: 10px;
+    }
+    
+    .page-break {
+      page-break-after: always;
+    }
+    
+    /* Ensure better fit */
+    img {
+      max-width: 100%;
+      height: auto;
     }
   </style>
 </head>
@@ -277,46 +317,51 @@ $htmlContent
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
           useHybridComposition: true,
+          useShouldOverrideUrlLoading: false,
         ),
-        initialSize: const Size(794, 1123), // A4 size in pixels at 96 DPI
+        initialSize: const Size(794, 1123), // A4 width
         onLoadStop: (controller, url) async {
           try {
             // Wait for content to render
-            await Future.delayed(const Duration(milliseconds: 2000));
+            await Future.delayed(const Duration(milliseconds: 2500));
 
             // Get the actual content height
             final contentHeight = await controller.evaluateJavascript(
-                source: "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)"
+                source: "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight)"
             );
 
-            int height = 1123;
+            int totalHeight = 1123;
             if (contentHeight != null) {
-              height = int.tryParse(contentHeight.toString()) ?? 1123;
-              // Ensure minimum height and add padding
-              height = height < 1123 ? 1123 : (height + 50);
+              totalHeight = int.tryParse(contentHeight.toString()) ?? 1123;
+              print('Content height: $totalHeight pixels');
             }
 
-            print('Content height: $height pixels');
+            // Calculate pages
+            final pageHeight = 1123; // A4 height
+            final pagesNeeded = (totalHeight / pageHeight).ceil();
+            print('Pages needed: $pagesNeeded');
 
-            // Resize to actual content
-            await headlessWebView?.setSize(Size(794, height.toDouble()));
-            await Future.delayed(const Duration(milliseconds: 800));
+            final pdf = pw.Document();
 
-            // Take screenshot
-            final screenshot = await controller.takeScreenshot();
+            // Capture each page separately
+            for (int pageIndex = 0; pageIndex < pagesNeeded; pageIndex++) {
+              // Scroll to the page position
+              final scrollY = pageIndex * pageHeight;
+              await controller.evaluateJavascript(
+                  source: "window.scrollTo(0, $scrollY);"
+              );
+              await Future.delayed(const Duration(milliseconds: 300));
 
-            if (screenshot != null) {
-              print('Screenshot captured: ${screenshot.length} bytes');
+              // Set size to capture one page
+              await headlessWebView?.setSize(Size(794, pageHeight.toDouble()));
+              await Future.delayed(const Duration(milliseconds: 300));
 
-              final pdf = pw.Document();
-              final image = pw.MemoryImage(screenshot);
+              // Take screenshot of this page
+              final screenshot = await controller.takeScreenshot();
 
-              // Calculate number of pages needed
-              final pagesNeeded = (height / 1123).ceil();
-              print('Pages needed: $pagesNeeded');
+              if (screenshot != null) {
+                final image = pw.MemoryImage(screenshot);
 
-              if (pagesNeeded == 1) {
-                // Single page
                 pdf.addPage(
                   pw.Page(
                     pageFormat: PdfPageFormat.a4,
@@ -326,26 +371,16 @@ $htmlContent
                     },
                   ),
                 );
-              } else {
-                // Multiple pages - split the image
-                pdf.addPage(
-                  pw.Page(
-                    pageFormat: PdfPageFormat.a4,
-                    margin: const pw.EdgeInsets.all(0),
-                    build: (pw.Context context) {
-                      return pw.Image(image, fit: pw.BoxFit.fill);
-                    },
-                  ),
-                );
+                print('Added page ${pageIndex + 1} of $pagesNeeded');
               }
-
-              final file = File(filePath);
-              final pdfBytes = await pdf.save();
-              await file.writeAsBytes(pdfBytes);
-              generatedFile = file;
-              pdfGenerated = true;
-              print('PDF generated successfully: ${pdfBytes.length} bytes');
             }
+
+            final file = File(filePath);
+            final pdfBytes = await pdf.save();
+            await file.writeAsBytes(pdfBytes);
+            generatedFile = file;
+            pdfGenerated = true;
+            print('PDF generated successfully: ${pdfBytes.length} bytes with $pagesNeeded pages');
           } catch (e) {
             print('Error generating PDF: $e');
           } finally {
@@ -361,9 +396,9 @@ $htmlContent
 
       await headlessWebView.run();
 
-      // Wait for PDF generation
+      // Wait for PDF generation (longer timeout for multi-page)
       int attempts = 0;
-      while (attempts < 40 && !pdfGenerated) {
+      while (attempts < 60 && !pdfGenerated) {
         await Future.delayed(const Duration(milliseconds: 500));
         attempts++;
       }
