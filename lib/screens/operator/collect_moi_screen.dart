@@ -1655,8 +1655,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         final eventDetails = await _getEventDetails();
 
         // ✅ Build denominations from current form
-        // ✅ Build denominations from current form
-        // ✅ Build denominations from current form
         Map<int, int>? denominations;
         if (_paymentMethod == 'CASH') {
           print('🎯 Payment method is CASH, building denominations...');
