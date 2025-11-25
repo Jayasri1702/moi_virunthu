@@ -353,7 +353,7 @@ packages:
     source: hosted
     version: "4.1.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: "4e973fcf4caae1a4be2fa0a13157aa38a8f9cb049db6529aa00b4d71abc4d928"
@@ -364,10 +364,10 @@ packages:
     dependency: "direct main"
     description:
       name: intl
-      sha256: "3df61194eb431efc39c4ceba583b95633a403f46c9fd341e550ce0bfa50e9aa5"
+      sha256: d6f56758b7d3014a48af9701c085700aac781a92a87a62b1333b46d8879661cf
       url: "https://pub.dev"
     source: hosted
-    version: "0.20.2"
+    version: "0.19.0"
   js:
     dependency: transitive
     description:
@@ -821,6 +821,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.10.3"
+  syncfusion_flutter_core:
+    dependency: transitive
+    description:
+      name: syncfusion_flutter_core
+      sha256: a55762b7d6fdfe588378127b7b186aad418c04a8670c40d3d3438fa09e3d259a
+      url: "https://pub.dev"
+    source: hosted
+    version: "31.2.15"
+  syncfusion_flutter_pdf:
+    dependency: "direct main"
+    description:
+      name: syncfusion_flutter_pdf
+      sha256: ac85ff223e830f3f9d4f799bc5817e1ce6a136d60b3f8dac28bd9d6860db56e0
+      url: "https://pub.dev"
+    source: hosted
+    version: "31.2.15"
   term_glyph:
     dependency: transitive
     description:
@@ -999,4 +1015,4 @@ packages:
     version: "2.1.0"
 sdks:
   dart: ">=3.9.2 <4.0.0"
-  flutter: ">=3.35.0"
+  flutter: ">=3.35.1"

@@ -1,16 +1,23 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:pdf/pdf.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:share_plus/share_plus.dart';
-import 'package:flutter/services.dart';
+
+// Syncfusion PDF library
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+
+// Import pdf package for Printing.convertHtml
+import 'package:pdf/pdf.dart' as pdf_pkg;
+
 
 class FinalMoiReportScreen extends StatefulWidget {
   final String eventId;
@@ -26,12 +33,16 @@ class FinalMoiReportScreen extends StatefulWidget {
 
 class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   bool _isLoading = false;
-  String? _generatedContent;
+  String? _generatedContent; // HTML or TXT bodies or base64 PDF when return_type == pdf
   String? _selectedFormat;
-  File? _generatedFile;
+  File? _generatedFile; // for xlsx or saved merged outputs
 
+  static const _serverUrl =
+      'https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/report-generator';
+  static const _authToken =
+      'Bearer 65d9708252d6947d42e757bc7558acce87b52c2067ef5663e1dc0b29843b1e2a';
 
-
+  // ********** Public actions (unchanged UI) **********
 
   Future<void> _generateReport(String returnType) async {
     setState(() {
@@ -43,10 +54,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/report-generator'),
+        Uri.parse(_serverUrl),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer 65d9708252d6947d42e757bc7558acce87b52c2067ef5663e1dc0b29843b1e2a',
+          'Authorization': _authToken,
         },
         body: json.encode({
           'event_id': widget.eventId,
@@ -54,100 +65,86 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         }),
       );
 
-      if (response.statusCode == 200) {
-        if (returnType == 'html' || returnType == 'txt') {
-          setState(() {
-            _generatedContent = response.body;
-          });
-        } else if (returnType == 'xlsx') {
-          // Save Excel file
-          final output = await getTemporaryDirectory();
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          final filePath = '${output.path}/final_moi_report_$timestamp.xlsx';
-          final file = File(filePath);
-
-          await file.writeAsBytes(response.bodyBytes);
-
-          if (await file.exists()) {
-            final fileSize = await file.length();
-            if (kDebugMode) print('Excel file created: ${file.path}, size: $fileSize bytes');
-
-            setState(() {
-              _generatedFile = file;
-            });
-          } else {
-            throw Exception('Failed to create Excel file');
-          }
-        } else if (returnType == 'pdf') {
-          setState(() {
-            _generatedContent = response.body;
-          });
-        }
-      } else {
+      if (response.statusCode != 200) {
         throw Exception('Failed to generate report: ${response.statusCode}');
+      }
+
+      // Branch by return type
+      if (returnType == 'html' || returnType == 'txt') {
+        // keep content
+        setState(() {
+          _generatedContent = response.body;
+        });
+      } else if (returnType == 'xlsx') {
+        // bytes -> file
+        final out = await getTemporaryDirectory();
+        final fname = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final file = File('${out.path}/$fname');
+        await file.writeAsBytes(response.bodyBytes);
+        setState(() => _generatedFile = file);
+      } else if (returnType == 'pdf') {
+        // server returned PDF bytes. We'll store bytes in _generatedContent as base64 string
+        final base64Pdf = base64Encode(response.bodyBytes);
+        setState(() {
+          _generatedContent = base64Pdf; // store pdf as base64 to indicate PDF bytes present
+        });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // ********** Print / Share logic with merging **********
 
   Future<void> _printReport() async {
     try {
       setState(() => _isLoading = true);
 
       if (_selectedFormat == 'html' && _generatedContent != null) {
-        // Convert HTML to PDF and print
-        final pdfBytes = await _convertHtmlToPdf(_generatedContent!);
-        if (pdfBytes != null) {
-          await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+        final html = _generatedContent!;
+        final mergedPdfBytes = await _createMergedPdfForHtml(html);
+        if (mergedPdfBytes != null) {
+          await Printing.layoutPdf(onLayout: (format) => mergedPdfBytes);
         } else {
-          throw Exception('Failed to convert HTML to PDF');
+          throw Exception('Failed to create merged PDF from HTML');
         }
       } else if (_selectedFormat == 'txt' && _generatedContent != null) {
-        // Convert text to PDF and print
         final pdfBytes = await _convertTextToPdf(_generatedContent!);
         await Printing.layoutPdf(onLayout: (format) => pdfBytes);
       } else if (_selectedFormat == 'xlsx') {
-        // For Excel, suggest opening in spreadsheet app
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please share the Excel file and print from your spreadsheet app'),
+              content: Text('Please share/open the Excel file to print from a spreadsheet app'),
               backgroundColor: Colors.orange,
             ),
           );
         }
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
-        // Convert HTML to PDF for printing
-        final pdfBytes = await _convertHtmlToPdf(_generatedContent!);
-        if (pdfBytes != null) {
-          await Printing.layoutPdf(onLayout: (format) => pdfBytes);
+        // _generatedContent is base64 PDF from server
+        final serverPdfBytes = base64Decode(_generatedContent!);
+        final mergedPdfBytes = await _createMergedPdfWithImageFirst(serverPdfBytes);
+        if (mergedPdfBytes != null) {
+          await Printing.layoutPdf(onLayout: (format) => mergedPdfBytes);
         } else {
-          throw Exception('Failed to convert HTML to PDF');
+          // fallback: print server PDF as-is
+          await Printing.layoutPdf(onLayout: (format) => serverPdfBytes);
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Print error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Print error: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -156,301 +153,266 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       setState(() => _isLoading = true);
 
       if (_selectedFormat == 'xlsx' && _generatedFile != null) {
-        // Share Excel file with proper MIME type
         await Share.shareXFiles(
-          [XFile(
-            _generatedFile!.path,
-            mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            name: 'final_moi_report.xlsx',
-          )],
+          [XFile(_generatedFile!.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', name: 'final_moi_report.xlsx')],
           text: 'Final Moi Report',
-          subject: 'Final Moi Report',
         );
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
-        // Generate PDF from HTML for sharing
-        final pdfBytes = await _convertHtmlToPdf(_generatedContent!);
-        if (pdfBytes != null) {
-          final output = await getTemporaryDirectory();
-          final timestamp = DateTime.now().millisecondsSinceEpoch;
-          final filePath = '${output.path}/final_moi_report_$timestamp.pdf';
-          final file = File(filePath);
-          await file.writeAsBytes(pdfBytes);
-
-          await Share.shareXFiles(
-            [XFile(
-              file.path,
-              mimeType: 'application/pdf',
-              name: 'final_moi_report.pdf',
-            )],
-            text: 'Final Moi Report',
-            subject: 'Final Moi Report',
-          );
-        }
-      } else if (_generatedContent != null) {
-        // Save content to temporary file (HTML or TXT)
+        final serverPdfBytes = base64Decode(_generatedContent!);
+        final mergedPdfBytes = await _createMergedPdfWithImageFirst(serverPdfBytes);
         final output = await getTemporaryDirectory();
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final extension = _selectedFormat == 'html' ? 'html' : 'txt';
-        final mimeType = _selectedFormat == 'html' ? 'text/html' : 'text/plain';
-        final filePath = '${output.path}/final_moi_report_$timestamp.$extension';
-        final file = File(filePath);
+        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final outFile = File(outPath);
+        if (mergedPdfBytes != null) {
+          await outFile.writeAsBytes(mergedPdfBytes);
+        } else {
+          // fallback to original server PDF
+          await outFile.writeAsBytes(serverPdfBytes);
+        }
+        await Share.shareXFiles([XFile(outFile.path, mimeType: 'application/pdf', name: 'final_moi_report.pdf')], text: 'Final Moi Report');
+      } else if (_selectedFormat == 'html' && _generatedContent != null) {
+        final html = _generatedContent!;
+        final mergedHtml = await _createMergedHtmlWithImageFirst(html);
+        final output = await getTemporaryDirectory();
+        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.html';
+        final file = File(outPath);
+        await file.writeAsString(mergedHtml, flush: true);
+        await Share.shareXFiles([XFile(file.path, mimeType: 'text/html', name: 'final_moi_report.html')], text: 'Final Moi Report');
+      } else if (_selectedFormat == 'txt' && _generatedContent != null) {
+        final output = await getTemporaryDirectory();
+        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.txt';
+        final file = File(outPath);
         await file.writeAsString(_generatedContent!);
-
-        await Share.shareXFiles(
-          [XFile(
-            file.path,
-            mimeType: mimeType,
-            name: 'final_moi_report.$extension',
-          )],
-          text: 'Final Moi Report',
-          subject: 'Final Moi Report',
-        );
+        await Share.shareXFiles([XFile(file.path, mimeType: 'text/plain', name: 'final_moi_report.txt')], text: 'Final Moi Report');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Share error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Share error: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<Uint8List?> _convertHtmlToPdf(String htmlContent) async {
-    try {
-      File? generatedFile;
-      bool pdfGenerated = false;
+  // ********** Helpers: create edited image and merging **********
 
-      final output = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final filePath = '${output.path}/report_$timestamp.pdf';
+  /// Draws text over the asset background image and returns PNG bytes.
+  /// Uses Flutter Canvas/TextPainter to ensure consistent fonts and rendering on devices.
+  Future<Uint8List> _createReceiptPngBytes(Map<String, String> fields) async {
+    // Load the image bytes
+    final byteData = await rootBundle.load('assets/images/receipt_bg.png');
+    final Uint8List imgBytes = byteData.buffer.asUint8List();
 
-      HeadlessInAppWebView? headlessWebView;
+    // Decode to ui.Image
+    final codec = await ui.instantiateImageCodec(imgBytes);
+    final frame = await codec.getNextFrame();
+    final ui.Image background = frame.image;
 
-      final styledHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    @page {
-      size: A4;
-      margin: 10mm;
-    }
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      width: 794px;
-      font-family: Arial, sans-serif;
-      background: white;
-      font-size: 10px;
-      line-height: 1.3;
-      padding: 20px;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 8px 0;
-      font-size: 9px;
-      page-break-inside: auto;
-    }
-    
-    tr {
-      page-break-inside: avoid;
-      page-break-after: auto;
-    }
-    
-    th, td {
-      border: 1px solid #000;
-      padding: 4px 3px;
-      text-align: center;
-      word-wrap: break-word;
-    }
-    
-    th {
-      background-color: #6B4C9A;
-      color: white;
-      font-weight: bold;
-      font-size: 10px;
-    }
-    
-    h1 {
-      font-size: 18px;
-      margin: 8px 0;
-      color: #333;
-      text-align: center;
-    }
-    
-    h2 {
-      font-size: 14px;
-      margin: 6px 0;
-      color: #333;
-    }
-    
-    h3 {
-      font-size: 12px;
-      margin: 5px 0;
-      color: #333;
-    }
-    
-    .summary {
-      margin: 10px 0;
-      padding: 8px;
-      background: #f5f5f5;
-      border: 2px solid #000;
-      page-break-inside: avoid;
-    }
-    
-    .summary-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 3px 0;
-      font-size: 10px;
-    }
-    
-    .page-break {
-      page-break-after: always;
-    }
-    
-    img {
-      max-width: 100%;
-      height: auto;
-    }
-  </style>
-</head>
-<body>
-$htmlContent
-</body>
-</html>
-''';
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint();
+    final bgSize = Size(background.width.toDouble(), background.height.toDouble());
 
-      headlessWebView = HeadlessInAppWebView(
-        initialData: InAppWebViewInitialData(data: styledHtml),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          useHybridComposition: true,
-          useShouldOverrideUrlLoading: false,
+    // Draw the background image
+    canvas.drawImage(background, Offset.zero, paint);
+
+    // Helper to draw a line of text using TextPainter
+    void drawText(String text, double x, double y, double fontSize, {TextAlign align = TextAlign.left, FontWeight fontWeight = FontWeight.normal}) {
+      final span = TextSpan(
+        text: text,
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: fontSize,
+          fontWeight: fontWeight,
         ),
-        initialSize: const Size(794, 1123),
-        onLoadStop: (controller, url) async {
-          try {
-            await Future.delayed(const Duration(milliseconds: 2500));
-
-            final contentHeight = await controller.evaluateJavascript(
-                source: "Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, document.body.offsetHeight)"
-            );
-
-            int totalHeight = 1123;
-            if (contentHeight != null) {
-              totalHeight = int.tryParse(contentHeight.toString()) ?? 1123;
-              if (kDebugMode) print('Content height: $totalHeight pixels');
-            }
-
-            final pageHeight = 1123;
-            final pagesNeeded = (totalHeight / pageHeight).ceil();
-            if (kDebugMode) print('Pages needed: $pagesNeeded');
-
-            final pdf = pw.Document();
-
-            for (int pageIndex = 0; pageIndex < pagesNeeded; pageIndex++) {
-              final scrollY = pageIndex * pageHeight;
-              await controller.evaluateJavascript(
-                  source: "window.scrollTo(0, $scrollY);"
-              );
-              await Future.delayed(const Duration(milliseconds: 300));
-
-              await headlessWebView?.setSize(Size(794, pageHeight.toDouble()));
-              await Future.delayed(const Duration(milliseconds: 300));
-
-              final screenshot = await controller.takeScreenshot();
-
-              if (screenshot != null) {
-                final image = pw.MemoryImage(screenshot);
-
-                pdf.addPage(
-                  pw.Page(
-                    pageFormat: PdfPageFormat.a4,
-                    margin: const pw.EdgeInsets.all(0),
-                    build: (pw.Context context) {
-                      return pw.Image(image, fit: pw.BoxFit.fill);
-                    },
-                  ),
-                );
-                if (kDebugMode) print('Added page ${pageIndex + 1} of $pagesNeeded');
-              }
-            }
-
-            final file = File(filePath);
-            final pdfBytes = await pdf.save();
-            await file.writeAsBytes(pdfBytes);
-            generatedFile = file;
-            pdfGenerated = true;
-            if (kDebugMode) print('PDF generated successfully: ${pdfBytes.length} bytes with $pagesNeeded pages');
-          } catch (e) {
-            if (kDebugMode) print('Error generating PDF: $e');
-          } finally {
-            if (headlessWebView != null) {
-              await headlessWebView.dispose();
-            }
-          }
-        },
-        onConsoleMessage: (controller, consoleMessage) {
-          if (kDebugMode) print('WebView Console: ${consoleMessage.message}');
-        },
       );
+      final tp = TextPainter(text: span, textAlign: align, textDirection: TextDirection.ltr);
+      tp.layout(maxWidth: bgSize.width - x - 20);
+      double dx = x;
+      if (align == TextAlign.center) {
+        dx = (bgSize.width - tp.width) / 2;
+      } else if (align == TextAlign.right) {
+        dx = bgSize.width - tp.width - x;
+      }
+      tp.paint(canvas, Offset(dx, y));
+    }
 
-      await headlessWebView.run();
+    // Build the content layout
+    final width = bgSize.width;
+    final height = bgSize.height;
 
-      int attempts = 0;
-      while (attempts < 60 && !pdfGenerated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        attempts++;
+    // Title
+    final title = fields['Title'] ?? fields['Event Name'] ?? 'Final MOI Report';
+    drawText(title, 0, height * 0.06, (width / 24).clamp(18.0, 36.0), align: TextAlign.center, fontWeight: FontWeight.bold);
+
+    // Left column of key-values
+    final startX = width * 0.08;
+    double cursorY = height * 0.18;
+    final lineHeight = (width / 28).clamp(14.0, 20.0);
+
+    // Draw each field except title
+    for (final entry in fields.entries) {
+      final label = entry.key;
+      final value = entry.value;
+      if (label.toLowerCase() == 'title' || label.toLowerCase() == 'event name') continue;
+      drawText('$label: $value', startX, cursorY, lineHeight - 2, align: TextAlign.left);
+      cursorY += lineHeight;
+    }
+
+    // Footer line
+    final generatedOn = fields['Generated On'] ?? DateTime.now().toString();
+    final footerText = 'Event ID: ${fields['Event ID'] ?? widget.eventId}  •  Generated On: $generatedOn';
+    drawText(footerText, startX, height * 0.88, 12.0, align: TextAlign.left);
+
+    // End drawing and convert to PNG bytes
+    final picture = recorder.endRecording();
+    final imgFinal = await picture.toImage(background.width, background.height);
+    final byteDataOut = await imgFinal.toByteData(format: ui.ImageByteFormat.png);
+    if (byteDataOut == null) throw Exception('Failed to convert edited receipt to PNG bytes');
+    return byteDataOut.buffer.asUint8List();
+  }
+
+  /// Create a merged PDF where the first page is the edited image and the rest are pages from `serverPdfBytes`.
+  /// Uses Syncfusion Pdf for reliable merging.
+  Future<Uint8List?> _createMergedPdfWithImageFirst(Uint8List serverPdfBytes) async {
+    try {
+      // Fields to render on receipt
+      final fields = <String, String>{
+        'Event ID': widget.eventId,
+        'Generated On': DateTime.now().toString(),
+        'Title': 'Final MOI Report',
+      };
+
+      // create PNG bytes of the receipt with overlay
+      final pngBytes = await _createReceiptPngBytes(fields);
+
+      // Create merged PDF with Syncfusion
+      final PdfDocument mergedDocument = PdfDocument();
+      // Add first page and draw the PNG (fit to page)
+      final PdfPage firstPage = mergedDocument.pages.add();
+      final PdfGraphics g = firstPage.graphics;
+
+      final PdfBitmap bitmap = PdfBitmap(pngBytes);
+      // Fit the image to the page while preserving aspect ratio
+      final Size pageSize = firstPage.getClientSize();
+      final double imgRatio = bitmap.width / bitmap.height;
+      final double pageRatio = pageSize.width / pageSize.height;
+      double drawWidth = pageSize.width;
+      double drawHeight = pageSize.height;
+      if (imgRatio > pageRatio) {
+        drawWidth = pageSize.width;
+        drawHeight = drawWidth / imgRatio;
+      } else {
+        drawHeight = pageSize.height;
+        drawWidth = drawHeight * imgRatio;
+      }
+      final double left = (pageSize.width - drawWidth) / 2;
+      final double top = (pageSize.height - drawHeight) / 2;
+      g.drawImage(bitmap, Rect.fromLTWH(left, top, drawWidth, drawHeight));
+
+      // Load server PDF
+      final PdfDocument serverDoc = PdfDocument(inputBytes: serverPdfBytes);
+
+      // Append all pages from serverDoc to mergedDocument using PdfDocumentPageCollection.addAll
+      // This is the correct way to merge pages in syncfusion_flutter_pdf
+      for (int i = 0; i < serverDoc.pages.count; i++) {
+        final PdfPage sourcePage = serverDoc.pages[i];
+        final PdfPage newPage = mergedDocument.pages.add();
+
+        // Copy page content by drawing the template
+        final template = sourcePage.createTemplate();
+        newPage.graphics.drawPdfTemplate(template, Offset.zero, sourcePage.size);
       }
 
-      if (pdfGenerated && generatedFile != null) {
-        final bytes = await generatedFile!.readAsBytes();
-        if (kDebugMode) print('Reading PDF file: ${bytes.length} bytes');
-        return bytes;
-      }
-
-      if (kDebugMode) print('PDF generation timed out or failed');
-      return null;
+      // Save - note: save() returns List<int> synchronously, not Future
+      final List<int> bytes = mergedDocument.saveSync();
+      mergedDocument.dispose();
+      serverDoc.dispose();
+      return Uint8List.fromList(bytes);
     } catch (e) {
-      if (kDebugMode) print('Error converting HTML to PDF: $e');
+      if (kDebugMode) print('Error merging PDF: $e');
       return null;
     }
   }
 
-  Future<Uint8List> _convertTextToPdf(String textContent) async {
-    final pdf = pw.Document();
+  /// Create a PDF from an HTML string by first creating an image page (receipt),
+  /// and then rendering the HTML to PDF and appending.
+  Future<Uint8List?> _createMergedPdfForHtml(String htmlContent) async {
+    try {
+      // 1) Create receipt PNG (we will embed it as first page)
+      final fields = <String, String>{
+        'Event ID': widget.eventId,
+        'Generated On': DateTime.now().toString(),
+        'Title': 'Final MOI Report',
+      };
+      final pngBytes = await _createReceiptPngBytes(fields);
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return [
-            pw.Text(
-              textContent,
-              style: const pw.TextStyle(fontSize: 12),
-            ),
-          ];
-        },
-      ),
-    );
+      // 2) Convert HTML to PDF bytes using Printing.convertHtml (uses PdfPageFormat from package:pdf)
+      Uint8List? htmlPdfBytes;
+      try {
+        htmlPdfBytes = await Printing.convertHtml(
+          format: pdf_pkg.PdfPageFormat.a4,
+          html: htmlContent,
+        );
+      } catch (e) {
+        if (kDebugMode) print('Printing.convertHtml failed: $e - falling back to text PDF');
+        // fallback: plain text PDF
+        htmlPdfBytes = await _convertTextToPdf(htmlContent);
+      }
 
-    return pdf.save();
+      if (htmlPdfBytes == null) {
+        throw Exception('Failed to convert HTML to PDF');
+      }
+
+      // 3) Merge: create merged doc with png first + htmlPdfBytes pages
+      return await _createMergedPdfWithImageFirst(htmlPdfBytes);
+    } catch (e) {
+      if (kDebugMode) print('Error creating merged PDF for HTML: $e');
+      return null;
+    }
   }
+
+  /// Produces merged HTML where the first element is the receipt PNG (base64).
+  Future<String> _createMergedHtmlWithImageFirst(String serverHtml) async {
+    final fields = <String, String>{
+      'Event ID': widget.eventId,
+      'Generated On': DateTime.now().toString(),
+      'Title': 'Final MOI Report',
+    };
+    final pngBytes = await _createReceiptPngBytes(fields);
+    final base64Image = base64Encode(pngBytes);
+    final imgTag =
+        '<div style="text-align:center; page-break-after:always;"><img src="data:image/png;base64,$base64Image" style="max-width:100%; height:auto;" /></div>';
+
+    // Insert the image at the top of body if possible, otherwise prepend
+    if (serverHtml.contains('<body')) {
+      final updated = serverHtml.replaceFirstMapped(
+        RegExp(r'(<body[^>]*>)', caseSensitive: false),
+            (match) => '${match.group(1)}$imgTag',
+      );
+      return updated;
+    } else {
+      return imgTag + serverHtml;
+    }
+  }
+
+  /// Convert plain text to PDF bytes using Syncfusion
+  Future<Uint8List> _convertTextToPdf(String textContent) async {
+    final PdfDocument document = PdfDocument();
+    final PdfPage page = document.pages.add();
+    page.graphics.drawString(
+      textContent,
+      PdfStandardFont(PdfFontFamily.helvetica, 12),
+      bounds: Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height),
+    );
+    final List<int> bytes = document.saveSync();
+    document.dispose();
+    return Uint8List.fromList(bytes);
+  }
+
+  // ********** UI copy from your original, unchanged UX **********
 
   @override
   Widget build(BuildContext context) {
@@ -642,9 +604,7 @@ $htmlContent
     if (_selectedFormat == 'html' && _generatedContent != null) {
       return InAppWebView(
         initialData: InAppWebViewInitialData(data: _generatedContent!),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-        ),
+        initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
       );
     } else if (_selectedFormat == 'xlsx' && _generatedFile != null) {
       return Center(
@@ -676,10 +636,7 @@ $htmlContent
         padding: const EdgeInsets.all(16),
         child: Text(
           _generatedContent!,
-          style: const TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 12,
-          ),
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
         ),
       );
     } else if (_selectedFormat == 'pdf') {
