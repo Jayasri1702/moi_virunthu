@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '/utils/constants.dart'; // if constants are in a separate file
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -200,6 +202,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
   /// Draws text over the asset background image and returns PNG bytes.
   /// Uses Flutter Canvas/TextPainter to ensure consistent fonts and rendering on devices.
+  /// Draws text over the asset background image and returns PNG bytes.
+  /// Uses Flutter Canvas/TextPainter to ensure consistent fonts and rendering on devices.
   Future<Uint8List> _createReceiptPngBytes(Map<String, String> fields) async {
     // Load the image bytes
     final byteData = await rootBundle.load('assets/images/receipt_bg.png');
@@ -210,68 +214,170 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     final frame = await codec.getNextFrame();
     final ui.Image background = frame.image;
 
+    final int width = background.width;
+    final int height = background.height;
+
+    // Create a picture recorder and canvas
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final paint = Paint();
-    final bgSize = Size(background.width.toDouble(), background.height.toDouble());
 
-    // Draw the background image
-    canvas.drawImage(background, Offset.zero, paint);
+    // Draw the background image first
+    canvas.drawImage(background, Offset.zero, Paint());
 
-    // Helper to draw a line of text using TextPainter
-    void drawText(String text, double x, double y, double fontSize, {TextAlign align = TextAlign.left, FontWeight fontWeight = FontWeight.normal}) {
-      final span = TextSpan(
-        text: text,
-        style: TextStyle(
-          color: Colors.black,
-          fontSize: fontSize,
-          fontWeight: fontWeight,
-        ),
+    // Helper function to draw text with proper styling
+    void drawText(
+        String text,
+        double x,
+        double y,
+        double fontSize, {
+          TextAlign align = TextAlign.left,
+          FontWeight fontWeight = FontWeight.normal,
+          Color color = Colors.black,
+        }) {
+      final textStyle = TextStyle(
+        color: color,
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        fontFamily: 'NotoSerifTamil', // Use default Flutter font
       );
-      final tp = TextPainter(text: span, textAlign: align, textDirection: TextDirection.ltr);
-      tp.layout(maxWidth: bgSize.width - x - 20);
-      double dx = x;
+
+      final textSpan = TextSpan(text: text, style: textStyle);
+      final textPainter = TextPainter(
+        text: textSpan,
+        textAlign: align,
+        textDirection: TextDirection.ltr,
+      );
+
+      // Layout the text
+      textPainter.layout(minWidth: 0, maxWidth: width.toDouble() - x - 20);
+
+      // Calculate x position based on alignment
+      double xPos = x;
       if (align == TextAlign.center) {
-        dx = (bgSize.width - tp.width) / 2;
+        xPos = (width - textPainter.width) / 2;
       } else if (align == TextAlign.right) {
-        dx = bgSize.width - tp.width - x;
+        xPos = width - textPainter.width - x;
       }
-      tp.paint(canvas, Offset(dx, y));
+
+      // Paint the text on canvas
+      textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    // Build the content layout
-    final width = bgSize.width;
-    final height = bgSize.height;
+    // Title at the top (event type)
+    final title = fields['Event Type'] ?? fields['Title'] ?? 'Final MOI Report';
+    final titleFontSize = (width / 20).clamp(20.0, 40.0);
+    drawText(
+      title,
+      0,
+      height * 0.40, // Positioned below the Ganesha image
+      titleFontSize,
+      align: TextAlign.center,
+      fontWeight: FontWeight.bold,
+      color: const Color(0xFF8B0000), // Dark red color like in template
+    );
 
-    // Title
-    final title = fields['Title'] ?? fields['Event Name'] ?? 'Final MOI Report';
-    drawText(title, 0, height * 0.06, (width / 24).clamp(18.0, 36.0), align: TextAlign.center, fontWeight: FontWeight.bold);
+    // Customer details section (centered)
+    double cursorY = height * 0.48;
+    final lineHeight = (height * 0.035).clamp(18.0, 35.0);
+    final labelFontSize = (lineHeight * 0.85).clamp(16.0, 28.0);
 
-    // Left column of key-values
-    final startX = width * 0.08;
-    double cursorY = height * 0.18;
-    final lineHeight = (width / 28).clamp(14.0, 20.0);
-
-    // Draw each field except title
-    for (final entry in fields.entries) {
-      final label = entry.key;
-      final value = entry.value;
-      if (label.toLowerCase() == 'title' || label.toLowerCase() == 'event name') continue;
-      drawText('$label: $value', startX, cursorY, lineHeight - 2, align: TextAlign.left);
+    // Customer name (குழந்தைச் செல்வங்கள்:)
+    final customerName = fields['Customer Name'] ?? '';
+    if (customerName.isNotEmpty) {
+      drawText(
+        'குழந்தைச் செல்வங்கள்:',
+        0,
+        cursorY,
+        labelFontSize,
+        align: TextAlign.center,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFFFF0000), // Red
+      );
       cursorY += lineHeight;
+      drawText(
+        customerName,
+        0,
+        cursorY,
+        labelFontSize,
+        align: TextAlign.center,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFFFF0000), // Red
+      );
+      cursorY += lineHeight * 1.3;
     }
 
-    // Footer line
-    final generatedOn = fields['Generated On'] ?? DateTime.now().toString();
-    final footerText = 'Event ID: ${fields['Event ID'] ?? widget.eventId}  •  Generated On: $generatedOn';
-    drawText(footerText, startX, height * 0.88, 12.0, align: TextAlign.left);
+    // Event For (if available)
+    final eventFor = fields['Event For'] ?? '';
+    if (eventFor.isNotEmpty) {
+      drawText(
+        eventFor,
+        0,
+        cursorY,
+        labelFontSize,
+        align: TextAlign.center,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFFFF0000), // Red
+      );
+      cursorY += lineHeight * 1.3;
+    }
 
-    // End drawing and convert to PNG bytes
+    // Date (நாள்:)
+    final eventDate = fields['Event Date'] ?? '';
+    if (eventDate.isNotEmpty) {
+      drawText(
+        'நாள்: $eventDate',
+        0,
+        cursorY,
+        labelFontSize * 0.9,
+        align: TextAlign.center,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF008000), // Green
+      );
+      cursorY += lineHeight * 1.3;
+    }
+
+    // Venue and City (இடம்:)
+    final venue = fields['Venue'] ?? '';
+    final city = fields['City'] ?? '';
+    if (venue.isNotEmpty || city.isNotEmpty) {
+      final venueText = venue.isNotEmpty && city.isNotEmpty
+          ? 'இடம்: $venue, $city'
+          : 'இடம்: ${venue.isNotEmpty ? venue : city}';
+
+      drawText(
+        venueText,
+        0,
+        cursorY,
+        labelFontSize * 0.85,
+        align: TextAlign.center,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF0000FF), // Blue
+      );
+    }
+
+    // Footer at the bottom (Hi Tech Moi contact info area)
+    // This area is already in your template image, so we'll keep it minimal
+    final footerFontSize = (width / 80).clamp(8.0, 12.0);
+    final generatedOn = DateTime.now().toString().substring(0, 19);
+
+    drawText(
+      'Generated: $generatedOn',
+      width * 0.05,
+      height * 0.95,
+      footerFontSize,
+      color: Colors.grey[600]!,
+    );
+
+    // Convert to image
     final picture = recorder.endRecording();
-    final imgFinal = await picture.toImage(background.width, background.height);
-    final byteDataOut = await imgFinal.toByteData(format: ui.ImageByteFormat.png);
-    if (byteDataOut == null) throw Exception('Failed to convert edited receipt to PNG bytes');
-    return byteDataOut.buffer.asUint8List();
+    final img = await picture.toImage(width, height);
+    final byteData2 = await img.toByteData(format: ui.ImageByteFormat.png);
+
+    if (byteData2 == null) {
+      throw Exception('Failed to convert edited receipt to PNG bytes');
+    }
+
+    return byteData2.buffer.asUint8List();
   }
 
   /// Create a merged PDF where the first page is the edited image and the rest are pages from `serverPdfBytes`.
@@ -279,10 +385,18 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   Future<Uint8List?> _createMergedPdfWithImageFirst(Uint8List serverPdfBytes) async {
     try {
       // Fields to render on receipt
+      // Fetch event details from your database first
+// You'll need to add a method to fetch event data
+      final eventData = await _fetchEventDetails(widget.eventId);
+
+// Fields to render on receipt
       final fields = <String, String>{
-        'Event ID': widget.eventId,
-        'Generated On': DateTime.now().toString(),
-        'Title': 'Final MOI Report',
+        'Event Type': eventData['event_type'] ?? '',
+        'Customer Name': eventData['customer_name'] ?? '',
+        'Event For': eventData['event_for'] ?? '',
+        'Event Date': eventData['event_date'] ?? '',
+        'Venue': eventData['venue'] ?? '',
+        'City': eventData['city'] ?? '',
       };
 
       // create PNG bytes of the receipt with overlay
@@ -342,10 +456,18 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   Future<Uint8List?> _createMergedPdfForHtml(String htmlContent) async {
     try {
       // 1) Create receipt PNG (we will embed it as first page)
+      // Fetch event details from your database first
+// You'll need to add a method to fetch event data
+      final eventData = await _fetchEventDetails(widget.eventId);
+
+// Fields to render on receipt
       final fields = <String, String>{
-        'Event ID': widget.eventId,
-        'Generated On': DateTime.now().toString(),
-        'Title': 'Final MOI Report',
+        'Event Type': eventData['event_type'] ?? '',
+        'Customer Name': eventData['customer_name'] ?? '',
+        'Event For': eventData['event_for'] ?? '',
+        'Event Date': eventData['event_date'] ?? '',
+        'Venue': eventData['venue'] ?? '',
+        'City': eventData['city'] ?? '',
       };
       final pngBytes = await _createReceiptPngBytes(fields);
 
@@ -374,12 +496,42 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
+
+  Future<Map<String, String>> _fetchEventDetails(String eventId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('events')
+          .select('*, event_types(name)')
+          .eq('id', eventId)
+          .single();
+
+      return {
+        'event_type': response['event_types']?['name'] ?? '',
+        'customer_name': response['customer_name'] ?? '',
+        'event_for': response['event_for'] ?? '',
+        'event_date': response['event_date'] ?? '',
+        'venue': response['venue'] ?? '',
+        'city': response['city'] ?? '',
+      };
+    } catch (e) {
+      if (kDebugMode) print('Error fetching event details: $e');
+      return {};
+    }
+  }
   /// Produces merged HTML where the first element is the receipt PNG (base64).
   Future<String> _createMergedHtmlWithImageFirst(String serverHtml) async {
+    // Fetch event details from your database first
+// You'll need to add a method to fetch event data
+    final eventData = await _fetchEventDetails(widget.eventId);
+
+// Fields to render on receipt
     final fields = <String, String>{
-      'Event ID': widget.eventId,
-      'Generated On': DateTime.now().toString(),
-      'Title': 'Final MOI Report',
+      'Event Type': eventData['event_type'] ?? '',
+      'Customer Name': eventData['customer_name'] ?? '',
+      'Event For': eventData['event_for'] ?? '',
+      'Event Date': eventData['event_date'] ?? '',
+      'Venue': eventData['venue'] ?? '',
+      'City': eventData['city'] ?? '',
     };
     final pngBytes = await _createReceiptPngBytes(fields);
     final base64Image = base64Encode(pngBytes);
