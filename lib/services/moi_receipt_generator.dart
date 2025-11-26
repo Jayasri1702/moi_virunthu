@@ -299,6 +299,10 @@ class MoiReceiptGenerator {
       padding: 8px;
       margin-bottom: 10px;
     }
+    .outer-box {
+  border: 3px solid black;
+  padding: 0;
+}
     
     .company-name {
       font-size: 22px;
@@ -319,22 +323,25 @@ class MoiReceiptGenerator {
     }
     
     .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  border-bottom: 2px solid black;
+}
+
+.left-section {
+  text-align: left;
+  padding: 8px;
+  flex: 1;
+  border-right: 2px solid black;
+}
+
+.right-section {
+  text-align: right;
+  padding: 8px;
+  flex: 1;
+  font-weight: bold;
+}
     
     .serial-no {
       font-size: 16px;
@@ -402,7 +409,8 @@ class MoiReceiptGenerator {
 <body>
   <div class="header">Single Receipt</div>
   
-  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="outer-box">
+    <div class="company-name">Hi Tech Moi</div>
   
   <div class="divider"></div>
   
@@ -440,6 +448,7 @@ class MoiReceiptGenerator {
     ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
     ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
     ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+</div>
   </div>
 </body>
 </html>
@@ -511,6 +520,10 @@ class MoiReceiptGenerator {
       padding: 10px;
       margin-bottom: 10px;
     }
+    .outer-box {
+  border: 3px solid black;
+  padding: 0;
+}
     
     .company-name {
       font-size: 22px;
@@ -531,22 +544,25 @@ class MoiReceiptGenerator {
     }
     
     .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  border-bottom: 2px solid black;
+}
+
+.left-section {
+  text-align: left;
+  padding: 8px;
+  flex: 1;
+  border-right: 2px solid black;
+}
+
+.right-section {
+  text-align: right;
+  padding: 8px;
+  flex: 1;
+  font-weight: bold;
+}
     
     .serial-no {
       font-size: 18px;
@@ -624,7 +640,9 @@ class MoiReceiptGenerator {
 <body>
   <div class="header">Check / Advance / UPI Receipt</div>
   
-  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="outer-box">
+  
+  <div class="company-name">Hi Tech Moi</div>
   
   <div class="divider"></div>
   
@@ -659,6 +677,7 @@ class MoiReceiptGenerator {
     ${customerName != null && customerName.isNotEmpty ? '<div class="footer-person">$customerName</div>' : ''}
     ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
     ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
@@ -1031,6 +1050,10 @@ class MoiReceiptGenerator {
       padding: 8px;
       margin-bottom: 10px;
     }
+    .outer-box {
+  border: 3px solid black;
+  padding: 0;
+}
     
     .company-name {
       font-size: 22px;
@@ -1051,26 +1074,25 @@ class MoiReceiptGenerator {
     }
     
     .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
-    
-    .entry-block {
-      margin: 10px 0;
-    }
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  border-bottom: 2px solid black;
+}
+
+.left-section {
+  text-align: left;
+  padding: 8px;
+  flex: 1;
+  border-right: 2px solid black;
+}
+
+.right-section {
+  text-align: right;
+  padding: 8px;
+  flex: 1;
+  font-weight: bold;
+}
     
     .serial-no {
       font-size: 16px;
@@ -1155,8 +1177,10 @@ class MoiReceiptGenerator {
 </head>
 <body>
   <div class="header">Group Moi Receipt</div>
+  <div class="outer-box">
   
-  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="company-name">Hi Tech Moi</div>
+  
 
   <div class="divider"></div>
   
@@ -1189,6 +1213,7 @@ class MoiReceiptGenerator {
     ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
     ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
     ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="village-info">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
@@ -1283,6 +1308,10 @@ class MoiReceiptGenerator {
       padding: 10px;
       margin-bottom: 10px;
     }
+    .outer-box {
+  border: 3px solid black;
+  padding: 0;
+}
     
     .company-name {
       font-size: 22px;
@@ -1303,22 +1332,25 @@ class MoiReceiptGenerator {
     }
     
     .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  border-bottom: 2px solid black;
+}
+
+.left-section {
+  text-align: left;
+  padding: 8px;
+  flex: 1;
+  border-right: 2px solid black;
+}
+
+.right-section {
+  text-align: right;
+  padding: 8px;
+  flex: 1;
+  font-weight: bold;
+}
     
     .entry-block {
       margin: 10px 0;
@@ -1404,8 +1436,8 @@ class MoiReceiptGenerator {
 </head>
 <body>
   <div class="header">Group Check / Advance / UPI Receipt</div>
-  
-  <div class="company-name">பேச்சி மொய் டெக்</div>
+  <div class="outer-box">
+  <div class="company-name">Hi Tech Moi</div>
   
   <div class="divider"></div>
   
@@ -1437,6 +1469,7 @@ class MoiReceiptGenerator {
     ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
     ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
     ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="village-info">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>

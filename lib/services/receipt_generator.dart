@@ -236,7 +236,7 @@ class ReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">ஹைடெக் மொய்</div>
+  <div class="header">Hi Tech Moi/div>
   
   <div class="divider"></div>
   

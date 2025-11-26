@@ -37,12 +37,12 @@ class ExchangeReceiptGenerator {
       HeadlessInAppWebView? headlessWebView;
 
       headlessWebView = HeadlessInAppWebView(
-          initialData: InAppWebViewInitialData(data: htmlContent),
-          initialSettings: InAppWebViewSettings(
-            javaScriptEnabled: true,
-            useHybridComposition: true,
-          ),
-          initialSize: Size(302, 800), // ADD THIS LINE
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
         onLoadStop: (controller, url) async {
           try {
             await Future.delayed(const Duration(milliseconds: 1500));
@@ -163,7 +163,18 @@ class ExchangeReceiptGenerator {
     required Map<int, int> returnedDenominations,
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(exchangeDate);
-    final timeStr = '${exchangeTime.hour.toString().padLeft(2, '0')}.${exchangeTime.minute.toString().padLeft(2, '0')} ${exchangeTime.hour < 12 ? 'am' : 'pm'}';
+
+    // Convert to 12-hour format with space before AM/PM (like withdrawal receipt)
+    int hour = exchangeTime.hour;
+    int minute = exchangeTime.minute;
+    String period = hour >= 12 ? 'pm' : 'am';
+    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final timeStr = '${displayHour.toString().padLeft(2, '0')}.${minute.toString().padLeft(2, '0')} $period';
+
+    // Use proper operator name, fallback to "Operator" if empty or null
+    final displayOperatorName = (operatorName.isEmpty || operatorName == 'Unknown')
+        ? 'Operator'
+        : operatorName;
 
     // Calculate received amount
     int receivedTotal = 0;
@@ -234,7 +245,12 @@ class ExchangeReceiptGenerator {
       font-size: 18px;
       font-weight: bold;
       padding: 10px;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .outer-box {
+      border: 3px solid black;
+      padding: 0;
     }
     
     .company-name {
@@ -242,44 +258,48 @@ class ExchangeReceiptGenerator {
       font-weight: bold;
       margin-bottom: 5px;
       color: #000;
+      padding: 10px 10px 5px 10px;
     }
     
     .company-phone {
       font-size: 14px;
       margin-bottom: 10px;
       color: #000;
+      padding: 0 10px 10px 10px;
     }
     
     .divider {
       border-top: 2px solid black;
-      margin: 10px 0;
+      margin: 0;
     }
     
     .date-time-row {
       display: flex;
       justify-content: space-between;
-      margin: 10px 0;
       font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
+      border-bottom: 2px solid black;
     }
     
     .left-section {
       text-align: left;
+      padding: 8px;
+      flex: 1;
+      border-right: 2px solid black;
     }
     
     .right-section {
       text-align: right;
+      padding: 8px;
+      flex: 1;
       font-weight: bold;
     }
     
     .section-title {
       font-size: 18px;
       font-weight: bold;
-      margin: 15px 0 10px 0;
       padding: 8px;
-      background-color: #f5f5f5;
-      border: 2px solid black;
+      border-bottom: 2px solid black;
+      text-align: center;
     }
     
     .received-title {
@@ -295,7 +315,7 @@ class ExchangeReceiptGenerator {
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
+      border-bottom: 2px solid black;
     }
     
     .total-row {
@@ -304,10 +324,8 @@ class ExchangeReceiptGenerator {
     }
     
     .footer {
-      margin-top: 15px;
+      padding: 10px;
       font-size: 14px;
-      border-top: 2px solid black;
-      padding-top: 10px;
     }
     
     .thanks {
@@ -319,43 +337,45 @@ class ExchangeReceiptGenerator {
 <body>
   <div class="header">Exchange Denomination Receipt</div>
   
-  <div class="company-name">பேச்சி மொய் டெக்</div>
-  
-  <div class="divider"></div>
-  
-  <div class="date-time-row">
-    <div class="left-section">
-      <div>$dateStr</div>
-      <div>$timeStr</div>
+  <div class="outer-box">
+    <div class="company-name">Hi Tech Moi</div>
+    
+    <div class="divider"></div>
+    
+    <div class="date-time-row">
+      <div class="left-section">
+        <div>$dateStr</div>
+        <div>$timeStr</div>
+      </div>
+      <div class="right-section">
+        <div>Typer</div>
+        <div>$displayOperatorName</div>
+      </div>
     </div>
-    <div class="right-section">
-      <div>Operator</div>
-      <div>$operatorName</div>
+    
+    <div class="section-title received-title">Received</div>
+    <table>
+      $receivedTable
+      <tr class="total-row">
+        <td colspan="3" style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">Total Received</td>
+        <td style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">₹$receivedTotal</td>
+      </tr>
+    </table>
+    
+    <div class="divider"></div>
+    
+    <div class="section-title returned-title">Returned</div>
+    <table>
+      $returnedTable
+      <tr class="total-row">
+        <td colspan="3" style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">Total Returned</td>
+        <td style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">₹$returnedTotal</td>
+      </tr>
+    </table>
+    
+    <div class="footer">
+      <div class="thanks">நன்றி!</div>
     </div>
-  </div>
-  
-  <div class="section-title received-title">Received</div>
-  <table>
-    $receivedTable
-    <tr class="total-row">
-      <td colspan="3" style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">Total Received</td>
-      <td style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">₹$receivedTotal</td>
-    </tr>
-  </table>
-  
-  <div class="divider"></div>
-  
-  <div class="section-title returned-title">Returned</div>
-  <table>
-    $returnedTable
-    <tr class="total-row">
-      <td colspan="3" style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">Total Returned</td>
-      <td style="border: 2px solid black; padding: 8px; text-align: center; font-size: 16px;">₹$returnedTotal</td>
-    </tr>
-  </table>
-  
-  <div class="footer">
-    <div class="thanks">நன்றி!</div>
   </div>
 </body>
 </html>

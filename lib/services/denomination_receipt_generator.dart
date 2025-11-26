@@ -25,7 +25,7 @@ class DenominationReceiptGenerator {
     required double totalWithdrawals,
     required double verupaadu,
     required int peopleCount,
-    required double totalOthersAmount, // NEW PARAMETER - sum of all OTHERS payment method entries
+    required double totalOthersAmount,
   }) async {
     try {
       final htmlContent = _generateDenominationHtml(
@@ -43,7 +43,7 @@ class DenominationReceiptGenerator {
         totalWithdrawals: totalWithdrawals,
         verupaadu: verupaadu,
         peopleCount: peopleCount,
-        totalOthersAmount: totalOthersAmount, // PASS THE NEW PARAMETER
+        totalOthersAmount: totalOthersAmount,
       );
 
       final output = await getTemporaryDirectory();
@@ -57,12 +57,12 @@ class DenominationReceiptGenerator {
       HeadlessInAppWebView? headlessWebView;
 
       headlessWebView = HeadlessInAppWebView(
-          initialData: InAppWebViewInitialData(data: htmlContent),
-          initialSettings: InAppWebViewSettings(
-            javaScriptEnabled: true,
-            useHybridComposition: true,
-          ),
-          initialSize: Size(302, 800), // ADD THIS LINE
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
         onLoadStop: (controller, url) async {
           try {
             await Future.delayed(const Duration(milliseconds: 1500));
@@ -198,7 +198,7 @@ class DenominationReceiptGenerator {
     required double totalWithdrawals,
     required double verupaadu,
     required int peopleCount,
-    required double totalOthersAmount, // NEW PARAMETER
+    required double totalOthersAmount,
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
 
@@ -237,7 +237,6 @@ class DenominationReceiptGenerator {
       ''';
     }
 
-    // UPDATED: Use the total of OTHERS payment method entries directly
     double checkAdvanceUPI = totalOthersAmount;
 
     return '''
@@ -262,31 +261,36 @@ class DenominationReceiptGenerator {
       background: white;
     }
     
-    .company-box {
+    .header {
+      background-color: #1976D2;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    
+    .outer-box {
       border: 2px solid black;
+      padding: 0;
+    }
+    
+    .company-box {
       padding: 8px 6px;
-      margin-bottom: 0;
+      border-bottom: 2px solid black;
     }
     
     .company-name {
       font-size: 20px;
       font-weight: bold;
-      margin-bottom: 4px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 13px;
       color: #000;
     }
     
     .customer-info {
-      margin: 0;
-      border: 2px solid black;
-      border-top: none;
       padding: 6px;
       text-align: center;
       line-height: 1.5;
+      border-bottom: 2px solid black;
     }
     
     .info-line {
@@ -298,11 +302,9 @@ class DenominationReceiptGenerator {
     .section-title {
       font-size: 14px;
       font-weight: bold;
-      margin: 0;
       padding: 5px;
       background-color: white;
-      border: 2px solid black;
-      border-top: none;
+      border-bottom: 2px solid black;
     }
     
     table {
@@ -316,18 +318,8 @@ class DenominationReceiptGenerator {
       font-weight: bold;
     }
     
-    .header {
-      background-color: #1976D2;
-      color: white;
-      font-size: 18px;
-      font-weight: bold;
-      padding: 10px;
-      margin-bottom: 10px;
-    }
-    
     .summary-item {
-      border: 2px solid black;
-      border-top: none;
+      border-bottom: 2px solid black;
       padding: 5px 6px;
       display: flex;
       justify-content: space-between;
@@ -353,17 +345,14 @@ class DenominationReceiptGenerator {
     }
     
     .footer {
-      margin-top: 10px;
+      padding: 10px 6px;
       font-size: 11px;
-      padding-top: 8px;
     }
     
     .signature-section {
       display: flex;
       justify-content: space-between;
-      margin-top: 25px;
       padding-top: 6px;
-      font-size: 11px;
     }
     
     .signature-box {
@@ -373,66 +362,69 @@ class DenominationReceiptGenerator {
   </style>
 </head>
 <body>
-<div class="header">Final Denomination Receipt</div>
-  <div class="company-box">
-    <div class="company-name">பேச்சி மொய் டெக்</div>
-  </div>
+  <div class="header">Final Denomination Receipt</div>
   
-  <div class="customer-info">
-    <div class="info-line">$customerName</div>
-    <div class="info-line">$eventTypeName</div>
-    <div class="info-line">$venue</div>
-    <div class="info-line">$city</div>
-    <div class="info-line">$contactNumber</div>
-    <div class="info-line">நாள் : $dateStr</div>
-  </div>
-  
-  <div class="section-title">DENOMINATION</div>
-  
-  <table>
-    $denominationRows
-    <tr class="total-row">
-      <td colspan="2" style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">
-        ருபாய் கைஇருப்பு
-      </td>
-      <td style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">${_formatAmount(grandTotal)}</td>
-    </tr>
-  </table>
-  
-  <div class="summary-item">
-    <span class="summary-label">கம்ப்யூட்டர் தொகை</span>
-    <span class="summary-value">${_formatAmount(computedTotal.round())}</span>
-  </div>
-  
-  <div class="summary-item highlight">
-    <span class="summary-label">வேருபாடு</span>
-    <span class="summary-value highlight-value">${_formatAmount(verupaadu.abs().round())}</span>
-  </div>
-  
-  <div class="summary-item">
-    <span class="summary-label">Total Withdrawals</span>
-    <span class="summary-value">${_formatAmount(totalWithdrawals.round())}</span>
-  </div>
-  
-  <div class="summary-item">
-    <span class="summary-label">Check / Advance / UPI</span>
-    <span class="summary-value">${_formatAmount(checkAdvanceUPI.round())}</span>
-  </div>
-  
-  <div class="summary-item" style="border-bottom: 2px solid black;">
-    <span class="summary-label">மொய்<br>செய்தவர்களின்<br>எண்ணிக்கை</span>
-    <span class="summary-value">$peopleCount</span>
-  </div>
-  
-  <div class="footer">
-    <div class="signature-section">
-      <div class="signature-box">
-        <div>For Petchi Moi Tech</div>
-        <div style="margin-top: 30px; border-top: 1px solid black; padding-top: 2px;"></div>
-      </div>
-      <div class="signature-box">
-        <div>Amt received by<br>Customer</div>
-        <div style="margin-top: 30px; border-top: 1px solid black; padding-top: 2px;"></div>
+  <div class="outer-box">
+    <div class="company-box">
+      <div class="company-name">Hi Tech Moi</div>
+    </div>
+    
+    <div class="customer-info">
+      <div class="info-line">$customerName</div>
+      <div class="info-line">$eventTypeName</div>
+      <div class="info-line">$venue</div>
+      <div class="info-line">$city</div>
+      <div class="info-line">$contactNumber</div>
+      <div class="info-line">நாள் : $dateStr</div>
+    </div>
+    
+    <div class="section-title">DENOMINATION</div>
+    
+    <table>
+      $denominationRows
+      <tr class="total-row">
+        <td colspan="2" style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">
+          ருபாய் கைஇருப்பு
+        </td>
+        <td style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">${_formatAmount(grandTotal)}</td>
+      </tr>
+    </table>
+    
+    <div class="summary-item">
+      <span class="summary-label">கம்ப்யூட்டர் தொகை</span>
+      <span class="summary-value">${_formatAmount(computedTotal.round())}</span>
+    </div>
+    
+    <div class="summary-item highlight">
+      <span class="summary-label">வேருபாடு</span>
+      <span class="summary-value highlight-value">${_formatAmount(verupaadu.abs().round())}</span>
+    </div>
+    
+    <div class="summary-item">
+      <span class="summary-label">Total Withdrawals</span>
+      <span class="summary-value">${_formatAmount(totalWithdrawals.round())}</span>
+    </div>
+    
+    <div class="summary-item">
+      <span class="summary-label">Check / Advance / UPI</span>
+      <span class="summary-value">${_formatAmount(checkAdvanceUPI.round())}</span>
+    </div>
+    
+    <div class="summary-item">
+      <span class="summary-label">மொய்<br>செய்தவர்களின்<br>எண்ணிக்கை</span>
+      <span class="summary-value">$peopleCount</span>
+    </div>
+    
+    <div class="footer">
+      <div class="signature-section">
+        <div class="signature-box">
+          <div>For Hi Moi Tech</div>
+          <div style="margin-top: 30px; border-top: 1px solid black; padding-top: 2px;"></div>
+        </div>
+        <div class="signature-box">
+          <div>Amt received by<br>Customer</div>
+          <div style="margin-top: 30px; border-top: 1px solid black; padding-top: 2px;"></div>
+        </div>
       </div>
     </div>
   </div>

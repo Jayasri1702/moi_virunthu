@@ -313,9 +313,13 @@ class WithdrawalReceiptGenerator {
     String? reason,
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(withdrawalDate);
-    final timeStr = '${withdrawalTime.hour.toString().padLeft(
-        2, '0')}.${withdrawalTime.minute.toString().padLeft(
-        2, '0')} ${withdrawalTime.hour < 12 ? 'am' : 'pm'}';
+
+    // Convert to 12-hour format with space before AM/PM
+    int hour = withdrawalTime.hour;
+    int minute = withdrawalTime.minute;
+    String period = hour >= 12 ? 'pm' : 'am';
+    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final timeStr = '${displayHour.toString().padLeft(2, '0')}.${minute.toString().padLeft(2, '0')} $period';
 
     // Use proper operator name, fallback to "Operator" if empty or null
     final displayOperatorName = (operatorName.isEmpty ||
@@ -364,17 +368,18 @@ class WithdrawalReceiptGenerator {
       background: white;
     }
     
-    .outer-box {
-      border: 3px solid black;
-      padding: 0;
-    }
-    
     .header {
       background-color: #1976D2;
       color: white;
       font-size: 18px;
       font-weight: bold;
       padding: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .outer-box {
+      border: 3px solid black;
+      padding: 0;
     }
     
     .company-name {
@@ -421,7 +426,7 @@ class WithdrawalReceiptGenerator {
     .info-box {
       border-bottom: 2px solid black;
       padding: 12px;
-      text-align: left;
+      text-align: center;
     }
     
     .info-label {
@@ -459,11 +464,13 @@ class WithdrawalReceiptGenerator {
       padding: 8px;
       background-color: #f5f5f5;
       border-bottom: 2px solid black;
+      text-align: center;
     }
     
     table {
       width: 100%;
       border-collapse: collapse;
+      border-bottom: 2px solid black;
     }
     
     .reason-box {
@@ -497,8 +504,6 @@ class WithdrawalReceiptGenerator {
     .footer-signature {
       display: flex;
       justify-content: space-between;
-      margin-top: 20px;
-      border-top: 2px solid black;
       padding-top: 10px;
     }
     
@@ -516,9 +521,9 @@ class WithdrawalReceiptGenerator {
   </style>
 </head>
 <body>
+  <div class="header">Cash Drawn Receipt</div>
+  
   <div class="outer-box">
-    <div class="header">Cash Drawn Receipt</div>
-    
     <div class="date-time-row">
       <div class="left-section">
         <div>$dateStr</div>
