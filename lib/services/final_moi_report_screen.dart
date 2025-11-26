@@ -238,7 +238,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         color: color,
         fontSize: fontSize,
         fontWeight: fontWeight,
-        fontFamily: 'NotoSerifTamil', // Use default Flutter font
+        fontFamily: 'NotoSerifTamil',
       );
 
       final textSpan = TextSpan(text: text, style: textStyle);
@@ -248,10 +248,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         textDirection: TextDirection.ltr,
       );
 
-      // Layout the text
-      textPainter.layout(minWidth: 0, maxWidth: width.toDouble() - x - 20);
+      textPainter.layout(minWidth: 0, maxWidth: width.toDouble() - 40);
 
-      // Calculate x position based on alignment
       double xPos = x;
       if (align == TextAlign.center) {
         xPos = (width - textPainter.width) / 2;
@@ -259,81 +257,92 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         xPos = width - textPainter.width - x;
       }
 
-      // Paint the text on canvas
       textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    // Title at the top (event type)
-    final title = fields['Event Type'] ?? fields['Title'] ?? 'Final MOI Report';
-    final titleFontSize = (width / 20).clamp(20.0, 40.0);
+    // Calculate font sizes
+    final titleFontSize = (width / 8).clamp(60.0, 120.0);
+    final textFontSize = (width / 10).clamp(50.0, 100.0);
+    final lineHeight = (height * 0.10).clamp(60.0, 120.0); // Increased spacing even more
+
+    // Event Type Title (positioned around 38% from top, below Ganesha)
+    final title = fields['Event Type'] ?? 'Final MOI Report';
     drawText(
       title,
       0,
-      height * 0.40, // Positioned below the Ganesha image
+      height * 0.38,
       titleFontSize,
       align: TextAlign.center,
       fontWeight: FontWeight.bold,
-      color: const Color(0xFF8B0000), // Dark red color like in template
+      color: const Color(0xFF8B0000), // Dark red
     );
 
-    // Customer details section (centered)
-    double cursorY = height * 0.48;
-    final lineHeight = (height * 0.035).clamp(18.0, 35.0);
-    final labelFontSize = (lineHeight * 0.85).clamp(16.0, 28.0);
+    // Start customer details section
+    double cursorY = height * 0.46;
 
-    // Customer name (குழந்தைச் செல்வங்கள்:)
+    // Customer Name
     final customerName = fields['Customer Name'] ?? '';
     if (customerName.isNotEmpty) {
-      drawText(
-        'குழந்தைச் செல்வங்கள்:',
-        0,
-        cursorY,
-        labelFontSize,
-        align: TextAlign.center,
-        fontWeight: FontWeight.bold,
-        color: const Color(0xFFFF0000), // Red
-      );
-      cursorY += lineHeight;
       drawText(
         customerName,
         0,
         cursorY,
-        labelFontSize,
+        textFontSize,
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFFFF0000), // Red
       );
-      cursorY += lineHeight * 1.3;
+      cursorY += lineHeight * 1.8; // More space after customer name
     }
 
-    // Event For (if available)
+    // Event For (if provided)
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
       drawText(
         eventFor,
         0,
         cursorY,
-        labelFontSize,
+        textFontSize,
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFFFF0000), // Red
       );
-      cursorY += lineHeight * 1.3;
+      cursorY += lineHeight * 1.8; // More space after event for
     }
 
-    // Date (நாள்:)
-    final eventDate = fields['Event Date'] ?? '';
-    if (eventDate.isNotEmpty) {
+    // House Warming label (if applicable based on event type)
+    if (title.toLowerCase().contains('house') || title.toLowerCase().contains('warming')) {
       drawText(
-        'நாள்: $eventDate',
+        'இல்ல காதணி விழா',
         0,
         cursorY,
-        labelFontSize * 0.9,
+        textFontSize * 0.95,
+        align: TextAlign.center,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFF0000FF), // Blue
+      );
+      cursorY += lineHeight * 1.8; // More space
+    }
+
+    // Date (நாள்:) with Tamil day
+    final eventDate = fields['Event Date'] ?? '';
+    final tamilDay = fields['Tamil Day'] ?? '';
+    if (eventDate.isNotEmpty) {
+      String dateText = 'நாள் : $eventDate';
+      if (tamilDay.isNotEmpty) {
+        dateText += ', $tamilDay';
+      }
+
+      drawText(
+        dateText,
+        0,
+        cursorY,
+        textFontSize * 0.95,
         align: TextAlign.center,
         fontWeight: FontWeight.w600,
         color: const Color(0xFF008000), // Green
       );
-      cursorY += lineHeight * 1.3;
+      cursorY += lineHeight * 1.8; // More space after date
     }
 
     // Venue and City (இடம்:)
@@ -341,32 +350,19 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     final city = fields['City'] ?? '';
     if (venue.isNotEmpty || city.isNotEmpty) {
       final venueText = venue.isNotEmpty && city.isNotEmpty
-          ? 'இடம்: $venue, $city'
-          : 'இடம்: ${venue.isNotEmpty ? venue : city}';
+          ? 'இடம் : $venue, $city'
+          : 'இடம் : ${venue.isNotEmpty ? venue : city}';
 
       drawText(
         venueText,
         0,
         cursorY,
-        labelFontSize * 0.85,
+        textFontSize * 0.9,
         align: TextAlign.center,
         fontWeight: FontWeight.w600,
         color: const Color(0xFF0000FF), // Blue
       );
     }
-
-    // Footer at the bottom (Hi Tech Moi contact info area)
-    // This area is already in your template image, so we'll keep it minimal
-    final footerFontSize = (width / 80).clamp(8.0, 12.0);
-    final generatedOn = DateTime.now().toString().substring(0, 19);
-
-    drawText(
-      'Generated: $generatedOn',
-      width * 0.05,
-      height * 0.95,
-      footerFontSize,
-      color: Colors.grey[600]!,
-    );
 
     // Convert to image
     final picture = recorder.endRecording();

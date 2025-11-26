@@ -35,7 +35,9 @@ class WithdrawalReceiptGenerator {
       );
 
       final output = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final timestamp = DateTime
+          .now()
+          .millisecondsSinceEpoch;
       final fileName = 'withdrawal_receipt_$timestamp.pdf';
       final filePath = '${output.path}/$fileName';
 
@@ -77,7 +79,8 @@ class WithdrawalReceiptGenerator {
 
               // Calculate PDF height based on content
               final pdfWidth = 80 * PdfPageFormat.mm;
-              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
+              final pdfHeight = (height / 302) *
+                  pdfWidth; // Maintain aspect ratio
 
               pdf.addPage(
                 pw.Page(
@@ -152,7 +155,8 @@ class WithdrawalReceiptGenerator {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
+        builder: (context) =>
+        const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -202,7 +206,8 @@ class WithdrawalReceiptGenerator {
           '💰 Amount: ₹${amount.round()}\n'
           '👤 Requested by: $requestedBy\n'
           '📅 Date: ${DateFormat('dd-MM-yyyy').format(withdrawalDate)}\n'
-          '⏰ Time: ${withdrawalTime.hour.toString().padLeft(2, '0')}:${withdrawalTime.minute.toString().padLeft(2, '0')}\n\n'
+          '⏰ Time: ${withdrawalTime.hour.toString().padLeft(
+          2, '0')}:${withdrawalTime.minute.toString().padLeft(2, '0')}\n\n'
           '${reason != null && reason.isNotEmpty ? 'Reason: $reason\n\n' : ''}'
           'Receipt attached below.\n\n'
           'நன்றி!\n'
@@ -228,7 +233,8 @@ class WithdrawalReceiptGenerator {
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('WhatsApp not installed. Please install WhatsApp.'),
+                content: Text(
+                    'WhatsApp not installed. Please install WhatsApp.'),
                 backgroundColor: Colors.orange,
                 duration: Duration(seconds: 3),
               ),
@@ -247,7 +253,6 @@ class WithdrawalReceiptGenerator {
           );
         }
       }
-
     } catch (e) {
       print('Error sending to WhatsApp: $e');
 
@@ -272,26 +277,28 @@ class WithdrawalReceiptGenerator {
   static void _showShareDialog(BuildContext context, File pdfFile) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Receipt Generated'),
-        content: const Text('Withdrawal receipt has been generated successfully!'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+      builder: (context) =>
+          AlertDialog(
+            title: const Text('Receipt Generated'),
+            content: const Text(
+                'Withdrawal receipt has been generated successfully!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await Share.shareXFiles(
+                    [XFile(pdfFile.path)],
+                    subject: 'Cash Withdrawal Receipt',
+                  );
+                },
+                child: const Text('Share'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await Share.shareXFiles(
-                [XFile(pdfFile.path)],
-                subject: 'Cash Withdrawal Receipt',
-              );
-            },
-            child: const Text('Share'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -306,10 +313,13 @@ class WithdrawalReceiptGenerator {
     String? reason,
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(withdrawalDate);
-    final timeStr = '${withdrawalTime.hour.toString().padLeft(2, '0')}.${withdrawalTime.minute.toString().padLeft(2, '0')} ${withdrawalTime.hour < 12 ? 'am' : 'pm'}';
+    final timeStr = '${withdrawalTime.hour.toString().padLeft(
+        2, '0')}.${withdrawalTime.minute.toString().padLeft(
+        2, '0')} ${withdrawalTime.hour < 12 ? 'am' : 'pm'}';
 
     // Use proper operator name, fallback to "Operator" if empty or null
-    final displayOperatorName = (operatorName.isEmpty || operatorName == 'Unknown')
+    final displayOperatorName = (operatorName.isEmpty ||
+        operatorName == 'Unknown')
         ? 'Operator'
         : operatorName;
 
@@ -322,13 +332,13 @@ class WithdrawalReceiptGenerator {
       if (count > 0) {
         int total = denom * count;
         denomTable += '''
-          <tr>
-            <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$denom</td>
-            <td style="border: 2px solid black; padding: 6px; text-align: center; font-size: 16px; font-weight: bold;">x</td>
-            <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$count</td>
-            <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$total</td>
-          </tr>
-        ''';
+        <tr>
+          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$denom</td>
+          <td style="border: 2px solid black; padding: 6px; text-align: center; font-size: 16px; font-weight: bold;">x</td>
+          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$count</td>
+          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$total</td>
+        </tr>
+      ''';
       }
     }
 
@@ -354,13 +364,17 @@ class WithdrawalReceiptGenerator {
       background: white;
     }
     
+    .outer-box {
+      border: 3px solid black;
+      padding: 0;
+    }
+    
     .header {
       background-color: #1976D2;
       color: white;
       font-size: 18px;
       font-weight: bold;
       padding: 10px;
-      margin-bottom: 10px;
     }
     
     .company-name {
@@ -368,41 +382,45 @@ class WithdrawalReceiptGenerator {
       font-weight: bold;
       margin-bottom: 5px;
       color: #000;
+      padding: 10px 10px 5px 10px;
     }
     
     .company-phone {
       font-size: 14px;
       margin-bottom: 10px;
       color: #000;
+      padding: 0 10px 10px 10px;
     }
     
     .divider {
       border-top: 2px solid black;
-      margin: 10px 0;
+      margin: 0;
     }
     
     .date-time-row {
       display: flex;
       justify-content: space-between;
-      margin: 10px 0;
       font-size: 14px;
-      border: 2px solid black;
-      padding: 8px;
+      border-bottom: 2px solid black;
     }
     
     .left-section {
       text-align: left;
+      padding: 8px;
+      flex: 1;
+      border-right: 2px solid black;
     }
     
     .right-section {
       text-align: right;
+      padding: 8px;
+      flex: 1;
       font-weight: bold;
     }
     
     .info-box {
-      border: 2px solid black;
+      border-bottom: 2px solid black;
       padding: 12px;
-      margin: 10px 0;
       text-align: left;
     }
     
@@ -419,9 +437,8 @@ class WithdrawalReceiptGenerator {
     
     .amount-box {
       background-color: #f5f5f5;
-      border: 2px solid black;
+      border-bottom: 2px solid black;
       padding: 12px;
-      margin: 15px 0;
     }
     
     .amount-label {
@@ -439,22 +456,19 @@ class WithdrawalReceiptGenerator {
     .section-title {
       font-size: 18px;
       font-weight: bold;
-      margin: 15px 0 10px 0;
       padding: 8px;
       background-color: #f5f5f5;
-      border: 2px solid black;
+      border-bottom: 2px solid black;
     }
     
     table {
       width: 100%;
       border-collapse: collapse;
-      margin: 10px 0;
     }
     
     .reason-box {
-      border: 2px solid black;
+      border-bottom: 2px solid black;
       padding: 10px;
-      margin: 15px 0;
       text-align: left;
       min-height: 60px;
     }
@@ -471,65 +485,78 @@ class WithdrawalReceiptGenerator {
     }
     
     .footer {
-      margin-top: 15px;
+      padding: 10px;
       font-size: 14px;
-      border-top: 2px solid black;
-      padding-top: 10px;
     }
     
     .footer-text {
       margin: 6px 0;
       font-weight: bold;
     }
+    
+    .footer-signature {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+      border-top: 2px solid black;
+      padding-top: 10px;
+    }
+    
+    .footer-left {
+      text-align: left;
+      flex: 1;
+    }
+    
+    .footer-right {
+      text-align: right;
+      flex: 1;
+      border-left: 2px solid black;
+      padding-left: 10px;
+    }
   </style>
 </head>
 <body>
-  <div class="header">Cash Drawn Receipt</div>
-  
-  <div class="company-name">பேச்சி மொய் டெக்</div>
-  
-  <div class="divider"></div>
-  
-  <div class="date-time-row">
-    <div class="left-section">
-      <div>$dateStr</div>
-      <div>$timeStr</div>
+  <div class="outer-box">
+    <div class="header">Cash Drawn Receipt</div>
+    
+    <div class="date-time-row">
+      <div class="left-section">
+        <div>$dateStr</div>
+        <div>$timeStr</div>
+      </div>
+      <div class="right-section">
+        <div>Typer</div>
+        <div>$displayOperatorName</div>
+      </div>
     </div>
-    <div class="right-section">
-      <div>Typer</div>
-      <div>$displayOperatorName</div>
+    
+    <div class="info-box">
+      <div class="info-label">Requested by: $requestedBy</div>
+      <div class="info-label">Requested Amt: ₹${amount.round()}</div>
     </div>
-  </div>
-  
-  <div class="info-box">
-    <div class="info-label">Requested by:</div>
-    <div class="info-value">$requestedBy</div>
-  </div>
-  
-  <div class="amount-box">
-    <div class="amount-label">Requested Amt:</div>
-    <div class="amount">₹${amount.round()}</div>
-  </div>
-  
-  <div class="section-title">நோட்டு விபரம்</div>
-  <table>
-    $denomTable
-  </table>
-  
-  ${reason != null && reason.isNotEmpty ? '''
-  <div class="reason-box">
-    <div class="reason-title">Reason:</div>
-    <div class="reason-text">$reason</div>
-  </div>
-  ''' : ''}
-  
-  <div class="divider"></div>
-  
-  <div class="footer">
-    <div class="footer-text">For Petchi Moi Tech</div>
-    <div style="margin-top: 20px;">
-      <div class="info-label">Amt Received by</div>
-      <div class="info-value">$requestedBy</div>
+    
+    <div class="section-title">நோட்டு விபரம்</div>
+    <table>
+      $denomTable
+    </table>
+    
+    ${reason != null && reason.isNotEmpty ? '''
+    <div class="reason-box">
+      <div class="reason-title">Reason:</div>
+      <div class="reason-text">$reason</div>
+    </div>
+    ''' : ''}
+    
+    <div class="footer">
+      <div class="footer-signature">
+        <div class="footer-left">
+          <div class="info-label">Hi Tech Moi</div>
+        </div>
+        <div class="footer-right">
+          <div class="info-label">Amt Received by</div>
+          <div class="info-value">$requestedBy</div>
+        </div>
+      </div>
     </div>
   </div>
 </body>
