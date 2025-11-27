@@ -260,42 +260,44 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    // Calculate font sizes
-    final titleFontSize = (width / 8).clamp(60.0, 120.0);
-    final textFontSize = (width / 10).clamp(50.0, 100.0);
-    final lineHeight = (height * 0.10).clamp(60.0, 120.0); // Increased spacing even more
+    // Font sizes
+    final titleFontSize = (width / 8).clamp(65.0, 130.0);
+    final textFontSize = (width / 10).clamp(55.0, 110.0);
 
-    // Event Type Title (positioned around 38% from top, below Ganesha)
-    final title = fields['Event Type'] ?? 'Final MOI Report';
+// Line spacing (very spacious)
+    final lineHeight = (height * 0.10).clamp(90.0, 170.0);
+
+// ---------- EVENT TYPE (TOP BELOW GANESHA) ----------
+    final eventType = fields['Event Type'] ?? 'MOI EVENT';
     drawText(
-      title,
+      eventType,
       0,
-      height * 0.38,
+      height * 0.24,
       titleFontSize,
       align: TextAlign.center,
       fontWeight: FontWeight.bold,
-      color: const Color(0xFF8B0000), // Dark red
+      color: const Color(0xFF8B0000),
     );
 
-    // Start customer details section
-    double cursorY = height * 0.46;
+// Cursor starts below Event Type
+    double cursorY = height * 0.32;
 
-    // Customer Name
-    final customerName = fields['Customer Name'] ?? '';
-    if (customerName.isNotEmpty) {
+// ---------- TITLE ----------
+    final title = fields['Title'] ?? '';
+    if (title.isNotEmpty) {
       drawText(
-        customerName,
+        title,
         0,
         cursorY,
         textFontSize,
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
-        color: const Color(0xFFFF0000), // Red
+        color: const Color(0xFF0B4206),
       );
-      cursorY += lineHeight * 1.8; // More space after customer name
+      cursorY += lineHeight * 2.7;
     }
 
-    // Event For (if provided)
+// ---------- EVENT FOR (EXTRA BIG SPACE BELOW) ----------
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
       drawText(
@@ -305,64 +307,63 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         textFontSize,
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
-        color: const Color(0xFFFF0000), // Red
+        color: const Color(0xFF000C8C),
       );
-      cursorY += lineHeight * 1.8; // More space after event for
+      cursorY += lineHeight * 3.2;      // EXTRA LARGE SPACE
     }
 
-    // House Warming label (if applicable based on event type)
-    if (title.toLowerCase().contains('house') || title.toLowerCase().contains('warming')) {
+// ---------- REMARKS ----------
+    final remarks = fields['Remarks'] ?? '';
+    if (remarks.isNotEmpty) {
       drawText(
-        'இல்ல காதணி விழா',
-        0,
-        cursorY,
-        textFontSize * 0.95,
-        align: TextAlign.center,
-        fontWeight: FontWeight.bold,
-        color: const Color(0xFF0000FF), // Blue
-      );
-      cursorY += lineHeight * 1.8; // More space
-    }
-
-    // Date (நாள்:) with Tamil day
-    final eventDate = fields['Event Date'] ?? '';
-    final tamilDay = fields['Tamil Day'] ?? '';
-    if (eventDate.isNotEmpty) {
-      String dateText = 'நாள் : $eventDate';
-      if (tamilDay.isNotEmpty) {
-        dateText += ', $tamilDay';
-      }
-
-      drawText(
-        dateText,
-        0,
-        cursorY,
-        textFontSize * 0.95,
-        align: TextAlign.center,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF008000), // Green
-      );
-      cursorY += lineHeight * 1.8; // More space after date
-    }
-
-    // Venue and City (இடம்:)
-    final venue = fields['Venue'] ?? '';
-    final city = fields['City'] ?? '';
-    if (venue.isNotEmpty || city.isNotEmpty) {
-      final venueText = venue.isNotEmpty && city.isNotEmpty
-          ? 'இடம் : $venue, $city'
-          : 'இடம் : ${venue.isNotEmpty ? venue : city}';
-
-      drawText(
-        venueText,
+        remarks,
         0,
         cursorY,
         textFontSize * 0.9,
         align: TextAlign.center,
         fontWeight: FontWeight.w600,
-        color: const Color(0xFF0000FF), // Blue
+        color: const Color(0xFF5C0E04),
       );
+      cursorY += lineHeight * 1.6;
     }
+
+// ---------- EVENT DATE ----------
+    final eventDate = fields['Event Date'] ?? '';
+    if (eventDate.isNotEmpty) {
+      drawText(
+        'நாள் : $eventDate',
+        0,
+        cursorY,
+        textFontSize * 0.9,
+        align: TextAlign.center,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF008000), // green
+      );
+      cursorY += lineHeight * 1.6;
+    }
+
+// ---------- VENUE ----------
+    final venue = fields['Venue'] ?? '';
+    final city = fields['City'] ?? '';
+
+    if (venue.isNotEmpty || city.isNotEmpty) {
+      final place = venue.isNotEmpty && city.isNotEmpty
+          ? 'இடம் : $venue, $city'
+          : 'இடம் : ${venue.isNotEmpty ? venue : city}';
+
+      drawText(
+        place,
+        0,
+        cursorY,
+        textFontSize * 0.85,
+        align: TextAlign.center,
+        fontWeight: FontWeight.bold,
+        color: const Color(0xFF0000FF), // blue
+      );
+
+      cursorY += lineHeight * 1.6;
+    }
+
 
     // Convert to image
     final picture = recorder.endRecording();
@@ -459,8 +460,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 // Fields to render on receipt
       final fields = <String, String>{
         'Event Type': eventData['event_type'] ?? '',
-        'Customer Name': eventData['customer_name'] ?? '',
+        'Title': eventData['title']??'',
         'Event For': eventData['event_for'] ?? '',
+        'Remarks': eventData['remark']??'',
         'Event Date': eventData['event_date'] ?? '',
         'Venue': eventData['venue'] ?? '',
         'City': eventData['city'] ?? '',
@@ -503,8 +505,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       return {
         'event_type': response['event_types']?['name'] ?? '',
-        'customer_name': response['customer_name'] ?? '',
+        'title': response['title'] ?? '',
         'event_for': response['event_for'] ?? '',
+        'remark': response['remark'] ?? '',
         'event_date': response['event_date'] ?? '',
         'venue': response['venue'] ?? '',
         'city': response['city'] ?? '',
@@ -523,8 +526,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 // Fields to render on receipt
     final fields = <String, String>{
       'Event Type': eventData['event_type'] ?? '',
-      'Customer Name': eventData['customer_name'] ?? '',
+      'Title': eventData['title']??'',
       'Event For': eventData['event_for'] ?? '',
+      'Remarks': eventData['remark']??'',
       'Event Date': eventData['event_date'] ?? '',
       'Venue': eventData['venue'] ?? '',
       'City': eventData['city'] ?? '',
