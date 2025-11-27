@@ -20,6 +20,8 @@ dependencies:
   flutter_dotenv: ^5.1.0
   url_launcher: ^6.3.2
   path_provider: ^2.1.5
+  image_picker: ^1.0.7
+  path: ^1.8.3
 
   # PDF-related libs
   printing: ^5.14.2        # used for printing & convertHtml

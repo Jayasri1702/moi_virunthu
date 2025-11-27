@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '/utils/constants.dart'; // if constants are in a separate file
-
+import '../screens/admin/cover_image_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -13,7 +13,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
-
+import 'package:moi_virunthu/utils/cover_image_helper.dart';
 // Syncfusion PDF library
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
@@ -198,16 +198,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
-  // ********** Helpers: create edited image and merging **********
-
-  /// Draws text over the asset background image and returns PNG bytes.
-  /// Uses Flutter Canvas/TextPainter to ensure consistent fonts and rendering on devices.
-  /// Draws text over the asset background image and returns PNG bytes.
-  /// Uses Flutter Canvas/TextPainter to ensure consistent fonts and rendering on devices.
   Future<Uint8List> _createReceiptPngBytes(Map<String, String> fields) async {
-    // Load the image bytes
-    final byteData = await rootBundle.load('assets/images/receipt_bg.png');
-    final Uint8List imgBytes = byteData.buffer.asUint8List();
+    // Load the image bytes - USE CUSTOM IMAGE IF AVAILABLE
+    final Uint8List imgBytes = await CoverImageHelper.getCoverImageBytes();
 
     // Decode to ui.Image
     final codec = await ui.instantiateImageCodec(imgBytes);
@@ -264,10 +257,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     final titleFontSize = (width / 8).clamp(65.0, 130.0);
     final textFontSize = (width / 10).clamp(55.0, 110.0);
 
-// Line spacing (very spacious)
+    // Line spacing (very spacious)
     final lineHeight = (height * 0.10).clamp(90.0, 170.0);
 
-// ---------- EVENT TYPE (TOP BELOW GANESHA) ----------
+    // ---------- EVENT TYPE (TOP BELOW GANESHA) ----------
     final eventType = fields['Event Type'] ?? 'MOI EVENT';
     drawText(
       eventType,
@@ -279,10 +272,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       color: const Color(0xFF8B0000),
     );
 
-// Cursor starts below Event Type
+    // Cursor starts below Event Type
     double cursorY = height * 0.32;
 
-// ---------- TITLE ----------
+    // ---------- TITLE ----------
     final title = fields['Title'] ?? '';
     if (title.isNotEmpty) {
       drawText(
@@ -297,7 +290,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       cursorY += lineHeight * 2.7;
     }
 
-// ---------- EVENT FOR (EXTRA BIG SPACE BELOW) ----------
+    // ---------- EVENT FOR (EXTRA BIG SPACE BELOW) ----------
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
       drawText(
@@ -309,10 +302,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         fontWeight: FontWeight.bold,
         color: const Color(0xFF000C8C),
       );
-      cursorY += lineHeight * 3.2;      // EXTRA LARGE SPACE
+      cursorY += lineHeight * 3.2; // EXTRA LARGE SPACE
     }
 
-// ---------- REMARKS ----------
+    // ---------- REMARKS ----------
     final remarks = fields['Remarks'] ?? '';
     if (remarks.isNotEmpty) {
       drawText(
@@ -327,7 +320,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       cursorY += lineHeight * 1.6;
     }
 
-// ---------- EVENT DATE ----------
+    // ---------- EVENT DATE ----------
     final eventDate = fields['Event Date'] ?? '';
     if (eventDate.isNotEmpty) {
       drawText(
@@ -342,7 +335,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       cursorY += lineHeight * 1.6;
     }
 
-// ---------- VENUE ----------
+    // ---------- VENUE ----------
     final venue = fields['Venue'] ?? '';
     final city = fields['City'] ?? '';
 
@@ -363,7 +356,6 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       cursorY += lineHeight * 1.6;
     }
-
 
     // Convert to image
     final picture = recorder.endRecording();

@@ -7,7 +7,6 @@ class AdminDashboard extends StatelessWidget {
   Future<void> _handleLogout(BuildContext context) async {
     final auth = AuthService();
 
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -203,7 +202,12 @@ class AdminDashboard extends StatelessWidget {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Container(), // Empty placeholder for grid alignment
+                          child: _buildGridButton(
+                            'Cover Image',
+                            Icons.image,
+                                () => Navigator.pushNamed(context, '/admin/cover-image'),
+                            color: const Color(0xFFB846D7), // Purple highlight
+                          ),
                         ),
                       ],
                     ),
@@ -218,7 +222,12 @@ class AdminDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildGridButton(String label, IconData icon, VoidCallback onPressed) {
+  Widget _buildGridButton(
+      String label,
+      IconData icon,
+      VoidCallback onPressed, {
+        Color color = const Color(0xFF8F8F8F),
+      }) {
     return Container(
       height: 110,
       decoration: BoxDecoration(
@@ -245,7 +254,7 @@ class AdminDashboard extends StatelessWidget {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF8F8F8F),
+                  color: color,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
