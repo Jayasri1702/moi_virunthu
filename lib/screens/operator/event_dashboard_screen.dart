@@ -423,8 +423,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Export Receipts', Icons.receipt_long, () {
-                          // Navigate to Export Receipts screen
+                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
+                          _showSampleReceipt();
                         }),
                       ),
                       const SizedBox(width: 12),
@@ -439,20 +439,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                             ),
                           );
                         }),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),  // ✅ CORRECT - Outside the Row
-                  Row(                          // ✅ CORRECT - Separate Row
-                    children: [
-                      Expanded(
-                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
-                          _showSampleReceipt();
-                        }),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(), // Empty placeholder
                       ),
                     ],
                   ),
