@@ -255,8 +255,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
       // Total Event Amount = Total Cash Collected + Check/Advance/UPI (without withdrawals)
       double totalEventAmount = totalCashCollected + totalOthers;
 
-      // Hand Cash = Total Event Amount - Total Withdrawals
-      double handCash = totalEventAmount - totalWithdrawals;
+// Hand Cash = Total Cash Collected - Total Withdrawals
+      double handCash = totalCashCollected - totalWithdrawals;
 
       setState(() {
         _summaryData = {

@@ -318,9 +318,9 @@ class MoiReceiptGenerator {
     }
     
     .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
+  border-top: 2px solid black;
+  margin: 0;  // Changed from margin: 10px 0;
+}
     
     .date-time-row {
   display: flex;
@@ -380,21 +380,25 @@ class MoiReceiptGenerator {
     }
     
     .table-title {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 10px 0;
-    }
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;  // Changed from margin: 10px 0;
+  padding: 8px 0;  // Added padding instead
+}
     
     table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 10px 0;
-    }
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;  // Changed from margin: 10px 0;
+}
+
+
     
     .footer {
-      margin-top: 15px;
-      font-size: 14px;
-    }
+  margin-top: 0;  // Changed from margin-top: 15px;
+  padding-top: 8px;  // Use padding instead
+  font-size: 14px;
+}
     
     .thanks {
       margin: 6px 0;
@@ -539,9 +543,9 @@ class MoiReceiptGenerator {
     }
     
     .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
+  border-top: 2px solid black;
+  margin: 0;  // Changed from margin: 10px 0;
+}
     
     .date-time-row {
   display: flex;
@@ -605,20 +609,20 @@ class MoiReceiptGenerator {
     }
     
     .payment-method-box {
-      border: 2px solid black;
-      padding: 12px;
-      margin: 15px 0;
-      font-size: 16px;
-      font-weight: bold;
-      background-color: #f5f5f5;
-    }
+  border: 2px solid black;
+  padding: 12px;
+  margin: 0;  // Changed from margin: 15px 0;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: #f5f5f5;
+}
+
     
     .footer {
-      margin-top: 15px;
-      font-size: 15px;
-      border-top: 2px solid black;
-      padding-top: 12px;
-    }
+  margin-top: 0;  // Changed from margin-top: 15px;
+  padding-top: 8px;  // Use padding instead
+  font-size: 14px;
+}
     
     .thanks {
       margin: 8px 0;
@@ -1069,9 +1073,9 @@ class MoiReceiptGenerator {
     }
     
     .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
+  border-top: 2px solid black;
+  margin: 0;  // Changed from margin: 10px 0;
+}
     
     .date-time-row {
   display: flex;
@@ -1123,12 +1127,12 @@ class MoiReceiptGenerator {
       margin: 4px 0;
     }
     
-    .total-section {
-      background-color: #f5f5f5;
-      padding: 10px;
-      margin: 15px 0;
-      border: 2px solid black;
-    }
+   .total-section {
+  background-color: #f5f5f5;
+  padding: 10px;
+  margin: 0;  // Changed from margin: 15px 0;
+  border: 2px solid black;
+}
     
     .total-label {
       font-size: 18px;
@@ -1143,21 +1147,24 @@ class MoiReceiptGenerator {
     }
     
     .table-title {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 10px 0;
-    }
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;  // Changed from margin: 10px 0;
+  padding: 8px 0;  // Added padding instead
+}
     
     table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 10px 0;
-    }
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;  // Changed from margin: 10px 0;
+}
+
     
     .footer {
-      margin-top: 15px;
-      font-size: 14px;
-    }
+  margin-top: 0;  // Changed from margin-top: 15px;
+  padding-top: 8px;  // Use padding instead
+  font-size: 14px;
+}
     
     .thanks {
       margin: 6px 0;
@@ -1326,10 +1333,10 @@ class MoiReceiptGenerator {
       color: #000;
     }
     
-    .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
+   .divider {
+  border-top: 2px solid black;
+  margin: 0;  // Changed from margin: 10px 0;
+}
     
     .date-time-row {
   display: flex;
@@ -1353,8 +1360,9 @@ class MoiReceiptGenerator {
 }
     
     .entry-block {
-      margin: 10px 0;
-    }
+  margin: 0;  // Changed from margin: 10px 0;
+  padding: 8px 0;
+}
     
     .serial-no {
       font-size: 16px;
@@ -1386,11 +1394,11 @@ class MoiReceiptGenerator {
     }
     
     .total-section {
-      background-color: #f5f5f5;
-      padding: 10px;
-      margin: 15px 0;
-      border: 2px solid black;
-    }
+  background-color: #f5f5f5;
+  padding: 10px;
+  margin: 0;  // Changed from margin: 15px 0;
+  border: 2px solid black;
+}
     
     .total-label {
       font-size: 18px;
@@ -1404,19 +1412,21 @@ class MoiReceiptGenerator {
       margin: 8px 0;
     }
     
-    .payment-method-box {
-      border: 2px solid black;
-      padding: 12px;
-      margin: 15px 0;
-      font-size: 16px;
-      font-weight: bold;
-      background-color: #f5f5f5;
-    }
+   .payment-method-box {
+  border: 2px solid black;
+  padding: 12px;
+  margin: 0;  // Changed from margin: 15px 0;
+  font-size: 16px;
+  font-weight: bold;
+  background-color: #f5f5f5;
+}
+
     
     .footer {
-      margin-top: 15px;
-      font-size: 14px;
-    }
+  margin-top: 0;  // Changed from margin-top: 15px;
+  padding-top: 8px;  // Use padding instead
+  font-size: 14px;
+}
     
     .thanks {
       margin: 6px 0;

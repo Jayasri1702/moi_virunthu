@@ -3228,7 +3228,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                '$amountInWords Rupees Only',
+                '$amountInWords ',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -3482,7 +3482,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                '$amountInWords Rupees Only',
+                '$amountInWords Rupees',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,

@@ -11,4 +11,6 @@
 
     <!-- Allow access to external cache directory -->
     <external-cache-path name="external_cache" path="." />
+
+    <external-path name="external_storage" path="." />
 </paths>

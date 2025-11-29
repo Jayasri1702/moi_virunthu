@@ -22,6 +22,8 @@ dependencies:
   path_provider: ^2.1.5
   image_picker: ^1.0.7
   path: ^1.8.3
+  flutter_local_notifications: ^17.0.0
+  open_file: ^3.3.2
 
   # PDF-related libs
   printing: ^5.14.2        # used for printing & convertHtml

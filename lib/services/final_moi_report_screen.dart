@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '/utils/constants.dart'; // if constants are in a separate file
+import '/utils/constants.dart';
 import '../screens/admin/cover_image_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -14,12 +14,43 @@ import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:moi_virunthu/utils/cover_image_helper.dart';
-// Syncfusion PDF library
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-
-// Import pdf package for Printing.convertHtml
 import 'package:pdf/pdf.dart' as pdf_pkg;
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart'; // Add this dependency
 
+Future<bool> _requestStoragePermission() async {
+  if (Platform.isAndroid) {
+    // For Android 13+ (API 33+), we need different permissions
+    if (await Permission.photos.isGranted ||
+        await Permission.videos.isGranted ||
+        await Permission.audio.isGranted) {
+      return true;
+    }
+
+    // Check Android version
+    final androidInfo = await Permission.storage.status;
+
+    if (Platform.isAndroid) {
+      // For Android 13+ (API 33+)
+      final photoStatus = await Permission.photos.request();
+      if (photoStatus.isGranted) return true;
+    }
+
+    // For Android 11-12
+    if (await Permission.manageExternalStorage.isGranted) {
+      return true;
+    }
+    final manageStatus = await Permission.manageExternalStorage.request();
+    if (manageStatus.isGranted) return true;
+
+    // For Android 10 and below
+    final storageStatus = await Permission.storage.request();
+    return storageStatus.isGranted;
+  }
+  return true;
+}
 
 class FinalMoiReportScreen extends StatefulWidget {
   final String eventId;
@@ -35,16 +66,133 @@ class FinalMoiReportScreen extends StatefulWidget {
 
 class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   bool _isLoading = false;
-  String? _generatedContent; // HTML or TXT bodies or base64 PDF when return_type == pdf
+  String? _generatedContent;
   String? _selectedFormat;
-  File? _generatedFile; // for xlsx or saved merged outputs
+  File? _generatedFile;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+  FlutterLocalNotificationsPlugin();
 
   static const _serverUrl =
       'https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/report-generator';
   static const _authToken =
       'Bearer 65d9708252d6947d42e757bc7558acce87b52c2067ef5663e1dc0b29843b1e2a';
 
-  // ********** Public actions (unchanged UI) **********
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    const androidSettings = AndroidInitializationSettings(
+        '@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) async {
+        if (details.payload != null) {
+          await OpenFile.open(details.payload);
+        }
+      },
+    );
+
+    // Request notification permission for Android 13+
+    if (Platform.isAndroid) {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    }
+  }
+
+  Future<void> _showDownloadNotification(String fileName,
+      String filePath) async {
+    final androidDetails = AndroidNotificationDetails(
+      'download_channel',
+      'Downloads',
+      channelDescription: 'File download notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(
+        'Tap to open the file',
+        contentTitle: 'Download Complete',
+      ),
+      actions: [
+        const AndroidNotificationAction(
+          'open',
+          'Open',
+          showsUserInterface: true,
+        ),
+      ],
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notificationsPlugin.show(
+      DateTime
+          .now()
+          .millisecondsSinceEpoch ~/ 1000,
+      'Download Complete',
+      fileName,
+      notificationDetails,
+      payload: filePath,
+    );
+  }
+
+  Future<void> _showProgressNotification(String fileName,
+      double progress) async {
+    final androidDetails = AndroidNotificationDetails(
+      'download_progress_channel',
+      'Download Progress',
+      channelDescription: 'Shows download progress',
+      importance: Importance.low,
+      priority: Priority.low,
+      showProgress: true,
+      maxProgress: 100,
+      progress: (progress * 100).toInt(),
+      ongoing: true,
+      autoCancel: false,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const iosDetails = DarwinNotificationDetails();
+
+    final notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notificationsPlugin.show(
+      0, // Use fixed ID for progress updates
+      'Downloading',
+      fileName,
+      notificationDetails,
+    );
+  }
 
   Future<void> _generateReport(String returnType) async {
     setState(() {
@@ -71,30 +219,30 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         throw Exception('Failed to generate report: ${response.statusCode}');
       }
 
-      // Branch by return type
       if (returnType == 'html' || returnType == 'txt') {
-        // keep content
         setState(() {
           _generatedContent = response.body;
         });
-      } else if (returnType == 'xlsx') {
-        // bytes -> file
+      } else if (returnType == 'excel' || returnType == 'excel') {
         final out = await getTemporaryDirectory();
-        final fname = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final extension = returnType == 'excel' ? 'csv' : 'xlsx';
+        final fname = 'final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.$extension';
         final file = File('${out.path}/$fname');
         await file.writeAsBytes(response.bodyBytes);
         setState(() => _generatedFile = file);
       } else if (returnType == 'pdf') {
-        // server returned PDF bytes. We'll store bytes in _generatedContent as base64 string
         final base64Pdf = base64Encode(response.bodyBytes);
         setState(() {
-          _generatedContent = base64Pdf; // store pdf as base64 to indicate PDF bytes present
+          _generatedContent = base64Pdf;
         });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Error: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -102,51 +250,187 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
-  // ********** Print / Share logic with merging **********
+  Future<void> _downloadReport() async {
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Storage permission is required to download files'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
-  Future<void> _printReport() async {
     try {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isDownloading = true;
+        _downloadProgress = 0.0;
+      });
 
-      if (_selectedFormat == 'html' && _generatedContent != null) {
-        final html = _generatedContent!;
-        final mergedPdfBytes = await _createMergedPdfForHtml(html);
-        if (mergedPdfBytes != null) {
-          await Printing.layoutPdf(onLayout: (format) => mergedPdfBytes);
-        } else {
-          throw Exception('Failed to create merged PDF from HTML');
+      String? savedFileName;
+      String? savedFilePath;
+
+      if (_selectedFormat == 'excel' || _selectedFormat == 'excel') {
+        if (_generatedFile != null) {
+          final fileName = 'final_moi_report_${DateTime
+              .now()
+              .millisecondsSinceEpoch}.${_selectedFormat}';
+
+          if (Platform.isAndroid) {
+            final downloadsDir = Directory('/storage/emulated/0/Download');
+            if (!await downloadsDir.exists()) {
+              await downloadsDir.create(recursive: true);
+            }
+            final savedFile = File('${downloadsDir.path}/$fileName');
+
+            await _showProgressNotification(fileName, 0.5);
+            await _generatedFile!.copy(savedFile.path);
+
+            savedFileName = fileName;
+            savedFilePath = savedFile.path;
+          } else if (Platform.isIOS) {
+            final appDir = await getApplicationDocumentsDirectory();
+            final savedFile = File('${appDir.path}/$fileName');
+            await _generatedFile!.copy(savedFile.path);
+
+            savedFileName = fileName;
+            savedFilePath = savedFile.path;
+          }
+        }
+      } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
+        await _showProgressNotification('Generating PDF...', 0.3);
+
+        final serverPdfBytes = base64Decode(_generatedContent!);
+        final mergedPdfBytes = await _createMergedPdfWithImageFirst(
+            serverPdfBytes);
+
+        await _showProgressNotification('Saving PDF...', 0.7);
+
+        final fileName = 'final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.pdf';
+
+        if (Platform.isAndroid) {
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            await downloadsDir.create(recursive: true);
+          }
+          final outFile = File('${downloadsDir.path}/$fileName');
+
+          if (mergedPdfBytes != null) {
+            await outFile.writeAsBytes(mergedPdfBytes);
+          } else {
+            await outFile.writeAsBytes(serverPdfBytes);
+          }
+
+          savedFileName = fileName;
+          savedFilePath = outFile.path;
+        } else if (Platform.isIOS) {
+          final appDir = await getApplicationDocumentsDirectory();
+          final outFile = File('${appDir.path}/$fileName');
+
+          if (mergedPdfBytes != null) {
+            await outFile.writeAsBytes(mergedPdfBytes);
+          } else {
+            await outFile.writeAsBytes(serverPdfBytes);
+          }
+
+          savedFileName = fileName;
+          savedFilePath = outFile.path;
+        }
+      } else if (_selectedFormat == 'html' && _generatedContent != null) {
+        final mergedHtml = await _createMergedHtmlWithImageFirst(
+            _generatedContent!);
+        final fileName = 'final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.html';
+
+        if (Platform.isAndroid) {
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            await downloadsDir.create(recursive: true);
+          }
+          final file = File('${downloadsDir.path}/$fileName');
+          await file.writeAsString(mergedHtml, flush: true);
+
+          savedFileName = fileName;
+          savedFilePath = file.path;
+        } else if (Platform.isIOS) {
+          final appDir = await getApplicationDocumentsDirectory();
+          final file = File('${appDir.path}/$fileName');
+          await file.writeAsString(mergedHtml, flush: true);
+
+          savedFileName = fileName;
+          savedFilePath = file.path;
         }
       } else if (_selectedFormat == 'txt' && _generatedContent != null) {
-        final pdfBytes = await _convertTextToPdf(_generatedContent!);
-        await Printing.layoutPdf(onLayout: (format) => pdfBytes);
-      } else if (_selectedFormat == 'xlsx') {
+        final fileName = 'final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.txt';
+
+        if (Platform.isAndroid) {
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            await downloadsDir.create(recursive: true);
+          }
+          final file = File('${downloadsDir.path}/$fileName');
+          await file.writeAsString(_generatedContent!);
+
+          savedFileName = fileName;
+          savedFilePath = file.path;
+        } else if (Platform.isIOS) {
+          final appDir = await getApplicationDocumentsDirectory();
+          final file = File('${appDir.path}/$fileName');
+          await file.writeAsString(_generatedContent!);
+
+          savedFileName = fileName;
+          savedFilePath = file.path;
+        }
+      }
+
+      // Cancel progress notification
+      await _notificationsPlugin.cancel(0);
+
+      if (savedFileName != null && savedFilePath != null) {
+        await _showDownloadNotification(savedFileName, savedFilePath);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please share/open the Excel file to print from a spreadsheet app'),
-              backgroundColor: Colors.orange,
+            SnackBar(
+              content: Text(
+                  'File downloaded: $savedFileName\nTap notification to open'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () async {
+                  await OpenFile.open(savedFilePath);
+                },
+              ),
             ),
           );
         }
-      } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
-        // _generatedContent is base64 PDF from server
-        final serverPdfBytes = base64Decode(_generatedContent!);
-        final mergedPdfBytes = await _createMergedPdfWithImageFirst(serverPdfBytes);
-        if (mergedPdfBytes != null) {
-          await Printing.layoutPdf(onLayout: (format) => mergedPdfBytes);
-        } else {
-          // fallback: print server PDF as-is
-          await Printing.layoutPdf(onLayout: (format) => serverPdfBytes);
-        }
       }
     } catch (e) {
+      await _notificationsPlugin.cancel(0);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Print error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Download error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadProgress = 0.0;
+        });
+      }
     }
   }
 
@@ -154,43 +438,83 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     try {
       setState(() => _isLoading = true);
 
-      if (_selectedFormat == 'xlsx' && _generatedFile != null) {
-        await Share.shareXFiles(
-          [XFile(_generatedFile!.path, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', name: 'final_moi_report.xlsx')],
-          text: 'Final Moi Report',
-        );
+      if (_selectedFormat == 'excel' || _selectedFormat == 'excel') {
+        if (_generatedFile != null) {
+          await Share.shareXFiles(
+            [XFile(
+              _generatedFile!.path,
+              mimeType: _selectedFormat == 'excel'
+                  ? 'text/csv'
+                  : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              name: 'final_moi_report.${_selectedFormat}',
+            )
+            ],
+            text: 'Final Moi Report',
+          );
+        }
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
         final serverPdfBytes = base64Decode(_generatedContent!);
-        final mergedPdfBytes = await _createMergedPdfWithImageFirst(serverPdfBytes);
+        final mergedPdfBytes = await _createMergedPdfWithImageFirst(
+            serverPdfBytes);
         final output = await getTemporaryDirectory();
-        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final outPath = '${output.path}/final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.pdf';
         final outFile = File(outPath);
+
         if (mergedPdfBytes != null) {
           await outFile.writeAsBytes(mergedPdfBytes);
         } else {
-          // fallback to original server PDF
           await outFile.writeAsBytes(serverPdfBytes);
         }
-        await Share.shareXFiles([XFile(outFile.path, mimeType: 'application/pdf', name: 'final_moi_report.pdf')], text: 'Final Moi Report');
+
+        await Share.shareXFiles(
+          [
+            XFile(outFile.path, mimeType: 'application/pdf',
+                name: 'final_moi_report.pdf')
+          ],
+          text: 'Final Moi Report',
+        );
       } else if (_selectedFormat == 'html' && _generatedContent != null) {
         final html = _generatedContent!;
         final mergedHtml = await _createMergedHtmlWithImageFirst(html);
         final output = await getTemporaryDirectory();
-        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.html';
+        final outPath = '${output.path}/final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.html';
         final file = File(outPath);
         await file.writeAsString(mergedHtml, flush: true);
-        await Share.shareXFiles([XFile(file.path, mimeType: 'text/html', name: 'final_moi_report.html')], text: 'Final Moi Report');
+
+        await Share.shareXFiles(
+          [
+            XFile(
+                file.path, mimeType: 'text/html', name: 'final_moi_report.html')
+          ],
+          text: 'Final Moi Report',
+        );
       } else if (_selectedFormat == 'txt' && _generatedContent != null) {
         final output = await getTemporaryDirectory();
-        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.txt';
+        final outPath = '${output.path}/final_moi_report_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.txt';
         final file = File(outPath);
         await file.writeAsString(_generatedContent!);
-        await Share.shareXFiles([XFile(file.path, mimeType: 'text/plain', name: 'final_moi_report.txt')], text: 'Final Moi Report');
+
+        await Share.shareXFiles(
+          [
+            XFile(
+                file.path, mimeType: 'text/plain', name: 'final_moi_report.txt')
+          ],
+          text: 'Final Moi Report',
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Share error: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Share error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -199,10 +523,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
   }
 
   Future<Uint8List> _createReceiptPngBytes(Map<String, String> fields) async {
-    // Load the image bytes - USE CUSTOM IMAGE IF AVAILABLE
     final Uint8List imgBytes = await CoverImageHelper.getCoverImageBytes();
-
-    // Decode to ui.Image
     final codec = await ui.instantiateImageCodec(imgBytes);
     final frame = await codec.getNextFrame();
     final ui.Image background = frame.image;
@@ -210,16 +531,11 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     final int width = background.width;
     final int height = background.height;
 
-    // Create a picture recorder and canvas
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-
-    // Draw the background image first
     canvas.drawImage(background, Offset.zero, Paint());
 
-    // Helper function to draw text with proper styling
-    void drawText(
-        String text,
+    void drawText(String text,
         double x,
         double y,
         double fontSize, {
@@ -253,14 +569,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    // Font sizes
     final titleFontSize = (width / 8).clamp(65.0, 130.0);
     final textFontSize = (width / 10).clamp(55.0, 110.0);
-
-    // Line spacing (very spacious)
     final lineHeight = (height * 0.10).clamp(90.0, 170.0);
 
-    // ---------- EVENT TYPE (TOP BELOW GANESHA) ----------
     final eventType = fields['Event Type'] ?? 'MOI EVENT';
     drawText(
       eventType,
@@ -272,10 +584,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       color: const Color(0xFF8B0000),
     );
 
-    // Cursor starts below Event Type
     double cursorY = height * 0.32;
 
-    // ---------- TITLE ----------
     final title = fields['Title'] ?? '';
     if (title.isNotEmpty) {
       drawText(
@@ -290,7 +600,6 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       cursorY += lineHeight * 2.7;
     }
 
-    // ---------- EVENT FOR (EXTRA BIG SPACE BELOW) ----------
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
       drawText(
@@ -302,10 +611,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         fontWeight: FontWeight.bold,
         color: const Color(0xFF000C8C),
       );
-      cursorY += lineHeight * 3.2; // EXTRA LARGE SPACE
+      cursorY += lineHeight * 3.2;
     }
 
-    // ---------- REMARKS ----------
     final remarks = fields['Remarks'] ?? '';
     if (remarks.isNotEmpty) {
       drawText(
@@ -320,7 +628,6 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       cursorY += lineHeight * 1.6;
     }
 
-    // ---------- EVENT DATE ----------
     final eventDate = fields['Event Date'] ?? '';
     if (eventDate.isNotEmpty) {
       drawText(
@@ -330,12 +637,11 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         textFontSize * 0.9,
         align: TextAlign.center,
         fontWeight: FontWeight.w600,
-        color: const Color(0xFF008000), // green
+        color: const Color(0xFF008000),
       );
       cursorY += lineHeight * 1.6;
     }
 
-    // ---------- VENUE ----------
     final venue = fields['Venue'] ?? '';
     final city = fields['City'] ?? '';
 
@@ -351,13 +657,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         textFontSize * 0.85,
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
-        color: const Color(0xFF0000FF), // blue
+        color: const Color(0xFF0000FF),
       );
-
-      cursorY += lineHeight * 1.6;
     }
 
-    // Convert to image
     final picture = recorder.endRecording();
     final img = await picture.toImage(width, height);
     final byteData2 = await img.toByteData(format: ui.ImageByteFormat.png);
@@ -369,41 +672,33 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     return byteData2.buffer.asUint8List();
   }
 
-  /// Create a merged PDF where the first page is the edited image and the rest are pages from `serverPdfBytes`.
-  /// Uses Syncfusion Pdf for reliable merging.
-  Future<Uint8List?> _createMergedPdfWithImageFirst(Uint8List serverPdfBytes) async {
+  Future<Uint8List?> _createMergedPdfWithImageFirst(
+      Uint8List serverPdfBytes) async {
     try {
-      // Fields to render on receipt
-      // Fetch event details from your database first
-// You'll need to add a method to fetch event data
       final eventData = await _fetchEventDetails(widget.eventId);
-
-// Fields to render on receipt
       final fields = <String, String>{
         'Event Type': eventData['event_type'] ?? '',
-        'Customer Name': eventData['customer_name'] ?? '',
+        'Title': eventData['title'] ?? '',
         'Event For': eventData['event_for'] ?? '',
+        'Remarks': eventData['remark'] ?? '',
         'Event Date': eventData['event_date'] ?? '',
         'Venue': eventData['venue'] ?? '',
         'City': eventData['city'] ?? '',
       };
 
-      // create PNG bytes of the receipt with overlay
       final pngBytes = await _createReceiptPngBytes(fields);
-
-      // Create merged PDF with Syncfusion
       final PdfDocument mergedDocument = PdfDocument();
-      // Add first page and draw the PNG (fit to page)
       final PdfPage firstPage = mergedDocument.pages.add();
       final PdfGraphics g = firstPage.graphics;
 
       final PdfBitmap bitmap = PdfBitmap(pngBytes);
-      // Fit the image to the page while preserving aspect ratio
       final Size pageSize = firstPage.getClientSize();
+
       final double imgRatio = bitmap.width / bitmap.height;
       final double pageRatio = pageSize.width / pageSize.height;
       double drawWidth = pageSize.width;
       double drawHeight = pageSize.height;
+
       if (imgRatio > pageRatio) {
         drawWidth = pageSize.width;
         drawHeight = drawWidth / imgRatio;
@@ -411,25 +706,21 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         drawHeight = pageSize.height;
         drawWidth = drawHeight * imgRatio;
       }
+
       final double left = (pageSize.width - drawWidth) / 2;
       final double top = (pageSize.height - drawHeight) / 2;
       g.drawImage(bitmap, Rect.fromLTWH(left, top, drawWidth, drawHeight));
 
-      // Load server PDF
       final PdfDocument serverDoc = PdfDocument(inputBytes: serverPdfBytes);
 
-      // Append all pages from serverDoc to mergedDocument using PdfDocumentPageCollection.addAll
-      // This is the correct way to merge pages in syncfusion_flutter_pdf
       for (int i = 0; i < serverDoc.pages.count; i++) {
         final PdfPage sourcePage = serverDoc.pages[i];
         final PdfPage newPage = mergedDocument.pages.add();
-
-        // Copy page content by drawing the template
         final template = sourcePage.createTemplate();
-        newPage.graphics.drawPdfTemplate(template, Offset.zero, sourcePage.size);
+        newPage.graphics.drawPdfTemplate(
+            template, Offset.zero, sourcePage.size);
       }
 
-      // Save - note: save() returns List<int> synchronously, not Future
       final List<int> bytes = mergedDocument.saveSync();
       mergedDocument.dispose();
       serverDoc.dispose();
@@ -440,28 +731,20 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
-  /// Create a PDF from an HTML string by first creating an image page (receipt),
-  /// and then rendering the HTML to PDF and appending.
   Future<Uint8List?> _createMergedPdfForHtml(String htmlContent) async {
     try {
-      // 1) Create receipt PNG (we will embed it as first page)
-      // Fetch event details from your database first
-// You'll need to add a method to fetch event data
       final eventData = await _fetchEventDetails(widget.eventId);
-
-// Fields to render on receipt
       final fields = <String, String>{
         'Event Type': eventData['event_type'] ?? '',
-        'Title': eventData['title']??'',
+        'Title': eventData['title'] ?? '',
         'Event For': eventData['event_for'] ?? '',
-        'Remarks': eventData['remark']??'',
+        'Remarks': eventData['remark'] ?? '',
         'Event Date': eventData['event_date'] ?? '',
         'Venue': eventData['venue'] ?? '',
         'City': eventData['city'] ?? '',
       };
       final pngBytes = await _createReceiptPngBytes(fields);
 
-      // 2) Convert HTML to PDF bytes using Printing.convertHtml (uses PdfPageFormat from package:pdf)
       Uint8List? htmlPdfBytes;
       try {
         htmlPdfBytes = await Printing.convertHtml(
@@ -469,8 +752,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           html: htmlContent,
         );
       } catch (e) {
-        if (kDebugMode) print('Printing.convertHtml failed: $e - falling back to text PDF');
-        // fallback: plain text PDF
+        if (kDebugMode) print(
+            'Printing.convertHtml failed: $e - falling back to text PDF');
         htmlPdfBytes = await _convertTextToPdf(htmlContent);
       }
 
@@ -478,14 +761,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         throw Exception('Failed to convert HTML to PDF');
       }
 
-      // 3) Merge: create merged doc with png first + htmlPdfBytes pages
       return await _createMergedPdfWithImageFirst(htmlPdfBytes);
     } catch (e) {
       if (kDebugMode) print('Error creating merged PDF for HTML: $e');
       return null;
     }
   }
-
 
   Future<Map<String, String>> _fetchEventDetails(String eventId) async {
     try {
@@ -509,28 +790,24 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       return {};
     }
   }
-  /// Produces merged HTML where the first element is the receipt PNG (base64).
-  Future<String> _createMergedHtmlWithImageFirst(String serverHtml) async {
-    // Fetch event details from your database first
-// You'll need to add a method to fetch event data
-    final eventData = await _fetchEventDetails(widget.eventId);
 
-// Fields to render on receipt
+  Future<String> _createMergedHtmlWithImageFirst(String serverHtml) async {
+    final eventData = await _fetchEventDetails(widget.eventId);
     final fields = <String, String>{
       'Event Type': eventData['event_type'] ?? '',
-      'Title': eventData['title']??'',
+      'Title': eventData['title'] ?? '',
       'Event For': eventData['event_for'] ?? '',
-      'Remarks': eventData['remark']??'',
+      'Remarks': eventData['remark'] ?? '',
       'Event Date': eventData['event_date'] ?? '',
       'Venue': eventData['venue'] ?? '',
       'City': eventData['city'] ?? '',
     };
     final pngBytes = await _createReceiptPngBytes(fields);
     final base64Image = base64Encode(pngBytes);
-    final imgTag =
-        '<div style="text-align:center; page-break-after:always;"><img src="data:image/png;base64,$base64Image" style="max-width:100%; height:auto;" /></div>';
 
-    // Insert the image at the top of body if possible, otherwise prepend
+    final imgTag =
+        '<div style="text-align:center; page-break-after:always; margin:0; padding:0;"><img src="data:image/png;base64,$base64Image" style="width:100%; height:auto; display:block;" /></div>';
+
     if (serverHtml.contains('<body')) {
       final updated = serverHtml.replaceFirstMapped(
         RegExp(r'(<body[^>]*>)', caseSensitive: false),
@@ -542,21 +819,22 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
-  /// Convert plain text to PDF bytes using Syncfusion
   Future<Uint8List> _convertTextToPdf(String textContent) async {
     final PdfDocument document = PdfDocument();
     final PdfPage page = document.pages.add();
     page.graphics.drawString(
       textContent,
       PdfStandardFont(PdfFontFamily.helvetica, 12),
-      bounds: Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height),
+      bounds: Rect.fromLTWH(0, 0, page
+          .getClientSize()
+          .width, page
+          .getClientSize()
+          .height),
     );
     final List<int> bytes = document.saveSync();
     document.dispose();
     return Uint8List.fromList(bytes);
   }
-
-  // ********** UI copy from your original, unchanged UX **********
 
   @override
   Widget build(BuildContext context) {
@@ -577,6 +855,23 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        actions: [
+          if (_isDownloading)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                        Colors.green),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -609,120 +904,126 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      _buildFormatButton('HTML', 'html', Icons.code, const Color(0xFFB846D7)),
+                      _buildFormatButton(
+                          'HTML', 'html', Icons.code, const Color(0xFFE67E22)),
                       const SizedBox(height: 16),
-                      _buildFormatButton('Excel', 'xlsx', Icons.table_chart, const Color(0xFF217346)),
+                      _buildFormatButton('Excel', 'excel', Icons.table_chart,
+                          const Color(0xFF217346)),
                       const SizedBox(height: 16),
-                      _buildFormatButton('PDF', 'pdf', Icons.picture_as_pdf, const Color(0xFFB846D7)),
+                      _buildFormatButton('PDF', 'pdf', Icons.picture_as_pdf,
+                          const Color(0xFFD32F2F)),
                       const SizedBox(height: 16),
-                      _buildFormatButton('Text', 'txt', Icons.text_fields, const Color(0xFFB846D7)),
+                      _buildFormatButton('Text', 'txt', Icons.text_fields,
+                          const Color(0xFF1976D2)),
                     ],
                   ),
                 ),
               ),
             ),
-          ] else if (_isLoading) ...[
-            const Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text(
-                      'Processing report...',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      spreadRadius: 1,
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: _buildReportPreview(),
-              ),
-            ),
-
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.2),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: const Offset(0, -2),
+          ] else
+            if (_isLoading) ...[
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Processing report...',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-              child: Row(
-                children: [
-                  if (_selectedFormat != 'xlsx') ...[
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _printReport,
-                        icon: const Icon(Icons.print, size: 24),
-                        label: const Text(
-                          'Print',
-                          style: TextStyle(fontSize: 16),
+            ] else
+              ...[
+                Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.2),
+                          spreadRadius: 1,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFB846D7),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                      ],
+                    ),
+                    child: _buildReportPreview(),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (_isLoading || _isDownloading)
+                              ? null
+                              : _downloadReport,
+                          icon: const Icon(Icons.download, size: 24),
+                          label: const Text(
+                            'Download',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB846D7),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                  ],
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isLoading ? null : _shareReport,
-                      icon: const Icon(Icons.share, size: 24),
-                      label: Text(
-                        _selectedFormat == 'xlsx' ? 'Open/Share' : 'Share',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedFormat == 'xlsx'
-                            ? const Color(0xFF217346)
-                            : const Color(0xFF8F8F8F),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (_isLoading || _isDownloading)
+                              ? null
+                              : _shareReport,
+                          icon: const Icon(Icons.share, size: 24),
+                          label: const Text(
+                            'Share',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF8F8F8F),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
         ],
       ),
     );
   }
 
-  Widget _buildFormatButton(String label, String format, IconData icon, Color color) {
+  Widget _buildFormatButton(String label, String format, IconData icon,
+      Color color) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -750,26 +1051,44 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         initialData: InAppWebViewInitialData(data: _generatedContent!),
         initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
       );
-    } else if (_selectedFormat == 'xlsx' && _generatedFile != null) {
+    } else if ((_selectedFormat == 'excel' || _selectedFormat == 'excel') &&
+        _generatedFile != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.table_chart, size: 64, color: Color(0xFF217346)),
+            Icon(
+              _selectedFormat == 'excel' ? Icons.table_rows : Icons.table_chart,
+              size: 64,
+              color: _selectedFormat == 'excel'
+                  ? const Color(0xFF0E7C7B)
+                  : const Color(0xFF217346),
+            ),
             const SizedBox(height: 16),
-            const Text(
-              'Excel Report Generated',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Text(
+              '${_selectedFormat == 'excel' ? 'Excel' : 'Excel'} Report Generated',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'File: ${_generatedFile!.path.split('/').last}',
+              'File: ${_generatedFile!
+                  .path
+                  .split('/')
+                  .last}',
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Use the Share button to open in Excel',
-              style: TextStyle(color: Colors.grey),
+            Text(
+              'Use the Download or Share button below',
+              style: const TextStyle(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'File will open in ${_selectedFormat == 'excel'
+                  ? 'Excel/Sheets'
+                  : 'Excel'}',
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ],
@@ -791,12 +1110,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
             Icon(Icons.picture_as_pdf, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text(
-              'PDF Preview',
+              'PDF Generated Successfully',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 8),
             Text(
-              'Use Print or Share to view the PDF',
+              'Use Download or Share to view the PDF',
               style: TextStyle(color: Colors.grey),
             ),
           ],
