@@ -21,6 +21,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
   // Summary data
   Map<String, dynamic> _summaryData = {};
+  // Add these after userDenominations declaration
+  Map<int, int> totalWithdrawals = {};
+  Map<int, int> totalExchanges = {};
+  bool _isLoadingTotals = false;
   bool _isLoadingSummary = false;
 
   final List<int> denominations = [500, 200, 100, 50, 20, 10, 5, 1];
@@ -29,75 +33,39 @@ class _DenominationScreenState extends State<DenominationScreen> {
   void initState() {
     super.initState();
     _loadDenominations();
+    _loadWithdrawalAndExchangeTotals(); // Add this line
   }
 
   Future<void> _loadDenominations() async {
     setState(() => _isLoading = true);
 
     try {
-      // Fetch MOI denominations for CASH payments
+      // Fetch MOI denominations for CASH payments (PURE COLLECTED DATA)
       final moiData = await _auth.client
           .from('moi_denominations')
           .select('''
-            operator_id,
-            denom_500,
-            denom_200,
-            denom_100,
-            denom_50,
-            denom_20,
-            denom_10,
-            denom_5,
-            denom_1,
-            users!moi_denominations_operator_id_fkey (
-              id,
-              full_name
-            ),
-            mois!moi_denominations_moi_id_fkey (
-              payment_method
-            )
-          ''')
+          operator_id,
+          denom_500,
+          denom_200,
+          denom_100,
+          denom_50,
+          denom_20,
+          denom_10,
+          denom_5,
+          denom_1,
+          users!moi_denominations_operator_id_fkey (
+            id,
+            full_name
+          ),
+          mois!moi_denominations_moi_id_fkey (
+            payment_method
+          )
+        ''')
           .eq('event_id', widget.eventId);
 
-      // Fetch cash withdrawals with denominations
-      final withdrawalData = await _auth.client
-          .from('cash_withdrawals')
-          .select('''
-            operator_id,
-            cash_withdrawal_denominations (
-              denom_500,
-              denom_200,
-              denom_100,
-              denom_50,
-              denom_20,
-              denom_10,
-              denom_5,
-              denom_1
-            )
-          ''')
-          .eq('event_id', widget.eventId);
-
-      // Fetch cash exchanges with denominations
-      final exchangeData = await _auth.client
-          .from('cash_exchanges')
-          .select('''
-            operator_id,
-            cash_exchange_denominations (
-              denom_500,
-              denom_200,
-              denom_100,
-              denom_50,
-              denom_20,
-              denom_10,
-              denom_5,
-              denom_1
-            )
-          ''')
-          .eq('event_id', widget.eventId);
-
-      // Calculate current denominations
+      // Calculate ONLY collected denominations per operator
       Map<String, Map<String, dynamic>> operatorDenoms = {};
 
-      // Step 1: ADD MOI denominations (cash collected by operator)
       for (var entry in moiData) {
         final operatorId = entry['operator_id'];
         if (operatorId == null) continue;
@@ -129,44 +97,6 @@ class _DenominationScreenState extends State<DenominationScreen> {
         }
       }
 
-      // Step 2: SUBTRACT withdrawal denominations
-      for (var withdrawal in withdrawalData) {
-        final operatorId = withdrawal['operator_id'];
-        if (operatorId == null) continue;
-
-        final denomData = withdrawal['cash_withdrawal_denominations'];
-        if (denomData == null) continue;
-
-        if (!operatorDenoms.containsKey(operatorId)) {
-          continue;
-        }
-
-        for (var denom in denominations) {
-          int currentValue = operatorDenoms[operatorId]!['denom_$denom'] as int;
-          int subtractValue = denomData['denom_$denom'] ?? 0;
-          operatorDenoms[operatorId]!['denom_$denom'] = currentValue - subtractValue;
-        }
-      }
-
-      // Step 3: ADD/SUBTRACT exchange denominations
-      for (var exchange in exchangeData) {
-        final operatorId = exchange['operator_id'];
-        if (operatorId == null) continue;
-
-        final denomData = exchange['cash_exchange_denominations'];
-        if (denomData == null) continue;
-
-        if (!operatorDenoms.containsKey(operatorId)) {
-          continue;
-        }
-
-        for (var denom in denominations) {
-          int currentValue = operatorDenoms[operatorId]!['denom_$denom'] as int;
-          int exchangeValue = denomData['denom_$denom'] ?? 0;
-          operatorDenoms[operatorId]!['denom_$denom'] = currentValue + exchangeValue;
-        }
-      }
-
       // Convert to list and sort by name
       List<Map<String, dynamic>> denoms = operatorDenoms.values.toList();
       denoms.sort((a, b) =>
@@ -191,7 +121,76 @@ class _DenominationScreenState extends State<DenominationScreen> {
       setState(() => _isLoading = false);
     }
   }
+  Future<void> _loadWithdrawalAndExchangeTotals() async {
+    setState(() => _isLoadingTotals = true);
 
+    try {
+      // Fetch total withdrawals (ALL operators)
+      final withdrawalData = await _auth.client
+          .from('cash_withdrawals')
+          .select('''
+          cash_withdrawal_denominations (
+            denom_500,
+            denom_200,
+            denom_100,
+            denom_50,
+            denom_20,
+            denom_10,
+            denom_5,
+            denom_1
+          )
+        ''')
+          .eq('event_id', widget.eventId);
+
+      // Fetch total exchanges (ALL operators)
+      final exchangeData = await _auth.client
+          .from('cash_exchanges')
+          .select('''
+          cash_exchange_denominations (
+            denom_500,
+            denom_200,
+            denom_100,
+            denom_50,
+            denom_20,
+            denom_10,
+            denom_5,
+            denom_1
+          )
+        ''')
+          .eq('event_id', widget.eventId);
+
+      // Calculate total withdrawals
+      Map<int, int> withdrawals = {500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0};
+      for (var withdrawal in withdrawalData) {
+        final denomData = withdrawal['cash_withdrawal_denominations'];
+        if (denomData == null) continue;
+
+        for (var denom in denominations) {
+          withdrawals[denom] = (withdrawals[denom] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+        }
+      }
+
+      // Calculate total exchanges (net values)
+      Map<int, int> exchanges = {500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0};
+      for (var exchange in exchangeData) {
+        final denomData = exchange['cash_exchange_denominations'];
+        if (denomData == null) continue;
+
+        for (var denom in denominations) {
+          exchanges[denom] = (exchanges[denom] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+        }
+      }
+
+      setState(() {
+        totalWithdrawals = withdrawals;
+        totalExchanges = exchanges;
+        _isLoadingTotals = false;
+      });
+    } catch (e) {
+      print('Error loading withdrawal/exchange totals: $e');
+      setState(() => _isLoadingTotals = false);
+    }
+  }
   // Calculate summary method with corrected formulas
   Future<void> _calculateSummary() async {
     setState(() => _isLoadingSummary = true);
@@ -282,7 +281,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
     for (var user in userDenominations) {
       for (var denom in denominations) {
-        int count = (user['denom_$denom'] ?? 0).abs();
+        int count = user['denom_$denom'] ?? 0; // Pure collected count
         totalCounts[denom] = (totalCounts[denom] ?? 0) + count;
         totalAmounts[denom] = (totalAmounts[denom] ?? 0) + (count * denom);
       }
@@ -303,6 +302,26 @@ class _DenominationScreenState extends State<DenominationScreen> {
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (Match m) => '${m[1]},',
     );
+  }
+
+  int _calculateWithdrawalTotal() {
+    int total = 0;
+    totalWithdrawals.forEach((denom, count) {
+      total += denom * count;
+    });
+    return total;
+  }
+
+  int _calculateExchangeTotal() {
+    int total = 0;
+    totalExchanges.forEach((denom, count) {
+      total += denom * count;
+    });
+    return total;
+  }
+
+  int _calculateFinalBalance(Map<String, dynamic> totals) {
+    return (totals['grandTotal'] as int) - _calculateWithdrawalTotal();
   }
 
   @override
@@ -387,7 +406,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                             ),
                           ),
 
-                          // Table Body
+                          // Table Body (Operator Rows)
                           _isLoading
                               ? Container(
                             padding: const EdgeInsets.all(40),
@@ -433,35 +452,35 @@ class _DenominationScreenState extends State<DenominationScreen> {
                                         bold: true,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_500'] ?? 0) as int).abs().toString(),
+                                        (user['denom_500'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_200'] ?? 0) as int).abs().toString(),
+                                        (user['denom_200'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_100'] ?? 0) as int).abs().toString(),
+                                        (user['denom_100'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_50'] ?? 0) as int).abs().toString(),
+                                        (user['denom_50'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_20'] ?? 0) as int).abs().toString(),
+                                        (user['denom_20'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_10'] ?? 0) as int).abs().toString(),
+                                        (user['denom_10'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_5'] ?? 0) as int).abs().toString(),
+                                        (user['denom_5'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
-                                        ((user['denom_1'] ?? 0) as int).abs().toString(),
+                                        (user['denom_1'] ?? 0).toString(),
                                         width: 60,
                                       ),
                                       _buildDataCell(
@@ -502,7 +521,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                             ),
                           ),
 
-                          // Total Count Row
+                          // Total Collected Count Row
                           Container(
                             decoration: BoxDecoration(
                               border: Border(
@@ -515,35 +534,35 @@ class _DenominationScreenState extends State<DenominationScreen> {
                                 children: [
                                   _buildFooterCell('Total Count', width: 120, bold: true),
                                   _buildFooterCell(
-                                    (totals['counts'][500] as int).abs().toString(),
+                                    (totals['counts'][500] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][200] as int).abs().toString(),
+                                    (totals['counts'][200] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][100] as int).abs().toString(),
+                                    (totals['counts'][100] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][50] as int).abs().toString(),
+                                    (totals['counts'][50] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][20] as int).abs().toString(),
+                                    (totals['counts'][20] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][10] as int).abs().toString(),
+                                    (totals['counts'][10] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][5] as int).abs().toString(),
+                                    (totals['counts'][5] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell(
-                                    (totals['counts'][1] as int).abs().toString(),
+                                    (totals['counts'][1] as int).toString(),
                                     width: 60,
                                   ),
                                   _buildFooterCell('', width: 100),
@@ -552,49 +571,58 @@ class _DenominationScreenState extends State<DenominationScreen> {
                             ),
                           ),
 
-                          // Total Amount Row
+                          // Total Collected Amount Row
                           Container(
                             decoration: BoxDecoration(
                               border: Border(
                                 top: BorderSide(color: Colors.grey[300]!, width: 1),
                               ),
+                              color: Colors.blue[50],
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: IntrinsicHeight(
                               child: Row(
                                 children: [
-                                  _buildFooterCell('Total Amount', width: 120, bold: true),
+                                  _buildFooterCell('Total Amount', width: 120, bold: true, color: Colors.blue),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][500] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][200] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][100] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][50] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][20] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][10] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][5] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['amounts'][1] as int),
                                     width: 60,
+                                    color: Colors.blue,
                                   ),
                                   _buildFooterCell(
                                     _formatAmount(totals['grandTotal'] as int),
@@ -606,6 +634,240 @@ class _DenominationScreenState extends State<DenominationScreen> {
                               ),
                             ),
                           ),
+
+                          // TOTAL EXCHANGES ROW
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.orange[700]!, width: 2),
+                              ),
+                              color: Colors.orange[50],
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('Total Exchanges', width: 120, bold: true, color: Colors.orange[900]),
+                                  _buildFooterCell(
+                                    (totalExchanges[500] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[200] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[100] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[50] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[20] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[10] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[5] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    (totalExchanges[1] ?? 0).toString(),
+                                    width: 60,
+                                    color: Colors.orange[900],
+                                  ),
+                                  _buildFooterCell(
+                                    _formatAmount(_calculateExchangeTotal()),
+                                    width: 100,
+                                    bold: true,
+                                    color: Colors.orange[900],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // TOTAL WITHDRAWALS ROW
+                          // TOTAL WITHDRAWALS ROW (Show as NEGATIVE)
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.red[700]!, width: 1),
+                              ),
+                              color: Colors.red[50],
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('Total Withdrawals', width: 120, bold: true, color: Colors.red),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[500] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[200] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[100] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[50] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[20] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[10] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[5] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${totalWithdrawals[1] ?? 0}',
+                                    width: 60,
+                                    color: Colors.red,
+                                  ),
+                                  _buildFooterCell(
+                                    '-${_formatAmount(_calculateWithdrawalTotal())}',
+                                    width: 100,
+                                    bold: true,
+                                    color: Colors.red,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // FINAL BALANCE ROW (Total - Withdrawals, with Exchange affecting denominations)
+                  // FINAL BALANCE ROW (Total + Exchange + Withdrawal[negative] = Total + Exchange - Withdrawal)
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: Colors.green[700]!, width: 2),
+                      ),
+                      color: Colors.green[100],
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          _buildFooterCell('Final Balance', width: 120, bold: true, color: Colors.green[900]),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][500] as int) +
+                                    ((totalExchanges[500] ?? 0) * 500) -
+                                    ((totalWithdrawals[500] ?? 0) * 500)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][200] as int) +
+                                    ((totalExchanges[200] ?? 0) * 200) -
+                                    ((totalWithdrawals[200] ?? 0) * 200)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][100] as int) +
+                                    ((totalExchanges[100] ?? 0) * 100) -
+                                    ((totalWithdrawals[100] ?? 0) * 100)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][50] as int) +
+                                    ((totalExchanges[50] ?? 0) * 50) -
+                                    ((totalWithdrawals[50] ?? 0) * 50)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][20] as int) +
+                                    ((totalExchanges[20] ?? 0) * 20) -
+                                    ((totalWithdrawals[20] ?? 0) * 20)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][10] as int) +
+                                    ((totalExchanges[10] ?? 0) * 10) -
+                                    ((totalWithdrawals[10] ?? 0) * 10)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][5] as int) +
+                                    ((totalExchanges[5] ?? 0) * 5) -
+                                    ((totalWithdrawals[5] ?? 0) * 5)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount(
+                                (totals['amounts'][1] as int) +
+                                    ((totalExchanges[1] ?? 0) * 1) -
+                                    ((totalWithdrawals[1] ?? 0) * 1)
+                            ),
+                            width: 60,
+                            color: Colors.green[900],
+                            bold: true,
+                          ),
+                          _buildFooterCell(
+                            _formatAmount((totals['grandTotal'] as int) - _calculateWithdrawalTotal()),
+                            width: 100,
+                            bold: true,
+                            color: Colors.green[900],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                         ],
                       ),
                     ),
@@ -633,41 +895,17 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         ),
                         const Divider(thickness: 2, color: Colors.black),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Total Cash Collected',
-                          '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}',
-                          Colors.green,
-                        ),
+                        _buildSummaryRow('Hand Cash', '₹${_formatAmount((_summaryData['handCash'] ?? 0).round())}', Colors.teal),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Total Withdrawals',
-                          '₹${_formatAmount((_summaryData['totalWithdrawals'] ?? 0).round())}',
-                          Colors.red,
-                        ),
+                        _buildSummaryRow('Total Cash Collected', '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}', Colors.green),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Check/Advance/UPI',
-                          '₹${_formatAmount((_summaryData['totalOthers'] ?? 0).round())}',
-                          Colors.orange,
-                        ),
+                        _buildSummaryRow('Total Withdrawals', '₹${_formatAmount((_summaryData['totalWithdrawals'] ?? 0).round())}', Colors.red),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Total People',
-                          '${_summaryData['peopleCount'] ?? 0}',
-                          Colors.purple,
-                        ),
+                        _buildSummaryRow('Check/Advance/UPI', '₹${_formatAmount((_summaryData['totalOthers'] ?? 0).round())}', Colors.orange),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Total Event Amount',
-                          '₹${_formatAmount((_summaryData['totalEventAmount'] ?? 0).round())}',
-                          Colors.blue,
-                        ),
+                        _buildSummaryRow('Total Event Amount', '₹${_formatAmount((_summaryData['totalEventAmount'] ?? 0).round())}', Colors.blue),
                         const SizedBox(height: 8),
-                        _buildSummaryRow(
-                          'Hand Cash',
-                          '₹${_formatAmount((_summaryData['handCash'] ?? 0).round())}',
-                          Colors.teal,
-                        ),
+                        _buildSummaryRow('Total People', '${_summaryData['peopleCount'] ?? 0}', Colors.purple),
                       ],
                     ),
                   ),
@@ -716,7 +954,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         final totals = _calculateTotals();
 
                         // Calculate verupaadu (difference between hand cash and grand total)
-                        final verupaadu = (_summaryData['handCash'] ?? 0) - (totals['grandTotal'] as int);
+                        final verupaadu = (_summaryData['totalEventAmount'] ?? 0) - (_summaryData['handCash'] ?? 0);
 
                         // Show loading
                         if (mounted) {
@@ -729,7 +967,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           );
                         }
 
-                        // Generate receipt
+                        // In denomination_screen.dart, find the Print button's onPressed handler
+// and update the generateDenominationReceipt call:
+
+// Generate receipt
                         final file = await DenominationReceiptGenerator.generateDenominationReceipt(
                           context: context,
                           customerName: customerName,
@@ -747,6 +988,9 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           verupaadu: (verupaadu as num).toDouble(),
                           peopleCount: _summaryData['peopleCount'] ?? 0,
                           totalOthersAmount: ((_summaryData['totalOthers'] ?? 0) as num).toDouble(),
+                          // ADD THESE TWO NEW PARAMETERS:
+                          totalWithdrawalCounts: totalWithdrawals,
+                          totalExchangeCounts: totalExchanges,
                         );
 
                         if (file == null) {

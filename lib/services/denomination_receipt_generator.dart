@@ -26,6 +26,9 @@ class DenominationReceiptGenerator {
     required double verupaadu,
     required int peopleCount,
     required double totalOthersAmount,
+    // NEW PARAMETERS for withdrawal and exchange counts
+    required Map<int, int> totalWithdrawalCounts,
+    required Map<int, int> totalExchangeCounts,
   }) async {
     try {
       final htmlContent = _generateDenominationHtml(
@@ -44,6 +47,8 @@ class DenominationReceiptGenerator {
         verupaadu: verupaadu,
         peopleCount: peopleCount,
         totalOthersAmount: totalOthersAmount,
+        totalWithdrawalCounts: totalWithdrawalCounts,
+        totalExchangeCounts: totalExchangeCounts,
       );
 
       final output = await getTemporaryDirectory();
@@ -199,45 +204,59 @@ class DenominationReceiptGenerator {
     required double verupaadu,
     required int peopleCount,
     required double totalOthersAmount,
+    required Map<int, int> totalWithdrawalCounts,
+    required Map<int, int> totalExchangeCounts,
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(eventDate);
 
     // Build denomination table rows - only include non-zero denominations
+    // Now showing: Collected + Exchange - Withdrawal = Final Count
     String denominationRows = '';
     List<int> denomKeys = [500, 200, 100, 50, 20, 10];
 
     for (int denom in denomKeys) {
       int count = denominationCounts[denom] ?? 0;
-      int amount = denominationAmounts[denom] ?? 0;
+      int exchangeCount = totalExchangeCounts[denom] ?? 0;
+      int withdrawalCount = totalWithdrawalCounts[denom] ?? 0;
 
-      if (count > 0) {
+      // Final count = collected + exchange - withdrawal
+      int finalCount = count + exchangeCount - withdrawalCount;
+      int finalAmount = finalCount * denom;  // Calculate final amount from final count
+
+      if (count > 0 || exchangeCount != 0 || withdrawalCount > 0) {
         denominationRows += '''
-          <tr>
-            <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">$denom</td>
-            <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">$count</td>
-            <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">${_formatAmount(amount)}</td>
-          </tr>
-        ''';
+      <tr>
+        <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">$denom</td>
+        <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-size: 12px;">$finalCount</td>
+        <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">${_formatAmount(finalAmount)}</td>
+      </tr>
+    ''';
       }
     }
 
     // Handle coins (5 and 1) separately
     int coins5 = denominationCounts[5] ?? 0;
     int coins1 = denominationCounts[1] ?? 0;
-    int totalCoins = coins5 + coins1;
-    int totalCoinsAmount = (coins5 * 5) + coins1;
+    int exchange5 = totalExchangeCounts[5] ?? 0;
+    int exchange1 = totalExchangeCounts[1] ?? 0;
+    int withdrawal5 = totalWithdrawalCounts[5] ?? 0;
+    int withdrawal1 = totalWithdrawalCounts[1] ?? 0;
 
-    if (totalCoins > 0) {
+    int totalCoins = coins5 + coins1 + exchange5 + exchange1 - withdrawal5 - withdrawal1;
+    int totalCoinsAmount = (coins5 * 5) + coins1 + (exchange5 * 5) + exchange1 - (withdrawal5 * 5) - withdrawal1;
+
+    if (totalCoins > 0 || (coins5 + coins1) > 0) {
       denominationRows += '''
         <tr>
           <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">Coins</td>
-          <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">$totalCoins</td>
+          <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-size: 12px;">$totalCoins</td>
           <td style="border: 2px solid black; border-top: none; padding: 4px; text-align: center; font-weight: bold; font-size: 14px;">${_formatAmount(totalCoinsAmount)}</td>
         </tr>
       ''';
     }
 
-    double checkAdvanceUPI = totalOthersAmount;
+    // Calculate final balance
+    int finalBalance = grandTotal - totalWithdrawals.round();
 
     return '''
 <!DOCTYPE html>
@@ -386,18 +405,13 @@ class DenominationReceiptGenerator {
         <td colspan="2" style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">
           ருபாய் கைஇருப்பு
         </td>
-        <td style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">${_formatAmount(grandTotal)}</td>
+        <td style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">${_formatAmount(finalBalance)}</td>
       </tr>
     </table>
     
     <div class="summary-item">
-      <span class="summary-label">கம்ப்யூட்டர் தொகை</span>
-      <span class="summary-value">${_formatAmount(computedTotal.round())}</span>
-    </div>
-    
-    <div class="summary-item highlight">
-      <span class="summary-label">வேருபாடு</span>
-      <span class="summary-value highlight-value">${_formatAmount(verupaadu.abs().round())}</span>
+      <span class="summary-label">ரூபாய் பெறப்பட்டது</span>
+      <span class="summary-value">${_formatAmount(totalCashCollected.round())}</span>
     </div>
     
     <div class="summary-item">
@@ -406,12 +420,22 @@ class DenominationReceiptGenerator {
     </div>
     
     <div class="summary-item">
-      <span class="summary-label">Check / Advance / UPI</span>
-      <span class="summary-value">${_formatAmount(checkAdvanceUPI.round())}</span>
+      <span class="summary-label">Cheque / Advance / UPI</span>
+      <span class="summary-value">${_formatAmount(totalOthersAmount.round())}</span>
     </div>
     
     <div class="summary-item">
-      <span class="summary-label">மொய்<br>செய்தவர்களின்<br>எண்ணிக்கை</span>
+      <span class="summary-label">கம்ப்யூட்டர் தொகை</span>
+      <span class="summary-value">${_formatAmount(computedTotal.round())}</span>
+    </div>
+    
+    <div class="summary-item highlight">
+      <span class="summary-label">வேறுபாடு</span>
+      <span class="summary-value highlight-value">${_formatAmount(verupaadu.abs().round())}</span>
+    </div>
+    
+    <div class="summary-item">
+      <span class="summary-label">மொய் செய்தவர்களின் எண்ணிக்கை</span>
       <span class="summary-value">$peopleCount</span>
     </div>
     

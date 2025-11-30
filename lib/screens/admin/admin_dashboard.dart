@@ -206,7 +206,7 @@ class AdminDashboard extends StatelessWidget {
                             'Cover Image',
                             Icons.image,
                                 () => Navigator.pushNamed(context, '/admin/cover-image'),
-                            color: const Color(0xFFB846D7), // Purple highlight
+                            color: const Color(0xFF8F8F8F), // Purple highlight
                           ),
                         ),
                       ],

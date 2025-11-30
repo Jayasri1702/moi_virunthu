@@ -150,122 +150,177 @@ class ReceiptGenerator {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 10px;
-      text-align: center;
-      background: white;
-    }
-    
-    .header {
-      font-size: 24px;
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: #000;
-    }
-    
-    .divider {
-      border-top: 2px solid black;
-      margin: 10px 0;
-    }
-    
-    .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      margin: 10px 0;
-      font-size: 14px;
-    }
-    
-    .left-section {
-      text-align: left;
-    }
-    
-    .right-section {
-      text-align: right;
-      font-weight: bold;
-    }
-    
-    .receipt-no {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 8px 0;
-    }
-    
-    .customer-name {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Noto Sans Tamil', sans-serif;
+    width: 302px;
+    padding: 6px;
+    background: white;
+  }
+  
+  .outer-box {
+    border: 3px solid black;
+    padding: 0;
+  }
+  
+  
+  .company-name {
+    font-size: 20px;
+    font-weight: bold;
+    color: #000;
+    text-align: center;
+  }
+  
+  .phone-numbers {
+    font-size: 14px;
+    margin-top: 2px;
+  }
+  
+  .date-time-section {
+    display: flex;
+    border-bottom: 2px solid black;
+  }
+  
+  .date-time-left {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    border-right: 2px solid black;
+    font-size: 16px;
+    font-weight: bold;
+  }
+  
+  .date-time-right {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    font-size: 14px;
+  }
+  
+  .typer-label {
+    font-size: 12px;
+    margin-bottom: 2px;
+  }
+  
+  .typer-name {
+    font-size: 16px;
+    font-weight: bold;
+  }
+  
+  .content-section {
+    padding: 12px;
+    text-align: center;
+    border-bottom: 2px solid black;
+  }
+  
+  .receipt-no {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+  
+  .customer-name {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 6px;
+  }
+  
+  .venue {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+  
+  .event-type {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  
+  .category {
+    font-size: 18px;
+    font-weight: bold;
+  }
+  
+  .footer-section {
+    padding: 12px;
+    text-align: center;
+  }
+  
+  .header {
+      background-color: #1976D2;
+      color: white;
       font-size: 18px;
       font-weight: bold;
-      margin: 8px 0;
+      padding: 10px;
+      margin-bottom: 10px;
+      text-align: center;
     }
     
-    .venue {
-      font-size: 16px;
-      margin: 6px 0;
-    }
-    
-    .event-type {
-      font-size: 20px;
-      font-weight: bold;
-      margin: 10px 0;
-    }
-    
-    .footer {
-      margin-top: 15px;
-      font-size: 16px;
-    }
-    
-    .thanks {
-      margin: 8px 0;
-    }
-    
-    .with-love {
-      font-size: 14px;
-      margin: 6px 0;
-    }
-    
-    .phone {
-      font-size: 16px;
-      margin: 4px 0;
-    }
-  </style>
+  .thanks {
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  
+  .with-love {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  
+  .footer-name {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  
+  .footer-city {
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  
+  .footer-phone {
+    font-size: 16px;
+  }
+</style>
 </head>
 <body>
-  <div class="header">Hi Tech Moi/div>
-  
-  <div class="divider"></div>
-  
-  <div class="date-time-row">
-    <div class="left-section">
-      <div>$dateStr</div>
-      <div>$timeStr</div>
+<div class="header">Sample Event Receipt</div>
+
+  <div class="outer-box">
+    
+      <div class="company-name">Hi Tech Moi</div>
     </div>
-    <div class="right-section">
-      <div>Admin</div>
+    
+    <div class="date-time-section">
+      <div class="date-time-left">
+        <div>$dateStr</div>
+        <div>$timeStr</div>
+      </div>
+      <div class="date-time-right">
+        <div class="typer-label">Typer</div>
+        <div class="typer-name">Admin</div>
+      </div>
     </div>
-  </div>
-  
-  <div class="receipt-no">வ.எண் : $receiptNo</div>
-  
-  <div class="customer-name">$customerName</div>
-  
-  <div class="venue">${venue.isNotEmpty ? venue : 'தொழை'}</div>
-  
-  <div class="event-type">$eventTypeName</div>
-  
-  <div class="divider"></div>
-  
-  <div class="footer">
-    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-    <div class="with-love">அன்புடன்</div>
-    <div class="customer-name">$customerName</div>
-    <div class="venue">$city</div>
-    <div class="phone">$contactNumber</div>
+    
+    <div class="content-section">
+      <div class="receipt-no">வ.எண் : $receiptNo</div>
+      <div class="customer-name">$customerName</div>
+      <div class="venue">${venue.isNotEmpty ? venue : 'தொழை'}</div>
+      <div class="event-type">$eventTypeName</div>
+      <div class="category">ரூ.1</div>
+    </div>
+    
+    <div class="footer-section">
+      <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+      <div class="with-love">அன்புடன்...</div>
+      <div class="footer-name">$customerName</div>
+      <div class="footer-city">$city</div>
+      <div class="footer-phone">$contactNumber</div>
+    </div>
   </div>
 </body>
 </html>

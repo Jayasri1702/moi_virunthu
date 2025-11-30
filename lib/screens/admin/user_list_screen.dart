@@ -90,6 +90,58 @@ class _UserListScreenState extends State<UserListScreen> {
     }
   }
 
+  Future<void> _toggleActiveStatus(UserModel user) async {
+    final newStatus = !user.isActive;
+
+    // Optimistically update UI immediately
+    setState(() {
+      final index = _users.indexWhere((u) => u.id == user.id);
+      if (index != -1) {
+        _users[index] = UserModel(
+          id: user.id,
+          fullName: user.fullName,
+          role: user.role,
+          isActive: newStatus,
+          email: user.email,
+          phone: user.phone,
+        );
+      }
+    });
+
+    try {
+      await _auth.client
+          .from('users')
+          .update({'is_active': newStatus})
+          .eq('id', user.id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('User ${newStatus ? "activated" : "deactivated"} successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Revert on error
+      setState(() {
+        final index = _users.indexWhere((u) => u.id == user.id);
+        if (index != -1) {
+          _users[index] = user; // Revert to original
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating status: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _navigateToCreate() async {
     final result = await Navigator.push(
       context,
@@ -200,7 +252,7 @@ class _UserListScreenState extends State<UserListScreen> {
                           _buildHeaderCell('Name', flex: 3),
                           _buildHeaderCell('Contact Number', flex: 3),
                           _buildHeaderCell('User Type', flex: 2),
-                          _buildHeaderCell('Actions', flex: 2),
+                          _buildHeaderCell('Actions', flex: 3),
                         ],
                       ),
                     ),
@@ -379,6 +431,21 @@ class _UserListScreenState extends State<UserListScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Active/Inactive Toggle
+            Expanded(
+              child: IconButton(
+                icon: Icon(
+                  user.isActive ? Icons.check_circle : Icons.cancel,
+                  size: 20,
+                ),
+                onPressed: () => _toggleActiveStatus(user),
+                color: user.isActive ? Colors.green : Colors.grey,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ),
+            const SizedBox(width: 4),
+            // Edit Button
             Expanded(
               child: IconButton(
                 icon: const Icon(Icons.edit, size: 20),
@@ -389,6 +456,7 @@ class _UserListScreenState extends State<UserListScreen> {
               ),
             ),
             const SizedBox(width: 4),
+            // Delete Button
             Expanded(
               child: IconButton(
                 icon: const Icon(Icons.delete, size: 20),

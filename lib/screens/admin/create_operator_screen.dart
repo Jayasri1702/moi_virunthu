@@ -385,9 +385,13 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
                                   ],
+                                  // Find the Contact Number TextFormField and update its validator:
                                   validator: (value) {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Contact number is required';
+                                    }
+                                    if (value.trim().length != 10) {
+                                      return 'Contact number must be exactly 10 digits';
                                     }
                                     return null;
                                   },
