@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../utils/cover_image_helper.dart';
+import '../../utils/network_utils.dart';
 
 class CoverImageManagerScreen extends StatefulWidget {
   const CoverImageManagerScreen({super.key});
@@ -32,15 +33,15 @@ class _CoverImageManagerScreenState extends State<CoverImageManagerScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadCurrentImage,
+          customMessage: 'Error loading image',
         );
       }
-      setState(() => _isLoading = false);
     }
   }
 
@@ -75,15 +76,15 @@ class _CoverImageManagerScreenState extends State<CoverImageManagerScreen> {
         throw Exception('Failed to save image');
       }
     } catch (e) {
+      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _pickAndSaveImage,
+          customMessage: 'Error updating image',
         );
       }
-      setState(() => _isLoading = false);
     }
   }
 
@@ -134,15 +135,15 @@ class _CoverImageManagerScreenState extends State<CoverImageManagerScreen> {
         throw Exception('Failed to delete custom image');
       }
     } catch (e) {
+      setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error resetting image: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _resetToDefault,
+          customMessage: 'Error resetting image',
         );
       }
-      setState(() => _isLoading = false);
     }
   }
 

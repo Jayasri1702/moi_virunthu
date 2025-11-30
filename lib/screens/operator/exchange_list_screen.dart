@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import '../../utils/network_utils.dart';
 
 class ExchangeListScreen extends StatefulWidget {
   final String eventId;
@@ -66,8 +67,11 @@ class _ExchangeListScreenState extends State<ExchangeListScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading exchanges: $e')),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadExchanges,
+          customMessage: 'Error loading exchanges',
         );
       }
     }

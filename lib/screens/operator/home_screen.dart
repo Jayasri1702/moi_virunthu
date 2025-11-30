@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
 import '../../models/user.dart';
+import '../../utils/network_utils.dart';
 
 class OperatorHomeScreen extends StatefulWidget {
   const OperatorHomeScreen({super.key});
@@ -46,9 +47,17 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
       return;
     }
 
+    // ⭐ ADD THIS: Check connection before making API call
+    bool hasConnection = await NetworkUtils.checkConnectionBeforeRequest(
+      context,
+      onRetry: _loadUpcomingEvents,
+    );
+    if (!hasConnection) return;
+
     setState(() => _loading = true);
 
     try {
+      // ... rest of your existing code
       print('Loading events for operator: $_currentUserId');
 
       // Get today's date at midnight for accurate comparison
@@ -109,11 +118,11 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
       print('Stack trace: $stackTrace');
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading events: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadUpcomingEvents,
+          customMessage: 'Error loading events',
         );
       }
     }
@@ -156,11 +165,11 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
     } catch (e, stackTrace) {
       print('Logout error: $e');
       print('Stack trace: $stackTrace');
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Error logging out: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
+      NetworkUtils.handleError(
+        context,
+        e,
+        onRetry: _handleLogout,
+        customMessage: 'Error logging out',
       );
     }
   }

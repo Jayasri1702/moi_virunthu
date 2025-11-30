@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class SimilarEntriesScreen extends StatefulWidget {
   final String eventId;
@@ -52,11 +53,11 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading entries: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadSimilarEntries,
+          customMessage: 'Error loading entries',
         );
       }
     } finally {

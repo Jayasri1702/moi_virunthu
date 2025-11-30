@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -46,11 +47,11 @@ class AdminDashboard extends StatelessWidget {
     } catch (e, stackTrace) {
       print('Logout error: $e');
       print('Stack trace: $stackTrace');
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Error logging out: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
+      NetworkUtils.handleError(
+        context,
+        e,
+        onRetry: () => _handleLogout(context),
+        customMessage: 'Error logging out',
       );
     }
   }

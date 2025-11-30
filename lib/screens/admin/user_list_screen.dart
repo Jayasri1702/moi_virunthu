@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/user.dart';
 import '../../services/auth_service.dart';
 import './create_operator_screen.dart';
+import '../../utils/network_utils.dart';
 
 class UserListScreen extends StatefulWidget {
   const UserListScreen({super.key});
@@ -34,11 +35,11 @@ class _UserListScreenState extends State<UserListScreen> {
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading users: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadUsers,
+          customMessage: 'Error loading users',
         );
       }
     }
@@ -79,11 +80,11 @@ class _UserListScreenState extends State<UserListScreen> {
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error deleting user: ${e.toString()}'),
-              backgroundColor: Colors.red,
-            ),
+          NetworkUtils.handleError(
+            context,
+            e,
+            onRetry: () => _deleteUser(user),
+            customMessage: 'Error deleting user',
           );
         }
       }
@@ -132,11 +133,11 @@ class _UserListScreenState extends State<UserListScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating status: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _toggleActiveStatus(user),
+          customMessage: 'Error updating user status',
         );
       }
     }

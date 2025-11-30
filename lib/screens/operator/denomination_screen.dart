@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/denomination_receipt_generator.dart';
+import '../../utils/network_utils.dart';
 
 class DenominationScreen extends StatefulWidget {
   final String eventId;
@@ -110,11 +111,11 @@ class _DenominationScreenState extends State<DenominationScreen> {
       await _calculateSummary();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading denomination data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadDenominations,
+          customMessage: 'Error loading denomination data',
         );
       }
     } finally {
@@ -189,6 +190,14 @@ class _DenominationScreenState extends State<DenominationScreen> {
     } catch (e) {
       print('Error loading withdrawal/exchange totals: $e');
       setState(() => _isLoadingTotals = false);
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadWithdrawalAndExchangeTotals,
+          customMessage: 'Error loading withdrawal/exchange totals',
+        );
+      }
     }
   }
   // Calculate summary method with corrected formulas
@@ -269,6 +278,14 @@ class _DenominationScreenState extends State<DenominationScreen> {
       });
     } catch (e) {
       print('Error calculating summary: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _calculateSummary,
+          customMessage: 'Error calculating summary',
+        );
+      }
     } finally {
       setState(() => _isLoadingSummary = false);
     }
@@ -1009,12 +1026,10 @@ class _DenominationScreenState extends State<DenominationScreen> {
                       } catch (e) {
                         print('Error generating receipt: $e');
                         if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error generating receipt: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                              duration: const Duration(seconds: 4),
-                            ),
+                          NetworkUtils.handleError(
+                            context,
+                            e,
+                            customMessage: 'Error generating receipt',
                           );
                         }
                       }

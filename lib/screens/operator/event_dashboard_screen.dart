@@ -12,6 +12,7 @@ import 'cash_managements_screen.dart';
 import '../../services/receipt_generator.dart';
 import 'package:printing/printing.dart';
 import '../../services/final_moi_report_screen.dart';
+import '../../utils/network_utils.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -31,7 +32,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments;
+    final args = ModalRoute
+        .of(context)
+        ?.settings
+        .arguments;
     if (args != null && args is Map<String, dynamic>) {
       setState(() {
         eventData = args;
@@ -97,11 +101,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             Container(
               width: double.infinity,
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(24),  // Change from vertical: 16
+              padding: const EdgeInsets.all(24),
+              // Change from vertical: 16
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),  // Add this
-                boxShadow: [  // Add this shadow
+                borderRadius: BorderRadius.circular(12), // Add this
+                boxShadow: [ // Add this shadow
                   BoxShadow(
                     color: Colors.grey.withOpacity(0.2),
                     spreadRadius: 1,
@@ -128,8 +133,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),  // Add this
-                boxShadow: [  // Add this shadow
+                borderRadius: BorderRadius.circular(12), // Add this
+                boxShadow: [ // Add this shadow
                   BoxShadow(
                     color: Colors.grey.withOpacity(0.2),
                     spreadRadius: 1,
@@ -214,22 +219,26 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     children: [
                       Expanded(
                         child: _buildGridButton('Collect Moi', Icons.add, () {
-                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                          final eventDataWithOperator = Map<String,
+                              dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
 
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => const CollectMoiScreen(),
-                              settings: RouteSettings(arguments: eventDataWithOperator),
+                              settings: RouteSettings(
+                                  arguments: eventDataWithOperator),
                             ),
                           );
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Collection Details', Icons.person, () {
-                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                        child: _buildGridButton(
+                            'Collection Details', Icons.person, () {
+                          final eventDataWithOperator = Map<String,
+                              dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
 
                           Navigator.pushNamed(
@@ -246,21 +255,29 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Cash Withdrawal', Icons.money_off, () {
+                        child: _buildGridButton(
+                            'Cash Withdrawal', Icons.money_off, () {
                           Navigator.pushNamed(
                             context,
                             '/operator/cash_withdrawal',
-                            arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                            arguments: {
+                              'id': eventData!['id'],
+                              'operator_id': operatorId
+                            },
                           );
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Exchange Deno', Icons.swap_horiz, () {
+                        child: _buildGridButton(
+                            'Exchange Deno', Icons.swap_horiz, () {
                           Navigator.pushNamed(
                             context,
                             '/operator/exchange-denomination',
-                            arguments: {'id': eventData!['id'], 'operator_id': operatorId},
+                            arguments: {
+                              'id': eventData!['id'],
+                              'operator_id': operatorId
+                            },
                           );
                         }),
                       ),
@@ -270,7 +287,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Uncle Re-order', Icons.sort_by_alpha, () {
+                        child: _buildGridButton(
+                            'Uncle Re-order', Icons.sort_by_alpha, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -282,11 +300,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Correct Village', Icons.location_city, () {
+                        child: _buildGridButton(
+                            'Correct Village', Icons.location_city, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const CorrectVillageNamesScreen(),
+                              builder: (
+                                  context) => const CorrectVillageNamesScreen(),
                             ),
                           );
                         }),
@@ -298,7 +318,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildGridButton('Correct Person', Icons.person_search, () {
+                          child: _buildGridButton('Correct Person', Icons
+                              .person_search, () {
                             Navigator.pushNamed(
                               context,
                               '/admin/correct-person-data',
@@ -332,26 +353,30 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Similar Entries', Icons.content_copy, () {
+                        child: _buildGridButton(
+                            'Similar Entries', Icons.content_copy, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => SimilarEntriesScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  SimilarEntriesScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Cash Deno', Icons.currency_rupee, () {
+                        child: _buildGridButton(
+                            'Cash Deno', Icons.currency_rupee, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DenominationScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  DenominationScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -362,13 +387,15 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Double Entries', Icons.filter_2, () {
+                        child: _buildGridButton(
+                            'Double Entries', Icons.filter_2, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => DoubleEntriesScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  DoubleEntriesScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -379,9 +406,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => UserWiseCollectionScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  UserWiseCollectionScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -392,27 +420,31 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Cash Management', Icons.account_balance_wallet, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CashManagementScreen(
-                                eventId: eventData!['id'],
-                                operatorId: operatorId,
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Cash Management',
+                            Icons.account_balance_wallet, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      CashManagementScreen(
+                                        eventId: eventData!['id'],
+                                        operatorId: operatorId,
+                                      ),
+                                ),
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Modified Report', Icons.edit_note, () {
+                        child: _buildGridButton(
+                            'Modified Report', Icons.edit_note, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => ModifiedReportScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  ModifiedReportScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -423,19 +455,22 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
+                        child: _buildGridButton(
+                            'Sample Receipt', Icons.receipt, () {
                           _showSampleReceipt();
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Final Moi Report', Icons.assessment, () {
+                        child: _buildGridButton(
+                            'Final Moi Report', Icons.assessment, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => FinalMoiReportScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  FinalMoiReportScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -564,7 +599,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
+        builder: (context) =>
+        const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -590,90 +626,91 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         // Show receipt in a dialog with print option
         showDialog(
           context: context,
-          builder: (context) => Dialog(
-            child: Container(
-              width: 400,
-              constraints: const BoxConstraints(maxHeight: 700),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header with close button
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Sample Receipt',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+          builder: (context) =>
+              Dialog(
+                child: Container(
+                  width: 400,
+                  constraints: const BoxConstraints(maxHeight: 700),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Header with close button
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            bottom: BorderSide(color: Colors.grey[300]!),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // PDF Preview
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: PdfPreview(
-                        build: (format) => pdfBytes,
-                        allowPrinting: false,
-                        allowSharing: false,
-                        canChangePageFormat: false,
-                        canChangeOrientation: false,
-                        canDebug: false,
-                        pdfFileName: 'receipt_$customerName.pdf',
-                        actions: const [], // Remove default toolbar actions
-                      ),
-                    ),
-                  ),
-                  // Custom Print Button at bottom
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        top: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await Printing.layoutPdf(
-                          onLayout: (format) => pdfBytes,
-                        );
-                      },
-                      icon: const Icon(Icons.print, size: 24),
-                      label: const Text(
-                        'Print Receipt',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFB846D7),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Sample Receipt',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
+                      // PDF Preview
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: PdfPreview(
+                            build: (format) => pdfBytes,
+                            allowPrinting: false,
+                            allowSharing: false,
+                            canChangePageFormat: false,
+                            canChangeOrientation: false,
+                            canDebug: false,
+                            pdfFileName: 'receipt_$customerName.pdf',
+                            actions: const [], // Remove default toolbar actions
+                          ),
+                        ),
+                      ),
+                      // Custom Print Button at bottom
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border(
+                            top: BorderSide(color: Colors.grey[300]!),
+                          ),
+                        ),
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await Printing.layoutPdf(
+                              onLayout: (format) => pdfBytes,
+                            );
+                          },
+                          icon: const Icon(Icons.print, size: 24),
+                          label: const Text(
+                            'Print Receipt',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFB846D7),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
         );
       } else {
         if (mounted) {
@@ -692,15 +729,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating receipt: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _showSampleReceipt,
+          customMessage: 'Error generating receipt',
         );
       }
     }
   }
-
-
 }
+

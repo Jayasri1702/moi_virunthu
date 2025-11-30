@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/exchange_receipt_generator.dart'; // Add this import
+import '../../utils/network_utils.dart';
 
 class ExchangeDenominationScreen extends StatefulWidget {
   const ExchangeDenominationScreen({super.key});
@@ -145,7 +146,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (paymentMethod != 'CASH') continue; // Only count CASH payments
 
         for (var denom in denominations) {
-          collected['$denom'] = (collected['$denom'] ?? 0) + ((entry['denom_$denom'] ?? 0) as int);
+          collected['$denom'] = (collected['$denom'] ?? 0) +
+              ((entry['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Collected: $collected');
@@ -157,7 +159,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) +
+              ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Withdrawn: $withdrawn');
@@ -169,7 +172,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          exchanged['$denom'] = (exchanged['$denom'] ?? 0) + ((denomData['denom_$denom'] ?? 0) as int);
+          exchanged['$denom'] = (exchanged['$denom'] ?? 0) +
+              ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
       print('Total Exchanged (Net): $exchanged');
@@ -177,14 +181,22 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       // Calculate available = collected - withdrawn + exchanged
       setState(() {
         _availableBalance = {
-          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) + (exchanged['500'] ?? 0),
-          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) + (exchanged['200'] ?? 0),
-          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) + (exchanged['100'] ?? 0),
-          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) + (exchanged['50'] ?? 0),
-          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) + (exchanged['20'] ?? 0),
-          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) + (exchanged['10'] ?? 0),
-          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) + (exchanged['5'] ?? 0),
-          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) + (exchanged['1'] ?? 0),
+          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) +
+              (exchanged['500'] ?? 0),
+          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) +
+              (exchanged['200'] ?? 0),
+          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) +
+              (exchanged['100'] ?? 0),
+          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) +
+              (exchanged['50'] ?? 0),
+          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) +
+              (exchanged['20'] ?? 0),
+          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) +
+              (exchanged['10'] ?? 0),
+          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) +
+              (exchanged['5'] ?? 0),
+          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) +
+              (exchanged['1'] ?? 0),
         };
         _isLoadingBalance = false;
       });
@@ -197,11 +209,11 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         _isLoadingBalance = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading denomination balance: $e'),
-            backgroundColor: Colors.orange,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadAvailableBalance,
+          customMessage: 'Error loading denomination balance',
         );
       }
     }
@@ -520,11 +532,11 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     } catch (e) {
       print('Error saving exchange: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving exchange: $e'),
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _saveExchange,
+          customMessage: 'Error saving exchange',
         );
       }
     }

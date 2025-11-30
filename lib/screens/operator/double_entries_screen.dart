@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class DoubleEntriesScreen extends StatefulWidget {
   final String eventId;
@@ -50,11 +51,11 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading entries: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadDoubleEntries,
+          customMessage: 'Error loading entries',
         );
       }
     } finally {
@@ -107,19 +108,16 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
       await _loadDoubleEntries();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting entry: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _deleteEntry(entryId),
+          customMessage: 'Error deleting entry',
         );
       }
     }
   }
 
-  // Helper to extract initial from name
-  // "P. Prashanth" → "P"
-  // "Prashanth" → ""
   String _extractInitial(String name) {
     if (name.isEmpty) return '';
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:printing/printing.dart';
+import '../../utils/network_utils.dart';
 
 class MoiReceiptPreviewScreen extends StatefulWidget {
   const MoiReceiptPreviewScreen({super.key});
@@ -65,11 +66,11 @@ class _MoiReceiptPreviewScreenState extends State<MoiReceiptPreviewScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error printing: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handlePrint,
+          customMessage: 'Error printing',
         );
       }
     }
@@ -96,11 +97,11 @@ class _MoiReceiptPreviewScreenState extends State<MoiReceiptPreviewScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error printing: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handlePrint,
+          customMessage: 'Error printing',
         );
       }
     }
@@ -122,11 +123,11 @@ class _MoiReceiptPreviewScreenState extends State<MoiReceiptPreviewScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error sharing: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handleShare,
+          customMessage: 'Error sharing receipt',
         );
       }
     }

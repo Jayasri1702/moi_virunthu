@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/withdrawal_receipt_generator.dart';
+import '../../utils/network_utils.dart';
 
 class CashWithdrawalScreen extends StatefulWidget {
   const CashWithdrawalScreen({super.key});
@@ -189,11 +190,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         _isLoadingBalance = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading denomination balance: $e'),
-            backgroundColor: Colors.orange,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadAvailableBalance,
+          customMessage: 'Error loading denomination balance',
         );
       }
     }
@@ -576,11 +577,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     } catch (e) {
       print('Error saving withdrawal: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving withdrawal: $e'),
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _saveWithdrawal,
+          customMessage: 'Error saving withdrawal',
         );
       }
     }
@@ -627,12 +628,11 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     } catch (e) {
       print('Error sending receipt to WhatsApp: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _sendReceiptToWhatsApp,
+          customMessage: 'Error sending receipt to WhatsApp',
         );
       }
     }

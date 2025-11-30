@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
 import '../../models/user.dart';
+import '../../utils/network_utils.dart';
 
 class CreateOperatorScreen extends StatefulWidget {
   final UserModel? userToEdit;
@@ -20,7 +21,7 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
   final _contactNumber = TextEditingController();
   final _auth = AuthService();
   bool _passwordVisible = false;
-  bool _resetPassword = false; // NEW: Track if user wants to reset password
+  bool _resetPassword = false;
 
   String _selectedUserType = 'Operator';
   bool _loading = false;
@@ -45,42 +46,64 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
 
     setState(() => _loading = true);
 
-    Map<String, dynamic> result;
+    try {
+      Map<String, dynamic> result;
 
-    if (isEditing) {
-      // Update existing user
-      result = await _updateUser();
-    } else {
-      // Create new user
-      result = await _auth.createOperator(
-        fullName: _name.text.trim(),
-        password: _password.text,
-        phone: _contactNumber.text.trim(),
-        email: _email.text.trim().isEmpty ? null : _email.text.trim(),
-        role: _selectedUserType == 'Administrator' ? 'admin' : 'operator',
-      );
-    }
+      if (isEditing) {
+        // Update existing user
+        result = await _updateUser();
+      } else {
+        // Create new user
+        result = await _auth.createOperator(
+          fullName: _name.text.trim(),
+          password: _password.text,
+          phone: _contactNumber.text.trim(),
+          email: _email.text.trim().isEmpty ? null : _email.text.trim(),
+          role: _selectedUserType == 'Administrator' ? 'admin' : 'operator',
+        );
+      }
 
-    setState(() => _loading = false);
+      setState(() => _loading = false);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message']),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message']),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        // Check if it's a network error that should trigger retry dialog
+        if (result['error'] != null) {
+          NetworkUtils.handleError(
+            context,
+            result['error'],
+            onRetry: _save,
+            customMessage: result['message'],
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message']),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _save,
+          customMessage: isEditing ? 'Error updating user' : 'Error creating operator',
+        );
+      }
     }
   }
 
@@ -126,6 +149,7 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
       return {
         'success': false,
         'message': 'Error updating user: ${e.toString()}',
+        'error': e,
       };
     }
   }
@@ -385,7 +409,6 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
                                   ],
-                                  // Find the Contact Number TextFormField and update its validator:
                                   validator: (value) {
                                     if (value == null || value.trim().isEmpty) {
                                       return 'Contact number is required';

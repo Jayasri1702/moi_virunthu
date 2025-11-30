@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,23 +20,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     setState(() => _loading = true);
-    final user = await _auth.login(_usernameController.text.trim(), _passwordController.text);
-    setState(() => _loading = false);
 
-    if (user == null) {
-      _showMessage('Invalid credentials');
-      return;
-    }
+    try {
+      final user = await _auth.login(_usernameController.text.trim(), _passwordController.text);
+      setState(() => _loading = false);
 
-    // Pass user data as arguments when navigating
-    if (user.role == 'admin') {
-      Navigator.pushReplacementNamed(context, '/admin', arguments: user);
-    } else {
-      Navigator.pushReplacementNamed(
-        context,
-        '/operator/home',
-        arguments: user,  // ← Pass the user object here
-      );
+      if (user == null) {
+        _showMessage('Invalid credentials');
+        return;
+      }
+
+      // Pass user data as arguments when navigating
+      if (user.role == 'admin') {
+        Navigator.pushReplacementNamed(context, '/admin', arguments: user);
+      } else {
+        Navigator.pushReplacementNamed(
+          context,
+          '/operator/home',
+          arguments: user,  // ← Pass the user object here
+        );
+      }
+    } catch (e) {
+      setState(() => _loading = false);
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _login,
+          customMessage: 'Error logging in',
+        );
+      }
     }
   }
 

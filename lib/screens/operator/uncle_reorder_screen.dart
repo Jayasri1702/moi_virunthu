@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../utils/network_utils.dart';
 
 class UncleReorderScreen extends StatefulWidget {
   const UncleReorderScreen({super.key});
@@ -93,12 +94,17 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
       }
     } catch (e) {
       print('Error loading uncles: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading uncles: $e')),
-      );
       setState(() {
         _isLoading = false;
       });
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadUncles,
+          customMessage: 'Error loading uncles',
+        );
+      }
     }
   }
 
@@ -178,12 +184,14 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
       await _loadUncles();
     } catch (e) {
       print('Error updating serial numbers: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error updating: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _updateSerialNumbers,
+          customMessage: 'Error updating serial numbers',
+        );
+      }
     }
   }
 

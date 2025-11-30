@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class EventExpensesScreen extends StatefulWidget {
   const EventExpensesScreen({super.key});
@@ -141,11 +142,11 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventData,
+          customMessage: 'Error loading event data',
         );
       }
     }
@@ -206,11 +207,11 @@ class _EventExpensesScreenState extends State<EventExpensesScreen> {
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving expenses: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _saveExpenses,
+          customMessage: 'Error saving expenses',
         );
       }
     }

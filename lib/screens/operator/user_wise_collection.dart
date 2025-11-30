@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class UserWiseCollectionScreen extends StatefulWidget {
   final String eventId;
@@ -79,11 +80,11 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading collection data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadUserCollections,
+          customMessage: 'Error loading collection data',
         );
       }
     } finally {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class AllEventsScreen extends StatefulWidget {
   const AllEventsScreen({super.key});
@@ -116,11 +117,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading operators: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _showOperatorsDialog(event),
+          customMessage: 'Error loading operators',
         );
       }
     }
@@ -195,11 +196,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting event: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _deleteEvent(event),
+          customMessage: 'Error deleting event',
         );
       }
     }
@@ -217,11 +218,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading event types: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventTypes,
+          customMessage: 'Error loading event types',
         );
       }
     }
@@ -272,11 +273,11 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading events: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEvents,
+          customMessage: 'Error loading events',
         );
       }
     }

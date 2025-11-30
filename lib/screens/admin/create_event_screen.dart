@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:intl/intl.dart';
 import '../../services/receipt_generator.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({super.key});
@@ -94,11 +95,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading event types: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventTypesAndPopulate,
+          customMessage: 'Error loading event types',
         );
       }
     }
@@ -122,11 +123,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading event types: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventTypes,
+          customMessage: 'Error loading event types',
         );
       }
     }
@@ -147,11 +148,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading operators: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadOperators,
+          customMessage: 'Error loading operators',
         );
       }
     }
@@ -409,15 +410,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           );
         }
       }
-
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _generateReceiptAndSendWhatsApp,
+          customMessage: 'Error generating receipt',
         );
       }
     } finally {
@@ -584,12 +583,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   } catch (e) {
                     setDialogState(() => isCreating = false);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error creating event type: ${e.toString()}'),
-                          backgroundColor: Colors.red,
-                          duration: const Duration(seconds: 4),
-                        ),
+                      NetworkUtils.handleError(
+                        context,
+                        e,
+                        customMessage: 'Error creating event type',
                       );
                     }
                   }
@@ -716,12 +713,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   } catch (e) {
                     setDialogState(() => isUpdating = false);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Error updating event type: ${e.toString()}'),
-                          backgroundColor: Colors.red,
-                          duration: const Duration(seconds: 4),
-                        ),
+                      NetworkUtils.handleError(
+                        context,
+                        e,
+                        customMessage: 'Error updating event type',
                       );
                     }
                   }
@@ -771,11 +766,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error checking event type usage: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          customMessage: 'Error checking event type usage',
         );
       }
       return;
@@ -831,12 +825,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting event type: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          customMessage: 'Error deleting event type',
         );
       }
     }
@@ -976,12 +968,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving event: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _save(shouldExit: shouldExit),
+          customMessage: 'Error saving event',
         );
       }
     } finally {
@@ -1236,11 +1227,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     } catch (e) {
       print('Error updating operator assignments: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating operators: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          customMessage: 'Error updating operators',
         );
       }
     }

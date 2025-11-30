@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../utils/network_utils.dart';
 
 class ModifiedReportScreen extends StatefulWidget {
   final String eventId;
@@ -93,11 +94,11 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
         _isLoading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: $e'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadModifiedEntries,
+          customMessage: 'Error loading data',
         );
       }
     }

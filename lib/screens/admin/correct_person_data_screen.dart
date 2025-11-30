@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../utils/network_utils.dart';
 
 class CorrectPersonDataScreen extends StatefulWidget {
   const CorrectPersonDataScreen({super.key});
@@ -68,11 +69,11 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading data: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadMois,
+          customMessage: 'Error loading data',
         );
       }
     }
@@ -145,7 +146,21 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
         successCount++;
       } catch (e) {
         errorCount++;
-        print('❌ Error saving moi ${moi['serial_no']}: $e');
+        print(' Error saving moi ${moi['serial_no']}: $e');
+
+        // If it's a network error, show dialog and stop processing
+        if (NetworkUtils.isNetworkError(e)) {
+          setState(() => _saving = false);
+          if (mounted) {
+            NetworkUtils.handleError(
+              context,
+              e,
+              onRetry: _saveAllChanges,
+              customMessage: 'Connection lost while saving',
+            );
+          }
+          return; // Stop processing remaining records
+        }
       }
     }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../utils/network_utils.dart';
 
 class CorrectVillageNamesScreen extends StatefulWidget {
   const CorrectVillageNamesScreen({super.key});
@@ -109,11 +110,11 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading village data: $e'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadVillageData,
+          customMessage: 'Error loading village data',
         );
       }
     }
@@ -198,11 +199,11 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
       await _loadVillageData();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating village names: $e'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _updateVillageNames,
+          customMessage: 'Error updating village names',
         );
       }
     } finally {

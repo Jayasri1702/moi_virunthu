@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/moi_receipt_generator.dart';
+import '../../utils/network_utils.dart';
 import 'package:flutter/services.dart';
 
 class CollectMoiScreen extends StatefulWidget {
@@ -128,6 +129,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       });
     } catch (e) {
       print('Error loading event details: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventDetails,
+          customMessage: 'Error loading event details',
+        );
+      }
     }
   }
 
@@ -285,6 +294,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } catch (e) {
       print('❌ Error loading denominations: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _loadDenominations(moiId),
+          customMessage: 'Error loading denominations',
+        );
+      }
       _initializeDenominations();
       setState(() {});
     }
@@ -308,6 +325,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       });
     } catch (e) {
       print('Error loading grouped MOIs: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadGroupedMois,
+          customMessage: 'Error loading grouped MOIs',
+        );
+      }
     }
   }
 
@@ -451,6 +476,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return matchingEntries;
     } catch (e) {
       print('Error checking existing entry: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _checkExistingEntry,
+          customMessage: 'Error checking existing entry',
+        );
+      }
       return [];
     }
   }
@@ -608,6 +641,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } catch (e) {
       print('Error auto-filling from phone number: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _autoFillFromPhoneNumber(phoneNumber),
+          customMessage: 'Error auto-filling data',
+        );
+      }
     }
   }
 
@@ -691,11 +732,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error updating entries: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating entries: $e'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _updateAllEntriesWithPhoneNumber(phoneNumber),
+          customMessage: 'Error updating entries',
         );
       }
     }
@@ -1053,8 +1094,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error in group operation: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handleGroup,
+          customMessage: 'Error in group operation',
         );
       }
     }
@@ -1577,8 +1621,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       } catch (e) {
         print('Error saving grouped entries: $e');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          NetworkUtils.handleError(
+            context,
+            e,
+            onRetry: _handleSaveAndPrint,
+            customMessage: 'Error saving grouped entries',
           );
         }
       }
@@ -1740,8 +1787,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error saving: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handleSaveAndPrint,
+          customMessage: 'Error saving MOI',
         );
       }
     }
@@ -1799,11 +1849,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error generating split receipts: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _generateSplitGroupReceipts,
+          customMessage: 'Error generating receipts',
         );
       }
     } finally {
@@ -1883,11 +1933,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error generating group receipt: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _generateConsolidatedGroupReceipt,
+          customMessage: 'Error generating group receipt',
         );
       }
     } finally {
@@ -2556,11 +2606,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('❌ Error in _handleGenerateSingleReceipt: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handleGenerateSingleReceipt,
+          customMessage: 'Error generating receipt',
         );
       }
     } finally {
@@ -2788,11 +2838,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error in _handleGenerateGroupReceipt: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _handleGenerateGroupReceipt,
+          customMessage: 'Error generating group receipt',
         );
       }
     } finally {
@@ -3825,11 +3875,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } catch (e) {
       print('Error deleting entry: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting entry: $e'),
-            backgroundColor: Colors.red,
-          ),
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: () => _handleDeleteFromGroup(moi),
+          customMessage: 'Error deleting entry',
         );
       }
     }
