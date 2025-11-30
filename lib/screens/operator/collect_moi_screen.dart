@@ -1068,7 +1068,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'living_place': _livingPlaceController.text.trim(),
         'notes': _notesController.text.trim(),
         'amount': int.tryParse(_amountController.text) ?? 0,
-        'payment_method': 'CASH',
+        'payment_method': _paymentMethod,  // ✅ FIXED - use current payment method
         'is_uncle': _isUncle,
         'persons': _buildPersonsData(),
         'group_id': groupId,
@@ -1292,6 +1292,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+    // ✅ NEW: ADD THIS CHECK - Force entries to go through MOI Details first
+    if (_groupedMois.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     bool isFinalSave = _groupedMois.isNotEmpty;
 
     if (isFinalSave) {
@@ -1301,28 +1313,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_groupedMois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please add at least one entry to MOI Details!'),
+            content: Text('Please add at least one entry to MOI Details before saving!'),
             backgroundColor: Colors.red,
           ),
         );
         return;
       }
 
-      int totalGroupAmount = 0;
-      for (var entry in _groupedMois) {
-        var amount = entry['amount'];
-        if (amount is int) {
-          totalGroupAmount += amount;
-        } else if (amount is double) {
-          totalGroupAmount += amount.toInt();
-        } else if (amount != null) {
-          totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
-        }
-      }
+      // ✅ NEW: Check if single entry with OTHERS payment method
+      bool isSingleEntryWithOthers = _groupedMois.length == 1 &&
+          _groupedMois[0]['payment_method'] == 'OTHERS';
 
-      if (_paymentMethod == 'CASH') {
+      // ✅ CHANGE: Only validate denomination if payment method is CASH AND not single OTHERS entry
+      if (_paymentMethod == 'CASH' && !isSingleEntryWithOthers) {
         int denomTotal = _getTotalAmount();
 
+        // Calculate total from MOI Details
+        int totalGroupAmount = 0;
+        for (var entry in _groupedMois) {
+          var amount = entry['amount'];
+          if (amount is int) {
+            totalGroupAmount += amount;
+          } else if (amount is double) {
+            totalGroupAmount += amount.toInt();
+          } else if (amount != null) {
+            totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
+          }
+        }
+
+        // Denomination is MANDATORY for CASH
         if (denomTotal == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -2078,7 +2097,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return false;
       }
 
-      // 2. Check denomination only if CASH payment (not Cheque/Advance/UPI)
+      // 2. ✅ CHANGE: Check denomination only if CASH payment (not Cheque/Advance/UPI)
       if (_paymentMethod == 'CASH') {
         int denomTotal = _getTotalAmount();
 

@@ -642,7 +642,7 @@ class MoiReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">Check / Advance / UPI Receipt</div>
+  <div class="header">Cheque / Advance / UPI Receipt</div>
   
   <div class="outer-box">
   
@@ -673,7 +673,7 @@ class MoiReceiptGenerator {
   <div class="amount-label">தொகை</div>
   <div class="amount">₹${amount.round()}</div>
   
-  <div class="payment-method-box">Check / Advance / UPI</div>
+  <div class="payment-method-box">Cheque / Advance / UPI</div>
   
   <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
@@ -1445,7 +1445,7 @@ class MoiReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">Group Check / Advance / UPI Receipt</div>
+  <div class="header">Group Cheque / Advance / UPI Receipt</div>
   <div class="outer-box">
   <div class="company-name">Hi Tech Moi</div>
   
@@ -1469,7 +1469,7 @@ class MoiReceiptGenerator {
     <div class="total-amount">₹$displayTotal</div>
   </div>
   
-  <div class="payment-method-box">Check / Advance / UPI</div>
+  <div class="payment-method-box">Cheque / Advance / UPI</div>
   
   <div class="divider"></div>
   
