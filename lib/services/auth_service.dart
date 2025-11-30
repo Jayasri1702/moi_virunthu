@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:argon2/argon2.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
+import '../utils/network_utils.dart'; // ✅ ADD THIS IMPORT
 
 class AuthService {
   final SupabaseClient client = Supabase.instance.client;
@@ -77,7 +78,8 @@ class AuthService {
     }
   }
 
-  Future<UserModel?> login(String fullName, String password) async {
+  // ✅ UPDATED: Now returns Map<String, dynamic> instead of UserModel?
+  Future<Map<String, dynamic>> login(String fullName, String password) async {
     try {
       print('Attempting login for full_name: $fullName');
 
@@ -89,7 +91,11 @@ class AuthService {
 
       if (data == null || data is! List || data.isEmpty) {
         print('No user found with full_name: $fullName');
-        return null;
+        return {
+          'success': false,
+          'error': 'invalid_credentials',
+          'message': 'Invalid username or password',
+        };
       }
 
       final row = data[0] as Map<String, dynamic>;
@@ -97,21 +103,46 @@ class AuthService {
 
       if (storedHash == null) {
         print('No password hash found for user');
-        return null;
+        return {
+          'success': false,
+          'error': 'invalid_credentials',
+          'message': 'Invalid username or password',
+        };
       }
 
       final isValid = await _verifyPassword(password, storedHash);
 
       if (!isValid) {
         print('Password verification failed');
-        return null;
+        return {
+          'success': false,
+          'error': 'invalid_credentials',
+          'message': 'Invalid username or password',
+        };
       }
 
       print('Login successful');
-      return UserModel.fromMap(row);
+      return {
+        'success': true,
+        'user': UserModel.fromMap(row),
+      };
     } catch (e) {
       print('Login error: $e');
-      return null;
+
+      // ✅ Check if it's a network error
+      if (NetworkUtils.isNetworkError(e)) {
+        return {
+          'success': false,
+          'error': 'network_error',
+          'message': 'No internet connection',
+        };
+      }
+
+      return {
+        'success': false,
+        'error': 'unknown',
+        'message': 'Error: ${e.toString()}',
+      };
     }
   }
 

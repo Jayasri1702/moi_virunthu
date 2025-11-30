@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../utils/network_utils.dart';
+import '../../models/user.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,37 +20,90 @@ class _LoginScreenState extends State<LoginScreen> {
   void _showMessage(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
 
   Future<void> _login() async {
+    // Basic validation first (no internet needed)
+    if (_usernameController.text.trim().isEmpty) {
+      _showMessage('Please enter username');
+      return;
+    }
+
+    if (_passwordController.text.isEmpty) {
+      _showMessage('Please enter password');
+      return;
+    }
+
+    // ✅ STEP 1: Check internet connection BEFORE attempting login
+    if (!await NetworkUtils.checkConnectionBeforeRequest(
+      context,
+      onRetry: _login,
+    )) {
+      return; // Internet dialog will be shown, exit early
+    }
+
+    // ✅ STEP 2: Show loading
     setState(() => _loading = true);
 
     try {
-      final user = await _auth.login(_usernameController.text.trim(), _passwordController.text);
+      // ✅ STEP 3: Attempt login
+      final result = await _auth.login(
+        _usernameController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (!mounted) return;
+
       setState(() => _loading = false);
 
-      if (user == null) {
-        _showMessage('Invalid credentials');
-        return;
-      }
+      // ✅ STEP 4: Handle response
+      if (result['success'] == true) {
+        final user = result['user'] as UserModel;
 
-      // Pass user data as arguments when navigating
-      if (user.role == 'admin') {
-        Navigator.pushReplacementNamed(context, '/admin', arguments: user);
+        // Navigate based on role
+        if (user.role == 'admin') {
+          Navigator.pushReplacementNamed(context, '/admin', arguments: user);
+        } else {
+          Navigator.pushReplacementNamed(
+            context,
+            '/operator/home',
+            arguments: user,
+          );
+        }
       } else {
-        Navigator.pushReplacementNamed(
-          context,
-          '/operator/home',
-          arguments: user,  // ← Pass the user object here
-        );
+        // ✅ STEP 5: Handle errors based on error type
+        final errorType = result['error'] ?? 'unknown';
+        final errorMessage = result['message'] ?? 'Login failed';
+
+        if (errorType == 'network_error') {
+          // Show network error dialog
+          if (mounted) {
+            NetworkUtils.showConnectionErrorDialog(
+              context,
+              onRetry: _login,
+            );
+          }
+        } else if (errorType == 'invalid_credentials') {
+          // Show invalid credentials message
+          if (mounted) {
+            _showMessage(errorMessage);
+          }
+        } else {
+          // Show generic error
+          if (mounted) {
+            _showMessage(errorMessage);
+          }
+        }
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() => _loading = false);
-      if (mounted) {
-        NetworkUtils.handleError(
-          context,
-          e,
-          onRetry: _login,
-          customMessage: 'Error logging in',
-        );
-      }
+
+      // ✅ Handle unexpected errors with NetworkUtils
+      NetworkUtils.handleError(
+        context,
+        e,
+        onRetry: _login,
+        customMessage: 'Error logging in',
+      );
     }
   }
 
@@ -196,51 +250,10 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildPhoneIcon() {
-    return Container(
-      width: 80,
-      height: 120,
-      decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(Icons.currency_rupee, size: 30, color: Colors.black),
-                  Positioned(
-                    left: 5,
-                    child: Icon(Icons.arrow_back, size: 20, color: Colors.black),
-                  ),
-                  Positioned(
-                    right: 5,
-                    child: Icon(Icons.arrow_forward, size: 20, color: Colors.black),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            width: 12,
-            height: 12,
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }

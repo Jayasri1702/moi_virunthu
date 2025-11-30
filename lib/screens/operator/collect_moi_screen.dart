@@ -901,6 +901,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleGroup() async {
+    // ✅ STEP 1: Check internet connection FIRST
+    if (!await NetworkUtils.checkConnectionBeforeRequest(context, onRetry: _handleGroup)) {
+      // Dialog will be shown by NetworkUtils.checkConnectionBeforeRequest
+      return;
+    }
+
     // ✅ NEW: If editing an entry that's already in MOI Details (not making changes), show specific message
     if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
       if (_hasNoChanges()) {
@@ -1013,13 +1019,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormForNextEntry();
           _phoneFocusNode.requestFocus();
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Entry updated in MOI Details!'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
         }
         return;
       }
@@ -1084,13 +1083,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       await _clearFormForNextEntry();
       _phoneFocusNode.requestFocus();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Entry added to MOI Details!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 1),
-        ),
-      );
     } catch (e) {
       print('Error in group operation: $e');
       if (mounted) {
@@ -3825,16 +3817,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           });
           await _clearFormForNextEntry();
         }
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Entry removed from group'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
         return;
       }
 
@@ -3861,16 +3843,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _originalData = null;
         });
         await _clearFormForNextEntry();
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Entry deleted successfully'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
       }
     } catch (e) {
       print('Error deleting entry: $e');
