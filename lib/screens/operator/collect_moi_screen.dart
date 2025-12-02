@@ -43,6 +43,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String _paymentMethod = 'CASH';
   bool _isUncle = false;
   bool _isLoading = true;
+  String? _lockedPaymentMethod; // Add this line
 
   // Edit mode variables
   bool _isEditMode = false;
@@ -1084,11 +1085,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // Get or create group ID
+      // Get or create group ID
       int groupId;
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
       } else {
         groupId = await _getNextGroupId();
+      }
+
+      // ✅ NEW: Lock payment method after first entry is added to MOI Details
+      if (_groupedMois.isEmpty) {
+        _lockedPaymentMethod = _paymentMethod;
       }
 
       // Get next serial number
@@ -2339,7 +2346,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // ✅ DON'T clear _currentGroupId or _groupedMois
 
     setState(() {
-      _paymentMethod = 'CASH';
+      // ✅ NEW: Set payment method to locked method if in group mode
+      if (_lockedPaymentMethod != null) {
+        _paymentMethod = _lockedPaymentMethod!;
+      } else {
+        _paymentMethod = 'CASH';
+      }
       _isUncle = false;
       // _isEditMode = false;
       _editingMoiId = null;
@@ -2378,6 +2390,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _originalData = null;
       _currentGroupId = null;
       _groupedMois.clear();
+      _lockedPaymentMethod = null; // Add this line
     });
   }
 
@@ -2410,6 +2423,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isEditMode = false;
       _editingMoiId = null;
       _originalData = null;
+      _lockedPaymentMethod = null; // Add this line
     });
     await _loadNextSerialNo();
     _phoneFocusNode.requestFocus(); // ✅ ADD THIS LINE
@@ -3169,6 +3183,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Widget _buildSerialAndPaymentHeader() {
+    // ✅ NEW: Check if payment method is locked
+    bool isPaymentMethodLocked = _lockedPaymentMethod != null;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -3216,24 +3233,47 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 visualDensity: VisualDensity.compact,
               ),
-              const SizedBox(width: 20),
-              const Text('Cheque / Advance / UPI',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              Checkbox(
-                value: _paymentMethod == 'OTHERS',
-                onChanged: (value) {
-                  setState(() {
-                    _paymentMethod = value == true ? 'OTHERS' : 'CASH';
-                    if (_paymentMethod == 'OTHERS') {
-                      for (var row in _denomRows) {
-                        row['countController'].clear();
-                      }
-                    }
-                  });
-                },
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
+              const SizedBox(width: 12),
+              Flexible(
+                child: Row(
+                  children: [
+                    const Flexible(
+                      child: Text(
+                        'Cheque / Advance / UPI',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Checkbox(
+                      value: _paymentMethod == 'OTHERS',
+                      onChanged: isPaymentMethodLocked ? null : (value) {
+                        setState(() {
+                          _paymentMethod = value == true ? 'OTHERS' : 'CASH';
+                          if (_paymentMethod == 'OTHERS') {
+                            for (var row in _denomRows) {
+                              row['countController'].clear();
+                            }
+                          }
+                        });
+                      },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
+                ),
               ),
+              // ✅ Lock indicator - now smaller and outside the Flexible
+              if (isPaymentMethodLocked)
+                Container(
+                  margin: const EdgeInsets.only(left: 2),
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    border: Border.all(color: Colors.orange, width: 1),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Icon(Icons.lock, size: 14, color: Colors.orange[900]),
+                ),
             ],
           ),
         ],
@@ -4112,7 +4152,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // If no more entries, clear group and denominations
         if (_groupedMois.isEmpty) {
           _currentGroupId = null;
-          // Clear denomination rows
+          _lockedPaymentMethod = null;
           for (var row in _denomRows) {
             row['countController'].clear();
           }
