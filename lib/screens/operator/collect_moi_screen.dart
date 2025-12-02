@@ -3559,6 +3559,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
               child: TextField(
                 controller: denomController,
+                focusNode: index == 0 ? _firstDenomFocusNode : null,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
                 style:
@@ -3629,7 +3630,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     border: Border.all(color: Colors.black, width: 2)),
                 child: TextField(
                   controller: controller,
-                  focusNode: index == 0 ? _firstDenomFocusNode : null,
+                  // focusNode: index == 0 ? _firstDenomFocusNode : null,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
