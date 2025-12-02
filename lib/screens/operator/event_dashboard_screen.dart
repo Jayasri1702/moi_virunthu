@@ -306,7 +306,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (
-                                  context) => const CorrectVillageNamesScreen(),
+                                  context) =>  CorrectVillageNamesScreen(
+                                  eventId: eventData!['id']
+                              ),
                             ),
                           );
                         }),

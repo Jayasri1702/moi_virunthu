@@ -51,7 +51,7 @@ class MyApp extends StatelessWidget {
         '/operator/home': (context) => const OperatorHomeScreen(),
         '/operator/event-dashboard': (context) => const EventDashboardScreen(), // Add this route
         '/operator/collect-moi': (context) => const CollectMoiScreen(),
-        '/operator/correct-village-names': (context) => const CorrectVillageNamesScreen(),
+        '/operator/correct-village-names': (context) => const CorrectVillageNamesScreen(eventId: '',),
         '/operator/uncle-reorder': (context) => const UncleReorderScreen(), // Add this line
         '/operator/cash_withdrawal': (context) => const CashWithdrawalScreen(),
         '/operator/exchange-denomination': (context) => const ExchangeDenominationScreen(),

@@ -3,7 +3,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/network_utils.dart';
 
 class CorrectVillageNamesScreen extends StatefulWidget {
-  const CorrectVillageNamesScreen({super.key});
+  final String eventId;
+  const CorrectVillageNamesScreen({
+    super.key,
+    required this.eventId
+  });
 
   @override
   State<CorrectVillageNamesScreen> createState() => _CorrectVillageNamesScreenState();
@@ -51,6 +55,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
       final response = await _supabase
           .from('mois')
           .select('village_name')
+          .eq('event_id', widget.eventId)
           .eq('is_deleted', false)
           .not('village_name', 'is', null);
 
@@ -179,6 +184,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
         await _supabase
             .from('mois')
             .update({'village_name': newName})
+            .eq('event_id', widget.eventId)
             .eq('village_name', oldName)
             .eq('is_deleted', false);
 
