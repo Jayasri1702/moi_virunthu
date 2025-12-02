@@ -140,7 +140,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-
   Future<void> _loadArguments() async {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
@@ -261,10 +260,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (count != 0) {
             print('➕ Adding row: ₹$denom × $count');
 
-            final countController = TextEditingController(text: count.toString());
+            final countController =
+            TextEditingController(text: count.toString());
             countController.addListener(_onDenomCountChanged);
 
-            final denomController = TextEditingController(text: denom.toString());
+            final denomController =
+            TextEditingController(text: denom.toString());
 
             _denomRows.add({
               'selectedDenom': denom,
@@ -306,7 +307,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       setState(() {});
     }
   }
-
 
   Future<void> _loadGroupedMois() async {
     if (_currentGroupId == null) return;
@@ -409,7 +409,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     try {
       // Get the values to check
       String villageName = _villageController.text.trim();
-      int amount = _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0;
+      int amount = _paymentMethod == 'CASH'
+          ? _getTotalAmount()
+          : int.tryParse(_amountController.text) ?? 0;
 
       // Parse Person 1 name
       String person1Name = _person1Field1Controller.text.trim();
@@ -456,8 +458,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             String entryP1Name = p1['name'] ?? '';
             String entryP1Job = p1['job'] ?? '';
 
-            if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) continue;
-            if (person1Job.isNotEmpty && entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
+            if (entryP1Name.toLowerCase() != person1Name.toLowerCase())
+              continue;
+            if (person1Job.isNotEmpty &&
+                entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
           }
 
           // Check Person 2 details
@@ -465,7 +469,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             var p2 = personsList[1];
             String entryP2Details = p2['details'] ?? '';
 
-            if (entryP2Details.toLowerCase() != person2Details.toLowerCase()) continue;
+            if (entryP2Details.toLowerCase() != person2Details.toLowerCase())
+              continue;
           }
         }
 
@@ -488,8 +493,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  Future<bool> _showExistingEntryDialog(List<Map<String, dynamic>> existingEntries) async {
-    String serialNumbers = existingEntries.map((e) => 'O${e['serial_no']}').join(', ');
+  Future<bool> _showExistingEntryDialog(
+      List<Map<String, dynamic>> existingEntries) async {
+    String serialNumbers =
+    existingEntries.map((e) => 'O${e['serial_no']}').join(', ');
 
     // Build the complete data display
     String entryDetails = '';
@@ -502,7 +509,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       entryDetails += '📞 Phone: ${entry['phone'] ?? 'N/A'}\n';
       entryDetails += '💰 Amount: ₹${entry['amount']}\n';
       entryDetails += '💳 Payment: ${entry['payment_method'] ?? 'N/A'}\n';
-      entryDetails += '👤 Uncle: ${(entry['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
+      entryDetails +=
+      '👤 Uncle: ${(entry['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
 
       if (entry['persons'] != null) {
         List<dynamic> personsList = entry['persons'] as List;
@@ -532,21 +540,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           '⚠️ Entry Already Exists!',
           style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
         ),
-        content: SingleChildScrollView(  // Added ScrollView for long content
+        content: SingleChildScrollView(
+          // Added ScrollView for long content
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'This entry already exists in Serial No: $serialNumbers',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 8),
               const Text(
                 'Existing Entry Details:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
               ),
               const SizedBox(height: 8),
               Text(
@@ -581,7 +594,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
             child: const Text(
               'PROCEED',
-              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+              style:
+              TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -694,7 +708,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     try {
       // Build persons data
       List<Map<String, dynamic>> personsData = [];
-      if (_person1Field1Controller.text.trim().isNotEmpty || _person1Field2Controller.text.trim().isNotEmpty) {
+      if (_person1Field1Controller.text.trim().isNotEmpty ||
+          _person1Field2Controller.text.trim().isNotEmpty) {
         personsData.add({
           'name': _person1Field1Controller.text.trim(),
           'job': _person1Field2Controller.text.trim(),
@@ -708,8 +723,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       // Update all entries with this phone number
       final updateData = {
-        'living_place': _livingPlaceController.text.trim().isEmpty ? null : _livingPlaceController.text.trim(),
-        'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
+        'living_place': _livingPlaceController.text.trim().isEmpty
+            ? null
+            : _livingPlaceController.text.trim(),
+        'village_name': _villageController.text.trim().isEmpty
+            ? null
+            : _villageController.text.trim(),
         'persons': personsData,
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -723,7 +742,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ All entries with this phone number have been updated!'),
+            content:
+            Text('✅ All entries with this phone number have been updated!'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
@@ -741,6 +761,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
   }
+
   Future<bool> _showGlobalUpdateConfirmation(String phoneNumber) async {
     // Count how many entries will be affected
     int affectedCount = 0;
@@ -790,7 +811,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 children: [
                   Text(
                     '⚠️ This will affect $affectedCount existing entries with this phone number!',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, color: Colors.orange),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -800,7 +822,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   const SizedBox(height: 4),
                   const Text('• Village Name', style: TextStyle(fontSize: 11)),
                   const Text('• Living Place', style: TextStyle(fontSize: 11)),
-                  const Text('• Person Details', style: TextStyle(fontSize: 11)),
+                  const Text('• Person Details',
+                      style: TextStyle(fontSize: 11)),
                 ],
               ),
             ),
@@ -820,7 +843,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
             child: const Text(
               'NO, ONLY THIS ENTRY',
-              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+              style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11),
             ),
           ),
           TextButton(
@@ -831,7 +857,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
             child: const Text(
               'YES, UPDATE ALL',
-              style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11),
+              style: TextStyle(
+                  color: Colors.blue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11),
             ),
           ),
         ],
@@ -902,7 +931,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<void> _handleGroup() async {
     // ✅ STEP 1: Check internet connection FIRST
-    if (!await NetworkUtils.checkConnectionBeforeRequest(context, onRetry: _handleGroup)) {
+    if (!await NetworkUtils.checkConnectionBeforeRequest(context,
+        onRetry: _handleGroup)) {
       // Dialog will be shown by NetworkUtils.checkConnectionBeforeRequest
       return;
     }
@@ -912,7 +942,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_hasNoChanges()) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ This entry is already in the group! Use "Add Entry" to add a new entry, or make changes and click "Group" to update it.'),
+            content: Text(
+                '⚠️ This entry is already in the group! Use "Add Entry" to add a new entry, or make changes and click "Group" to update it.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 3),
           ),
@@ -939,7 +970,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     // Check if amount is entered
-    if (_amountController.text.trim().isEmpty || int.tryParse(_amountController.text) == 0) {
+    if (_amountController.text.trim().isEmpty ||
+        int.tryParse(_amountController.text) == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter amount before adding to group!'),
@@ -952,10 +984,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // Phone validation (optional)
     String phoneNumber = _phoneController.text.trim();
     if (phoneNumber.isNotEmpty) {
-      if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
+      if (phoneNumber.length != 10 ||
+          !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Phone number must be exactly 10 digits or leave it empty!'),
+            content: Text(
+                'Phone number must be exactly 10 digits or leave it empty!'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 2),
           ),
@@ -984,7 +1018,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (isDuplicate) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('⚠️ This entry already exists in MOI Details with the same details.'),
+              content: Text(
+                  '⚠️ This entry already exists in MOI Details with the same details.'),
               backgroundColor: Colors.orange,
               duration: Duration(seconds: 3),
             ),
@@ -993,7 +1028,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
 
         // Find and update the entry in _groupedMois list
-        int index = _groupedMois.indexWhere((moi) => moi['id'] == _editingMoiId);
+        int index =
+        _groupedMois.indexWhere((moi) => moi['id'] == _editingMoiId);
         if (index != -1) {
           setState(() {
             _groupedMois[index] = {
@@ -1018,7 +1054,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           await _clearFormForNextEntry();
           _phoneFocusNode.requestFocus();
-
         }
         return;
       }
@@ -1068,7 +1103,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'living_place': _livingPlaceController.text.trim(),
         'notes': _notesController.text.trim(),
         'amount': int.tryParse(_amountController.text) ?? 0,
-        'payment_method': _paymentMethod,  // ✅ FIXED - use current payment method
+        'payment_method':
+        _paymentMethod, // ✅ FIXED - use current payment method
         'is_uncle': _isUncle,
         'persons': _buildPersonsData(),
         'group_id': groupId,
@@ -1082,7 +1118,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       await _clearFormForNextEntry();
       _phoneFocusNode.requestFocus();
-
     } catch (e) {
       print('Error in group operation: $e');
       if (mounted) {
@@ -1118,7 +1153,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
 // ✅ NEW: Helper method to check if entries are identical
-  bool _areEntriesIdentical(Map<String, dynamic> entry1, Map<String, dynamic> entry2) {
+  bool _areEntriesIdentical(
+      Map<String, dynamic> entry1, Map<String, dynamic> entry2) {
     // Compare basic fields
     if (entry1['phone'] != entry2['phone']) return false;
     if (entry1['village_name'] != entry2['village_name']) return false;
@@ -1168,7 +1204,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     List<Map<String, dynamic>> personsData = [];
 
 // Parse Person 1
-    if (_person1Field1Controller.text.trim().isNotEmpty || _person1Field2Controller.text.trim().isNotEmpty) {
+    if (_person1Field1Controller.text.trim().isNotEmpty ||
+        _person1Field2Controller.text.trim().isNotEmpty) {
       personsData.add({
         'name': _person1Field1Controller.text.trim(),
         'job': _person1Field2Controller.text.trim(),
@@ -1190,11 +1227,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       'amount': int.tryParse(_amountController.text) ?? 0,
       'payment_method': _paymentMethod,
       'persons': personsData,
-      'village_name': _villageController.text.trim().isEmpty ? null : _villageController.text.trim(),
-      'living_place': _livingPlaceController.text.trim().isEmpty ? null : _livingPlaceController.text.trim(),
-      'phone': _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+      'village_name': _villageController.text.trim().isEmpty
+          ? null
+          : _villageController.text.trim(),
+      'living_place': _livingPlaceController.text.trim().isEmpty
+          ? null
+          : _livingPlaceController.text.trim(),
+      'phone': _phoneController.text.trim().isEmpty
+          ? null
+          : _phoneController.text.trim(),
       'is_uncle': _isUncle,
-      'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'notes': _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
       'group_id': groupId,
       'updated_at': DateTime.now().toIso8601String(),
     };
@@ -1217,11 +1262,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         print('Updated existing MOI: $moiId with serial_no: $_serialNo');
       } else {
         moiData['created_at'] = DateTime.now().toIso8601String();
-        response = await _supabase
-            .from('mois')
-            .insert(moiData)
-            .select()
-            .single();
+        response =
+        await _supabase.from('mois').insert(moiData).select().single();
         moiId = response['id'];
 
         print('Inserted new MOI: $moiId with serial_no: $_serialNo');
@@ -1273,15 +1315,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .upsert({...denomData, 'moi_id': firstMoiId});
     } else {
       // For single entry, use its own ID
-      await _supabase
-          .from('moi_denominations')
-          .upsert(denomData);
+      await _supabase.from('moi_denominations').upsert(denomData);
     }
   }
 
   Future<void> _handleSaveAndPrint() async {
     // ✅ FIRST: Check if editing a single entry with no changes (before anything else)
-    if (_isEditMode && _editingMoiId != null && _currentGroupId == null && _hasNoChanges()) {
+    if (_isEditMode &&
+        _editingMoiId != null &&
+        _currentGroupId == null &&
+        _hasNoChanges()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚠️ No changes detected. Nothing to save.'),
@@ -1296,7 +1339,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (_groupedMois.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
+          content: Text(
+              '⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -1313,7 +1357,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_groupedMois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please add at least one entry to MOI Details before saving!'),
+            content: Text(
+                'Please add at least one entry to MOI Details before saving!'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1378,7 +1423,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             if (count.abs() > available) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
+                  content: Text(
+                      '₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
                   backgroundColor: Colors.red,
                   duration: const Duration(seconds: 3),
                 ),
@@ -1412,11 +1458,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (entry['is_temp'] == true) {
             moiData['created_at'] = DateTime.now().toIso8601String();
 
-            final response = await _supabase
-                .from('mois')
-                .insert(moiData)
-                .select()
-                .single();
+            final response =
+            await _supabase.from('mois').insert(moiData).select().single();
 
             savedMoiIds.add(response['id']);
           } else {
@@ -1453,7 +1496,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Map<int, int>? denominations;
             if (_paymentMethod == 'CASH') {
               denominations = {
-                500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+                500: 0,
+                200: 0,
+                100: 0,
+                50: 0,
+                20: 0,
+                10: 0,
+                5: 0,
+                1: 0,
               };
 
               for (var row in _denomRows) {
@@ -1465,7 +1515,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               }
 
               // Check if we have any non-zero denominations
-              bool hasNonZeroDenoms = denominations.values.any((count) => count != 0);
+              bool hasNonZeroDenoms =
+              denominations.values.any((count) => count != 0);
               if (!hasNonZeroDenoms) {
                 denominations = null;
               }
@@ -1510,9 +1561,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               person1Job: person1Job,
               person2Details: person2Details,
               phone: entry['phone'],
-              amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+              amount: _paymentMethod == 'CASH'
+                  ? _getTotalAmount()
+                  : int.tryParse(_amountController.text) ?? 0,
               paymentMethod: _paymentMethod,
-              denominations: denominations,  // ✅ Using form denominations
+              denominations: denominations, // ✅ Using form denominations
               customerName: _customerName,
               city: _city,
               customerPhone: _customerPhone,
@@ -1546,7 +1599,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           } finally {
             setState(() => _isLoading = false);
           }
-          return;  // ✅ Exit early, don't show dialog
+          return; // ✅ Exit early, don't show dialog
         } else {
           // Show receipt type selection dialog for multiple entries
           if (mounted) {
@@ -1567,7 +1620,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     onPressed: () => Navigator.pop(context, 'single'),
                     style: TextButton.styleFrom(
                       backgroundColor: Colors.blue[50],
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                     child: const Text(
                       'Single Receipt',
@@ -1581,7 +1635,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     onPressed: () => Navigator.pop(context, 'group'),
                     style: TextButton.styleFrom(
                       backgroundColor: Colors.green[50],
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                     child: const Text(
                       'Group Receipt',
@@ -1595,7 +1650,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     onPressed: () => Navigator.pop(context, 'cancel'),
                     style: TextButton.styleFrom(
                       backgroundColor: Colors.grey[200],
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 12),
                     ),
                     child: const Text(
                       'Cancel',
@@ -1651,7 +1707,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     if (!hasValidPerson) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one person with a name')),
+        const SnackBar(
+            content: Text('Please add at least one person with a name')),
       );
       return;
     }
@@ -1696,7 +1753,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     String phoneNumber = _phoneController.text.trim();
-    if (phoneNumber.isNotEmpty && phoneNumber.length == 10 && _hasAutoFilledDataChanged()) {
+    if (phoneNumber.isNotEmpty &&
+        phoneNumber.length == 10 &&
+        _hasAutoFilledDataChanged()) {
       final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
       if (shouldUpdateAll) {
         await _updateAllEntriesWithPhoneNumber(phoneNumber);
@@ -1719,7 +1778,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           print('🎯 Number of _denomRows: ${_denomRows.length}');
 
           denominations = {
-            500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+            500: 0,
+            200: 0,
+            100: 0,
+            50: 0,
+            20: 0,
+            10: 0,
+            5: 0,
+            1: 0,
           };
 
           for (var row in _denomRows) {
@@ -1734,18 +1800,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           print('🔍 Denominations BEFORE validation: $denominations');
 
           // ✅ CRITICAL: Check if we have any non-zero denominations
-          bool hasNonZeroDenoms = denominations.values.any((count) => count != 0);
+          bool hasNonZeroDenoms =
+          denominations.values.any((count) => count != 0);
           print('🔍 Has non-zero denominations: $hasNonZeroDenoms');
 
           if (!hasNonZeroDenoms) {
-            print('⚠️ WARNING: All denominations are zero in Save&Print! Setting to null.');
+            print(
+                '⚠️ WARNING: All denominations are zero in Save&Print! Setting to null.');
             denominations = null;
           } else {
             print('✅ Valid denominations found: $denominations');
           }
         }
 
-        print('🔍 FINAL denominations being passed to receipt generator: $denominations');
+        print(
+            '🔍 FINAL denominations being passed to receipt generator: $denominations');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -1771,7 +1840,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           person1Job: _person1Field2Controller.text.trim(),
           person2Details: _person2Controller.text.trim(),
           phone: _phoneController.text.trim(),
-          amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+          amount: _paymentMethod == 'CASH'
+              ? _getTotalAmount()
+              : int.tryParse(_amountController.text) ?? 0,
           paymentMethod: _paymentMethod,
           denominations: denominations,
           customerName: _customerName,
@@ -1840,8 +1911,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventDate: eventDetails['event_date'],
         eventTime: eventDetails['event_time'],
         groupEntries: entriesWithDenoms,
-        customerName: _customerName,  // ✅ NEW
-        city: _city,                  // ✅ NEW
+        customerName: _customerName, // ✅ NEW
+        city: _city, // ✅ NEW
         customerPhone: _customerPhone, // ✅ NEW
       );
 
@@ -1882,7 +1953,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       double totalAmount = 0.0;
       Map<int, int> totalDenominations = {
-        500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+        500: 0,
+        200: 0,
+        100: 0,
+        50: 0,
+        20: 0,
+        10: 0,
+        5: 0,
+        1: 0,
       };
 
       for (var entry in _groupedMois) {
@@ -1899,7 +1977,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           final denoms = await _getDenominations(entry['id']);
           if (denoms != null) {
             denoms.forEach((denom, count) {
-              totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+              totalDenominations[denom] =
+                  (totalDenominations[denom] ?? 0) + count;
             });
           }
         }
@@ -1923,9 +2002,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventTime: eventDetails['event_time'],
         groupEntries: _groupedMois,
         totalAmount: totalAmount,
-        totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
-        customerName: _customerName,  // ✅ NEW
-        city: _city,                  // ✅ NEW
+        totalDenominations: totalDenominations.values.any((v) => v > 0)
+            ? totalDenominations
+            : null,
+        customerName: _customerName, // ✅ NEW
+        city: _city, // ✅ NEW
         customerPhone: _customerPhone, // ✅ NEW
       );
 
@@ -1956,8 +2037,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-
-
   Future<void> _saveDenominationsForGroup(String firstMoiId) async {
     // Build denomination data from rows
     Map<String, dynamic> denomData = {
@@ -1985,9 +2064,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     // Save denomination (linked to first MOI entry)
-    await _supabase
-        .from('moi_denominations')
-        .upsert(denomData);
+    await _supabase.from('moi_denominations').upsert(denomData);
   }
 
   bool _hasFormData() {
@@ -2010,19 +2087,27 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     print('🔍 Checking for changes...');
     print('Original data: $_originalData');
 
-    bool phoneChanged = (_originalData!['phone'] ?? '') != _phoneController.text.trim();
-    print('Phone changed: $phoneChanged (${_originalData!['phone']} vs ${_phoneController.text.trim()})');
+    bool phoneChanged =
+        (_originalData!['phone'] ?? '') != _phoneController.text.trim();
+    print(
+        'Phone changed: $phoneChanged (${_originalData!['phone']} vs ${_phoneController.text.trim()})');
 
-    bool villageChanged = (_originalData!['village_name'] ?? '') != _villageController.text.trim();
-    print('Village changed: $villageChanged (${_originalData!['village_name']} vs ${_villageController.text.trim()})');
+    bool villageChanged = (_originalData!['village_name'] ?? '') !=
+        _villageController.text.trim();
+    print(
+        'Village changed: $villageChanged (${_originalData!['village_name']} vs ${_villageController.text.trim()})');
 
-    bool livingPlaceChanged = (_originalData!['living_place'] ?? '') != _livingPlaceController.text.trim();
-    print('Living place changed: $livingPlaceChanged (${_originalData!['living_place']} vs ${_livingPlaceController.text.trim()})');
+    bool livingPlaceChanged = (_originalData!['living_place'] ?? '') !=
+        _livingPlaceController.text.trim();
+    print(
+        'Living place changed: $livingPlaceChanged (${_originalData!['living_place']} vs ${_livingPlaceController.text.trim()})');
 
-    bool notesChanged = (_originalData!['notes'] ?? '') != _notesController.text.trim();
+    bool notesChanged =
+        (_originalData!['notes'] ?? '') != _notesController.text.trim();
     print('Notes changed: $notesChanged');
 
-    bool paymentMethodChanged = _originalData!['payment_method'] != _paymentMethod;
+    bool paymentMethodChanged =
+        _originalData!['payment_method'] != _paymentMethod;
     print('Payment method changed: $paymentMethodChanged');
 
     bool isUncleChanged = (_originalData!['is_uncle'] ?? false) != _isUncle;
@@ -2058,9 +2143,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           currentP1Job != origP1Job ||
           currentP2Details != origP2Details;
 
-      print('Person 1 name changed: ${currentP1Name != origP1Name} ($origP1Name vs $currentP1Name)');
-      print('Person 1 job changed: ${currentP1Job != origP1Job} ($origP1Job vs $currentP1Job)');
-      print('Person 2 details changed: ${currentP2Details != origP2Details} ($origP2Details vs $currentP2Details)');
+      print(
+          'Person 1 name changed: ${currentP1Name != origP1Name} ($origP1Name vs $currentP1Name)');
+      print(
+          'Person 1 job changed: ${currentP1Job != origP1Job} ($origP1Job vs $currentP1Job)');
+      print(
+          'Person 2 details changed: ${currentP2Details != origP2Details} ($origP2Details vs $currentP2Details)');
     } else {
       personsChanged = _person1Field1Controller.text.trim().isNotEmpty ||
           _person1Field2Controller.text.trim().isNotEmpty ||
@@ -2068,9 +2156,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       print('Persons changed (no original): $personsChanged');
     }
 
-    bool hasNoChanges = !phoneChanged && !villageChanged && !livingPlaceChanged &&
-        !notesChanged && !paymentMethodChanged && !isUncleChanged &&
-        !amountChanged && !personsChanged;
+    bool hasNoChanges = !phoneChanged &&
+        !villageChanged &&
+        !livingPlaceChanged &&
+        !notesChanged &&
+        !paymentMethodChanged &&
+        !isUncleChanged &&
+        !amountChanged &&
+        !personsChanged;
 
     print('✅ Final result - Has NO changes: $hasNoChanges');
 
@@ -2090,7 +2183,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_groupedMois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please add at least one entry to MOI Details before saving!'),
+            content: Text(
+                'Please add at least one entry to MOI Details before saving!'),
             backgroundColor: Colors.red,
           ),
         );
@@ -2153,7 +2247,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             if (count.abs() > available) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
+                  content: Text(
+                      '₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
                   backgroundColor: Colors.red,
                   duration: const Duration(seconds: 3),
                 ),
@@ -2175,7 +2270,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     if (!hasValidPerson) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please add at least one person with a name')),
+        const SnackBar(
+            content: Text('Please add at least one person with a name')),
       );
       return false;
     }
@@ -2183,10 +2279,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // 2. Phone validation (optional, only if entered)
     String phoneNumber = _phoneController.text.trim();
     if (phoneNumber.isNotEmpty) {
-      if (phoneNumber.length != 10 || !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
+      if (phoneNumber.length != 10 ||
+          !RegExp(r'^\d{10}$').hasMatch(phoneNumber)) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Phone number must be exactly 10 digits or leave it empty!'),
+            content: Text(
+                'Phone number must be exactly 10 digits or leave it empty!'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 2),
           ),
@@ -2223,7 +2321,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return true; // ✅ Grouping validation passed
   }
 
-
   Future<void> _clearFormForNextEntry() async {
     await _loadNextSerialNo();
 
@@ -2244,7 +2341,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     setState(() {
       _paymentMethod = 'CASH';
       _isUncle = false;
-      _isEditMode = false;
+      // _isEditMode = false;
       _editingMoiId = null;
       _originalData = null;
     });
@@ -2323,9 +2420,42 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String _numberToWords(int number) {
     if (number == 0) return 'Zero';
 
-    final ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-    final teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-    final tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    final ones = [
+      '',
+      'One',
+      'Two',
+      'Three',
+      'Four',
+      'Five',
+      'Six',
+      'Seven',
+      'Eight',
+      'Nine'
+    ];
+    final teens = [
+      'Ten',
+      'Eleven',
+      'Twelve',
+      'Thirteen',
+      'Fourteen',
+      'Fifteen',
+      'Sixteen',
+      'Seventeen',
+      'Eighteen',
+      'Nineteen'
+    ];
+    final tens = [
+      '',
+      '',
+      'Twenty',
+      'Thirty',
+      'Forty',
+      'Fifty',
+      'Sixty',
+      'Seventy',
+      'Eighty',
+      'Ninety'
+    ];
 
     String convertHundreds(int n) {
       if (n == 0) return '';
@@ -2400,7 +2530,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return result.trim();
   }
 
-
   String _getPersonsDisplay(dynamic persons) {
     if (persons == null) return 'No name';
     try {
@@ -2411,7 +2540,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       for (var person in personsList) {
         if (person['name'] != null && person['name'].toString().isNotEmpty) {
           names.add(person['name']);
-        } else if (person['details'] != null && person['details'].toString().isNotEmpty) {
+        } else if (person['details'] != null &&
+            person['details'].toString().isNotEmpty) {
           // For person 2, extract first part before comma
           String details = person['details'];
           String firstName = details.split(',')[0].trim();
@@ -2566,7 +2696,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         print('🎯 Payment method is NOT CASH: $_paymentMethod');
       }
 
-      print('🔍 Final denominations being passed to receipt generator: $denominations');
+      print(
+          '🔍 Final denominations being passed to receipt generator: $denominations');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2594,7 +2725,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         person1Job: _person1Field2Controller.text.trim(),
         person2Details: _person2Controller.text.trim(),
         phone: _phoneController.text.trim(),
-        amount: _paymentMethod == 'CASH' ? _getTotalAmount() : int.tryParse(_amountController.text) ?? 0,
+        amount: _paymentMethod == 'CASH'
+            ? _getTotalAmount()
+            : int.tryParse(_amountController.text) ?? 0,
         paymentMethod: _paymentMethod,
         denominations: denominations,
         customerName: _customerName,
@@ -2634,16 +2767,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_eventId == null) return 0;
 
       // Step 1: Get collected from MOI (CASH only)
-      final moiData = await _supabase
-          .from('moi_denominations')
-          .select('''
+      final moiData = await _supabase.from('moi_denominations').select('''
           denom_$denomination,
           mois!moi_denominations_moi_id_fkey (
             payment_method,
             is_deleted
           )
-        ''')
-          .eq('event_id', _eventId!);
+        ''').eq('event_id', _eventId!);
 
       int collected = 0;
       for (var entry in moiData) {
@@ -2656,14 +2786,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // Step 2: Get withdrawn
-      final withdrawalData = await _supabase
-          .from('cash_withdrawals')
-          .select('''
+      final withdrawalData = await _supabase.from('cash_withdrawals').select('''
           cash_withdrawal_denominations (
             denom_$denomination
           )
-        ''')
-          .eq('event_id', _eventId!);
+        ''').eq('event_id', _eventId!);
 
       int withdrawn = 0;
       for (var withdrawal in withdrawalData) {
@@ -2674,14 +2801,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // Step 3: Get exchanged (net)
-      final exchangeData = await _supabase
-          .from('cash_exchanges')
-          .select('''
+      final exchangeData = await _supabase.from('cash_exchanges').select('''
           cash_exchange_denominations (
             denom_$denomination
           )
-        ''')
-          .eq('event_id', _eventId!);
+        ''').eq('event_id', _eventId!);
 
       int exchanged = 0;
       for (var exchange in exchangeData) {
@@ -2743,7 +2867,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (receiptType == 'consolidated') {
         double totalAmount = 0.0;
         Map<int, int> totalDenominations = {
-          500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+          500: 0,
+          200: 0,
+          100: 0,
+          50: 0,
+          20: 0,
+          10: 0,
+          5: 0,
+          1: 0,
         };
 
         for (var entry in _groupedMois) {
@@ -2760,7 +2891,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             final denoms = await _getDenominations(entry['id']);
             if (denoms != null) {
               denoms.forEach((denom, count) {
-                totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+                totalDenominations[denom] =
+                    (totalDenominations[denom] ?? 0) + count;
               });
             }
           }
@@ -2784,9 +2916,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           eventTime: eventDetails['event_time'],
           groupEntries: _groupedMois,
           totalAmount: totalAmount,
-          totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
-          customerName: _customerName,  // ✅ NEW
-          city: _city,                  // ✅ NEW
+          totalDenominations: totalDenominations.values.any((v) => v > 0)
+              ? totalDenominations
+              : null,
+          customerName: _customerName, // ✅ NEW
+          city: _city, // ✅ NEW
           customerPhone: _customerPhone, // ✅ NEW
         );
 
@@ -2828,8 +2962,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           eventDate: eventDetails['event_date'],
           eventTime: eventDetails['event_time'],
           groupEntries: entriesWithDenoms,
-          customerName: _customerName,  // ✅ NEW
-          city: _city,                  // ✅ NEW
+          customerName: _customerName, // ✅ NEW
+          city: _city, // ✅ NEW
           customerPhone: _customerPhone, // ✅ NEW
         );
 
@@ -2870,160 +3004,167 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     return Focus(
-        autofocus: true,
-        onKeyEvent: (node, event) {
-          if (event is KeyDownEvent) {
-            // Check for Ctrl+S
-            if (event.logicalKey == LogicalKeyboardKey.keyS &&
-                (event.logicalKey.keyLabel == 's' || event.logicalKey.keyLabel == 'S') &&
-                HardwareKeyboard.instance.isControlPressed) {
-              _handleSaveAndPrint();
-              return KeyEventResult.handled;
-            }
-            // In the Focus widget's onKeyEvent, add:
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          // Check for Ctrl+S
+          if (event.logicalKey == LogicalKeyboardKey.keyS &&
+              (event.logicalKey.keyLabel == 's' ||
+                  event.logicalKey.keyLabel == 'S') &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _handleSaveAndPrint();
+            return KeyEventResult.handled;
+          }
+          // In the Focus widget's onKeyEvent, add:
 // After Ctrl+G handler, add Ctrl+Enter handler:
-            if (event.logicalKey == LogicalKeyboardKey.enter &&
-                HardwareKeyboard.instance.isControlPressed) {
-              _handleGroup();
-              return KeyEventResult.handled;
-            }
+          if (event.logicalKey == LogicalKeyboardKey.enter &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _handleGroup();
+            return KeyEventResult.handled;
+          }
 
 // Add Ctrl+D handler for denomination:
-            if (event.logicalKey == LogicalKeyboardKey.keyD &&
-                HardwareKeyboard.instance.isControlPressed) {
-              // Focus first denomination field
-              if (_denomRows.isNotEmpty) {
-                FocusScope.of(context).requestFocus(_firstDenomFocusNode);
-              }
-              return KeyEventResult.handled;
+          if (event.logicalKey == LogicalKeyboardKey.keyD &&
+              HardwareKeyboard.instance.isControlPressed) {
+            // Focus first denomination field
+            if (_denomRows.isNotEmpty) {
+              FocusScope.of(context).requestFocus(_firstDenomFocusNode);
             }
-            // Check for Ctrl+G
-            if (event.logicalKey == LogicalKeyboardKey.keyG &&
-                (event.logicalKey.keyLabel == 'g' || event.logicalKey.keyLabel == 'G') &&
-                HardwareKeyboard.instance.isControlPressed) {
-              _handleGroup();
-              return KeyEventResult.handled;
-            }
-            // Check for Ctrl+Delete
-            if (event.logicalKey == LogicalKeyboardKey.delete &&
-                HardwareKeyboard.instance.isControlPressed) {
-              _handleClear();
-              return KeyEventResult.handled;
-            }
-            // Check for Ctrl+A (Add Entry - only when in group mode)
-            if (event.logicalKey == LogicalKeyboardKey.keyA &&
-                (event.logicalKey.keyLabel == 'a' || event.logicalKey.keyLabel == 'A') &&
-                HardwareKeyboard.instance.isControlPressed) {
-              if (_currentGroupId != null) {
-                _handleAddEntry();
-                return KeyEventResult.handled;
-              }
-            }
-// Check for Ctrl+P (Generate receipt)
-            if (event.logicalKey == LogicalKeyboardKey.keyP &&
-                (event.logicalKey.keyLabel == 'p' || event.logicalKey.keyLabel == 'P') &&
-                HardwareKeyboard.instance.isControlPressed) {
-              if (_currentGroupId != null && _groupedMois.isNotEmpty) {
-                _handleGenerateGroupReceipt();
-              } else if (_currentGroupId == null && (_isEditMode || _hasFormData())) {
-                _handleGenerateSingleReceipt();
-              }
-              return KeyEventResult.handled;
-            }
-
+            return KeyEventResult.handled;
           }
-          return KeyEventResult.ignored;
-        },
-        child: Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
+          // Check for Ctrl+G
+          if (event.logicalKey == LogicalKeyboardKey.keyG &&
+              (event.logicalKey.keyLabel == 'g' ||
+                  event.logicalKey.keyLabel == 'G') &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _handleGroup();
+            return KeyEventResult.handled;
+          }
+          // Check for Ctrl+Delete
+          if (event.logicalKey == LogicalKeyboardKey.delete &&
+              HardwareKeyboard.instance.isControlPressed) {
+            _handleClear();
+            return KeyEventResult.handled;
+          }
+          // Check for Ctrl+A (Add Entry - only when in group mode)
+          if (event.logicalKey == LogicalKeyboardKey.keyA &&
+              (event.logicalKey.keyLabel == 'a' ||
+                  event.logicalKey.keyLabel == 'A') &&
+              HardwareKeyboard.instance.isControlPressed) {
+            if (_currentGroupId != null) {
+              _handleAddEntry();
+              return KeyEventResult.handled;
+            }
+          }
+// Check for Ctrl+P (Generate receipt)
+          if (event.logicalKey == LogicalKeyboardKey.keyP &&
+              (event.logicalKey.keyLabel == 'p' ||
+                  event.logicalKey.keyLabel == 'P') &&
+              HardwareKeyboard.instance.isControlPressed) {
+            if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+              _handleGenerateGroupReceipt();
+            } else if (_currentGroupId == null &&
+                (_isEditMode || _hasFormData())) {
+              _handleGenerateSingleReceipt();
+            }
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 1,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            _isEditMode ? 'Edit MOI' : 'Collect Moi',
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
-        title: Text(
-          _isEditMode ? 'Edit MOI' : 'Collect Moi',
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              _buildSerialAndPaymentHeader(),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Search Mobile Number',
+                      style:
+                      TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: _phoneController,
+                      focusNode: _phoneFocusNode,
+                      keyboardType:
+                      TextInputType.number, // ✅ CHANGE from phone to number
+                      maxLength: 10,
+                      inputFormatters: [
+                        FilteringTextInputFormatter
+                            .digitsOnly, // ✅ ADD THIS - Only digits allowed
+                      ],
+                      style: const TextStyle(fontSize: 13),
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Search Mobile Number',
+                        contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        isDense: true,
+                        counterText: '', // Hide character counter
+                      ),
+                      onChanged: (value) {
+                        // Auto-fill when 10 digits are entered
+                        if (value.length == 10 && !_isEditMode) {
+                          _autoFillFromPhoneNumber(value);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildVillageAndLivingPlace(),
+              const SizedBox(height: 12),
+              _buildPerson1Fields(),
+              const SizedBox(height: 12),
+              _buildPerson2Field(),
+              const SizedBox(height: 12),
+              _buildTextField('Notes', _notesController, maxLines: 2),
+              const SizedBox(height: 12),
+              _buildAmountField(),
+              const SizedBox(height: 12),
+
+              // ✅ MOVED HERE - MOI Details after Amount, before Denomination
+              if (_groupedMois.isNotEmpty) _buildMoiDetails(),
+              const SizedBox(height: 12),
+              // ✅ Denomination comes after MOI Details
+              if (_paymentMethod == 'CASH') _buildDenominations(),
+              const SizedBox(height: 12),
+              if (_paymentMethod == 'CASH') _buildAmountSummary(),
+              const SizedBox(height: 12),
+              _buildActionButtons(),
+            ],
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            _buildSerialAndPaymentHeader(),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black, width: 2),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Search Mobile Number',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: _phoneController,
-                    focusNode: _phoneFocusNode,
-                    keyboardType: TextInputType.number, // ✅ CHANGE from phone to number
-                    maxLength: 10,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly, // ✅ ADD THIS - Only digits allowed
-                    ],
-                    style: const TextStyle(fontSize: 13),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      hintText: 'Search Mobile Number',
-                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      isDense: true,
-                      counterText: '',  // Hide character counter
-                    ),
-                    onChanged: (value) {
-                      // Auto-fill when 10 digits are entered
-                      if (value.length == 10 && !_isEditMode) {
-                        _autoFillFromPhoneNumber(value);
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildVillageAndLivingPlace(),
-            const SizedBox(height: 12),
-            _buildPerson1Fields(),
-            const SizedBox(height: 12),
-            _buildPerson2Field(),
-            const SizedBox(height: 12),
-            _buildTextField('Notes', _notesController, maxLines: 2),
-            const SizedBox(height: 12),
-            _buildAmountField(),
-            const SizedBox(height: 12),
-
-            // ✅ MOVED HERE - MOI Details after Amount, before Denomination
-            if (_groupedMois.isNotEmpty) _buildMoiDetails(),
-            const SizedBox(height: 12),
-            // ✅ Denomination comes after MOI Details
-            if (_paymentMethod == 'CASH') _buildDenominations(),
-            const SizedBox(height: 12),
-            if (_paymentMethod == 'CASH') _buildAmountSummary(),
-            const SizedBox(height: 12),
-            _buildActionButtons(),
-
-          ],
-        ),
-      ),
-        ),
     );
   }
 
@@ -3044,7 +3185,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
               const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   border: Border.all(color: Colors.black, width: 2),
@@ -3062,7 +3204,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('Uncle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const Text('Uncle',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               Checkbox(
                 value: _isUncle,
                 onChanged: (value) {
@@ -3074,7 +3217,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 visualDensity: VisualDensity.compact,
               ),
               const SizedBox(width: 20),
-              const Text('Cheque / Advance / UPI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const Text('Cheque / Advance / UPI',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               Checkbox(
                 value: _paymentMethod == 'OTHERS',
                 onChanged: (value) {
@@ -3097,7 +3241,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {int maxLines = 1}) {
+  Widget _buildTextField(String label, TextEditingController controller,
+      {int maxLines = 1}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -3107,7 +3252,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(label,
+              style:
+              const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           TextField(
             controller: controller,
@@ -3116,7 +3263,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
               hintText: label,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
           ),
@@ -3138,14 +3286,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Village Name', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const Text('Village Name',
+                    style:
+                    TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _villageController,
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                 ),
@@ -3157,14 +3308,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Living City', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const Text('Living City',
+                    style:
+                    TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                 ),
@@ -3186,7 +3340,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Init, Name 1', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          const Text('Init, Name 1',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           TextField(
             controller: _person1Field1Controller,
@@ -3257,12 +3412,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Amount', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const Text('Amount',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           Container(
             height: 40,
             alignment: Alignment.center,
-            decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
+            decoration: BoxDecoration(
+                border: Border.all(color: Colors.black, width: 2)),
             child: TextField(
               controller: _amountController,
               focusNode: _amountFocusNode,
@@ -3315,7 +3472,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Denomination', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const Text('Denomination',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ..._denomRows.asMap().entries.map((entry) {
             int index = entry.key;
@@ -3336,8 +3494,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     if (!row.containsKey('denomController')) {
       row['denomController'] = TextEditingController(
-          text: selectedDenom != null ? selectedDenom.toString() : ''
-      );
+          text: selectedDenom != null ? selectedDenom.toString() : '');
     }
     final denomController = row['denomController'] as TextEditingController;
 
@@ -3364,13 +3521,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 controller: denomController,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style:
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
                   prefixText: '₹',
-                  prefixStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  prefixStyle:
+                  TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   hintText: '0',
                 ),
                 onChanged: (value) {
@@ -3390,13 +3549,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   if (!validDenoms.contains(typedValue)) {
                     // Only show error if user has finished typing (not while typing "200")
                     // Check if the current value could potentially become a valid denomination
-                    bool couldBeValid = validDenoms.any((denom) => denom.toString().startsWith(value));
+                    bool couldBeValid = validDenoms
+                        .any((denom) => denom.toString().startsWith(value));
 
                     if (!couldBeValid) {
                       denomController.clear();
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
+                          content: Text(
+                              'Only ₹1, ₹5, ₹10, ₹20, ₹50, ₹100, ₹200, ₹500 allowed'),
                           backgroundColor: Colors.red,
                           duration: Duration(seconds: 2),
                         ),
@@ -3417,13 +3578,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             ),
             const SizedBox(width: 6),
-            const Text('×', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('×',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(width: 6),
             Expanded(
               child: Container(
                 height: 35,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2)),
+                decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black, width: 2)),
                 child: TextField(
                   controller: controller,
                   focusNode: index == 0 ? _firstDenomFocusNode : null,
@@ -3444,7 +3607,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             ),
             const SizedBox(width: 6),
-            const Text('=', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('=',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(width: 6),
             Container(
               width: 90,
@@ -3460,7 +3624,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
                     total.toString(),
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                 ),
               ),
@@ -3527,9 +3692,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Total Count: ${_getTotalCount()}',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
                 Text('Total Amount: ₹$totalAmount',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
               ],
             ),
           ),
@@ -3594,10 +3761,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Moi Details', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const Text('Moi Details',
+                    style:
+                    TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 if (_currentGroupId != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.blue[50],
                       border: Border.all(color: Colors.blue, width: 2),
@@ -3605,7 +3775,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     ),
                     child: Text(
                       'Group ID - $_currentGroupId',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue),
                     ),
                   ),
               ],
@@ -3618,39 +3791,62 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             child: _groupedMois.isEmpty
                 ? const Padding(
               padding: EdgeInsets.all(12),
-              child: Text('Grouped entries will appear here...', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              child: Text('Grouped entries will appear here...',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
             )
                 : ListView.separated(
               shrinkWrap: true,
               padding: const EdgeInsets.all(10),
               itemCount: _groupedMois.length,
-              separatorBuilder: (context, index) => const Divider(color: Colors.black, thickness: 1, height: 12),
-                itemBuilder: (context, index) {
-                  final moi = _groupedMois[index];
-                  final isCurrentlyEditing = _editingMoiId == moi['id'];
+              separatorBuilder: (context, index) => const Divider(
+                  color: Colors.black, thickness: 1, height: 12),
+              itemBuilder: (context, index) {
+                final moi = _groupedMois[index];
+                final isCurrentlyEditing = _editingMoiId == moi['id'];
 
-                  // ✅ Format amount as integer
-                  var amountValue = moi['amount'];
-                  int displayAmount = 0;
-                  if (amountValue is int) {
-                    displayAmount = amountValue;
-                  } else if (amountValue is double) {
-                    displayAmount = amountValue.toInt();
-                  } else if (amountValue != null) {
-                    displayAmount = int.tryParse(amountValue.toString()) ?? 0;
-                  }
+                // ✅ Format amount as integer
+                var amountValue = moi['amount'];
+                int displayAmount = 0;
+                if (amountValue is int) {
+                  displayAmount = amountValue;
+                } else if (amountValue is double) {
+                  displayAmount = amountValue.toInt();
+                } else if (amountValue != null) {
+                  displayAmount =
+                      int.tryParse(amountValue.toString()) ?? 0;
+                }
 
-                  return Dismissible(
-                    key: Key('${moi['id']}_$index'), // ✅ FIXED: Use compound key with index
-                    direction: DismissDirection.horizontal,
-                    confirmDismiss: (direction) async {
+                return Dismissible(
+                  key: Key(
+                      '${moi['id']}_$index'), // ✅ FIXED: Use compound key with index
+                  direction: DismissDirection.horizontal,
+                  confirmDismiss: (direction) async {
+                    if (_isEditMode) {
+                      // If in edit mode, show a SnackBar (toast-like message)
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              '❌ Cannot delete entry while in edit mode.',
+                              style:
+                              TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      return false; // Prevent dismissal
+                    } else {
                       return await showDialog<bool>(
                         context: context,
                         barrierDismissible: false,
                         builder: (context) => AlertDialog(
                           title: const Text(
                             '🗑️ Delete Entry',
-                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold),
                           ),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -3658,11 +3854,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                             children: [
                               const Text(
                                 'Do you want to delete this entry from the group?',
-                                style: TextStyle(fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 12),
                               Text('Serial No: O${moi['serial_no']}'),
-                              Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
+                              Text(
+                                  'Name: ${_getPersonsDisplay(moi['persons'])}'),
                               if (moi['village_name'] != null)
                                 Text('Village: ${moi['village_name']}'),
                               Text('Amount: ₹$displayAmount'),
@@ -3670,114 +3868,143 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                           ),
                           actions: [
                             TextButton(
-                              onPressed: () => Navigator.pop(context, false),
+                              onPressed: () =>
+                                  Navigator.pop(context, false),
                               style: TextButton.styleFrom(
                                 backgroundColor: Colors.grey[200],
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 10),
                               ),
                               child: const Text(
                                 'CANCEL',
-                                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pop(context, true),
+                              onPressed: () =>
+                                  Navigator.pop(context, true),
                               style: TextButton.styleFrom(
                                 backgroundColor: Colors.red[100],
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 10),
                               ),
                               child: const Text(
                                 'DELETE',
-                                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
                         ),
                       );
-                    },
-                    onDismissed: (direction) async {
-                      // ✅ Create a local copy before async operation
-                      final moiToDelete = Map<String, dynamic>.from(moi);
-                      await _handleDeleteFromGroup(moiToDelete);
-                    },
-                    background: Container(
-                      color: Colors.red,
-                      alignment: Alignment.centerLeft,
-                      padding: const EdgeInsets.only(left: 20),
-                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
-                    ),
-                    secondaryBackground: Container(
-                      color: Colors.red,
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
-                    ),
-                    child: InkWell(
-                      onTap: () => _loadGroupedEntryForEdit(moi),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                        decoration: BoxDecoration(
-                          color: isCurrentlyEditing
-                              ? Colors.blue.shade50
-                              : (moi['is_temp'] == true ? Colors.yellow[50] : Colors.transparent),
-                          border: isCurrentlyEditing
-                              ? Border.all(color: Colors.blue, width: 2)
-                              : (moi['is_temp'] == true ? Border.all(color: Colors.orange, width: 1) : null),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
+                    }
+                  },
+                  onDismissed: (direction) async {
+                    // ✅ Create a local copy before async operation
+                    final moiToDelete = Map<String, dynamic>.from(moi);
+                    await _handleDeleteFromGroup(moiToDelete);
+                  },
+                  background: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerLeft,
+                    padding: const EdgeInsets.only(left: 20),
+                    child: const Icon(Icons.delete,
+                        color: Colors.white, size: 30),
+                  ),
+                  secondaryBackground: Container(
+                    color: Colors.red,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 20),
+                    child: const Icon(Icons.delete,
+                        color: Colors.white, size: 30),
+                  ),
+                  child: InkWell(
+                    onTap: () => _loadGroupedEntryForEdit(moi),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: isCurrentlyEditing
+                            ? Colors.blue.shade50
+                            : (moi['is_temp'] == true
+                            ? Colors.yellow[50]
+                            : Colors.transparent),
+                        border: isCurrentlyEditing
+                            ? Border.all(color: Colors.blue, width: 2)
+                            : (moi['is_temp'] == true
+                            ? Border.all(
+                            color: Colors.orange, width: 1)
+                            : null),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getPersonsDisplay(moi['persons']),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                    color: isCurrentlyEditing
+                                        ? Colors.blue
+                                        : Colors.black,
+                                  ),
+                                ),
+                                if (moi['village_name'] != null)
                                   Text(
-                                    _getPersonsDisplay(moi['persons']),
+                                    moi['village_name'],
                                     style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color: isCurrentlyEditing ? Colors.blue : Colors.black,
+                                      fontSize: 11,
+                                      color: isCurrentlyEditing
+                                          ? Colors.blue.shade700
+                                          : Colors.grey[600],
                                     ),
                                   ),
-                                  if (moi['village_name'] != null)
-                                    Text(
-                                      moi['village_name'],
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: isCurrentlyEditing ? Colors.blue.shade700 : Colors.grey[600],
-                                      ),
-                                    ),
-                                ],
+                              ],
+                            ),
+                          ),
+                          if (isCurrentlyEditing)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text(
+                                'EDITING',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold),
                               ),
                             ),
-                            if (isCurrentlyEditing)
-                              Container(
-                                margin: const EdgeInsets.only(right: 6),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Text(
-                                  'EDITING',
-                                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            Text(
-                              '₹$displayAmount',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: isCurrentlyEditing ? Colors.blue : Colors.green,
-                              ),
+                          Text(
+                            '₹$displayAmount',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: isCurrentlyEditing
+                                  ? Colors.blue
+                                  : Colors.green,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-            ),),
+                  ),
+                );
+              },
+            ),
+          ),
 
           // ✅ NEW: Total Count and Total Amount at bottom
           if (_groupedMois.isNotEmpty)
@@ -3786,7 +4013,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.green[50],
-                border: const Border(top: BorderSide(color: Colors.black, width: 2)),
+                border: const Border(
+                    top: BorderSide(color: Colors.black, width: 2)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3817,6 +4045,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<void> _handleDeleteFromGroup(Map<String, dynamic> moi) async {
     try {
+      // ✅ Step 1: Check if this is the first entry (linked to denominations)
+      bool isFirstEntry =
+          _groupedMois.isNotEmpty && _groupedMois[0]['id'] == moi['id'];
+      String? oldDenomMoiId = isFirstEntry ? moi['id'] : null;
+
       // If temporary entry, just remove from list
       if (moi['is_temp'] == true) {
         setState(() {
@@ -3839,21 +4072,58 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return;
       }
 
-      // For saved entries, mark as deleted in database
-      await _supabase
-          .from('mois')
-          .update({'is_deleted': true, 'updated_at': DateTime.now().toIso8601String()})
-          .eq('id', moi['id']);
+      // ✅ Step 2: If deleting first entry, we need to transfer denominations to next entry
+      if (isFirstEntry && _groupedMois.length > 1) {
+        // Get the denomination data before deletion
+        final denomResponse = await _supabase
+            .from('moi_denominations')
+            .select('*')
+            .eq('moi_id', oldDenomMoiId!)
+            .maybeSingle();
 
-      // Remove from local list
+        if (denomResponse != null) {
+          // Find the second entry (which will become the new first)
+          var secondEntry = _groupedMois[1];
+          String newDenomMoiId = secondEntry['id'];
+
+          // Only transfer if second entry is NOT a temp entry
+          if (secondEntry['is_temp'] != true) {
+            // Update denomination table to link to new MOI ID
+            await _supabase
+                .from('moi_denominations')
+                .update({'moi_id': newDenomMoiId}).eq('moi_id', oldDenomMoiId);
+
+            print(
+                '✅ Transferred denominations from $oldDenomMoiId to $newDenomMoiId');
+          }
+        }
+      }
+
+      // ✅ Step 3: Mark entry as deleted in database
+      await _supabase.from('mois').update({
+        'is_deleted': true,
+        'updated_at': DateTime.now().toIso8601String()
+      }).eq('id', moi['id']);
+
+      // ✅ Step 4: Remove from local list
       setState(() {
         _groupedMois.removeWhere((entry) => entry['id'] == moi['id']);
 
-        // If no more entries, clear group
+        // If no more entries, clear group and denominations
         if (_groupedMois.isEmpty) {
           _currentGroupId = null;
+          // Clear denomination rows
+          for (var row in _denomRows) {
+            row['countController'].clear();
+          }
         }
       });
+
+      // ✅ Step 5: Reload denominations if we still have entries
+      if (_groupedMois.isNotEmpty && _paymentMethod == 'CASH') {
+        // Reload denominations from the new first entry
+        await _loadDenominations(_groupedMois[0]['id']);
+      }
 
       if (_editingMoiId == moi['id']) {
         setState(() {
@@ -3862,6 +4132,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _originalData = null;
         });
         await _clearFormForNextEntry();
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Entry deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       print('Error deleting entry: $e');
@@ -3884,7 +4164,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Expanded(
               child: Container(
                 height: 42,
-                decoration: BoxDecoration(color: Colors.green, border: Border.all(color: Colors.black, width: 2)),
+                decoration: BoxDecoration(
+                    color: Colors.green,
+                    border: Border.all(color: Colors.black, width: 2)),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -3892,7 +4174,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     child: const Center(
                       child: Text(
                         'Save & Print',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -3903,7 +4188,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             Expanded(
               child: Container(
                 height: 42,
-                decoration: BoxDecoration(color: Colors.blue, border: Border.all(color: Colors.black, width: 2)),
+                decoration: BoxDecoration(
+                    color: Colors.blue,
+                    border: Border.all(color: Colors.black, width: 2)),
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -3911,7 +4198,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     child: const Center(
                       child: Text(
                         'Group',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -3929,7 +4219,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           Container(
             width: double.infinity,
             height: 42,
-            decoration: BoxDecoration(color: Colors.teal, border: Border.all(color: Colors.black, width: 2)),
+            decoration: BoxDecoration(
+                color: Colors.teal,
+                border: Border.all(color: Colors.black, width: 2)),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
@@ -3937,7 +4229,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: const Center(
                   child: Text(
                     'Generate Single Receipt',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -3950,7 +4245,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           Container(
             width: double.infinity,
             height: 42,
-            decoration: BoxDecoration(color: Colors.purple, border: Border.all(color: Colors.black, width: 2)),
+            decoration: BoxDecoration(
+                color: Colors.purple,
+                border: Border.all(color: Colors.black, width: 2)),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
@@ -3958,7 +4255,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 child: const Center(
                   child: Text(
                     'ADD ENTRY',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -3970,7 +4270,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         Container(
           width: double.infinity,
           height: 42,
-          decoration: BoxDecoration(color: Colors.orange, border: Border.all(color: Colors.black, width: 2)),
+          decoration: BoxDecoration(
+              color: Colors.orange,
+              border: Border.all(color: Colors.black, width: 2)),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -3978,7 +4280,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               child: const Center(
                 child: Text(
                   'Clear',
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             ),
