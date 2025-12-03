@@ -91,8 +91,167 @@ class _UserListScreenState extends State<UserListScreen> {
     }
   }
 
+  Future<bool> _hasActiveEvents(String userId) async {
+    try {
+      final activeEvents = await _auth.client
+          .from('event_assignments')
+          .select('event_id, events!inner(status)')
+          .eq('operator_id', userId)
+          .or('status.eq.upcoming,status.eq.live', referencedTable: 'events')
+          .limit(1);
+
+      return activeEvents.isNotEmpty;
+    } catch (e) {
+      print('Error checking active events: $e');
+      return false;
+    }
+  }
+
+  Future<void> _showCannotDeactivateDialog(UserModel user, List<Map<String, dynamic>> activeEvents) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber, color: Colors.orange, size: 24),
+            SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Cannot Deactivate User',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Operator: ${user.fullName}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  border: Border.all(color: Colors.orange, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'This operator is currently assigned to the following events:',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...activeEvents.map((event) {
+                final eventData = event['events'];
+                final status = eventData['status'].toString().toUpperCase();
+                final title = eventData['title'] ?? 'Untitled Event';
+                final date = eventData['event_date'] ?? '';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: status == 'UPCOMING' ? Colors.blue : Colors.green,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              status,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (date.isNotEmpty)
+                        Text(
+                          'Date: $date',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              const SizedBox(height: 12),
+              const Text(
+                'To deactivate this operator:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              const Text('• Complete or cancel all assigned events, OR', style: TextStyle(fontSize: 12)),
+              const Text('• Remove this operator from those events', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.grey[200],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('OK', style: TextStyle(color: Colors.black)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _toggleActiveStatus(UserModel user) async {
     final newStatus = !user.isActive;
+
+    // ✅ CHECK: If trying to deactivate, check for active events
+    if (newStatus == false && user.role == 'operator') {
+      final hasActive = await _hasActiveEvents(user.id);
+
+      if (hasActive) {
+        // Fetch event details for display
+        List<Map<String, dynamic>> activeEventsList = [];
+        try {
+          final events = await _auth.client
+              .from('event_assignments')
+              .select('event_id, events!inner(id, title, event_date, status)')
+              .eq('operator_id', user.id)
+              .or('status.eq.upcoming,status.eq.live', referencedTable: 'events');
+          activeEventsList = List<Map<String, dynamic>>.from(events);
+        } catch (e) {
+          print('Error fetching event details: $e');
+        }
+
+        await _showCannotDeactivateDialog(user, activeEventsList);
+        return; // Don't proceed with deactivation
+      }
+    }
 
     // Optimistically update UI immediately
     setState(() {
