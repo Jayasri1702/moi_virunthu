@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/network_utils.dart';
+// 1. First, add this import at the top of your file:
+import 'package:intl/intl.dart';
 
 class CorrectVillageNamesScreen extends StatefulWidget {
   final String eventId;
@@ -44,6 +46,8 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
     }
     super.dispose();
   }
+
+  // REPLACE the entire _loadVillageData method with this:
 
   Future<void> _loadVillageData() async {
     setState(() {
@@ -98,14 +102,14 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
         };
       }).toList();
 
-      // Sort by village name
-      villageList.sort((a, b) =>
-          (a['city'] as String).compareTo(b['city'] as String));
+      // Sort using custom sorting (Tamil first, then English)
+      final sortedVillageList = _sortVillages(villageList);
 
+      // ONLY ONE setState - this was the bug!
       setState(() {
-        _villages = villageList;
-        _filteredVillages = List.from(villageList);
-        _totalCities = villageList.length;
+        _villages = sortedVillageList;
+        _filteredVillages = List.from(sortedVillageList);
+        _totalCities = sortedVillageList.length;
         _totalPersons = totalPersons;
         _isLoading = false;
       });
@@ -125,16 +129,97 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
     }
   }
 
+// Keep these helper methods as they are:
+  String _extractTamilWord(String villageName) {
+    final parts = villageName.split('.');
+    return parts.last; // Get the word after the last dot (or the whole string if no dot)
+  }
+
+  bool _isTamil(String text) {
+    // Tamil Unicode range: \u0B80-\u0BFF
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]');
+    return tamilRegex.hasMatch(text);
+  }
+
+  List<Map<String, dynamic>> _sortVillages(List<Map<String, dynamic>> villages) {
+    // Separate Tamil and English villages
+    final tamilVillages = <Map<String, dynamic>>[];
+    final englishVillages = <Map<String, dynamic>>[];
+
+    for (var village in villages) {
+      final villageName = village['city'] as String;
+      final placeWord = _extractTamilWord(villageName);
+
+      if (_isTamil(placeWord)) {
+        tamilVillages.add(village);
+      } else {
+        englishVillages.add(village);
+      }
+    }
+
+    // Sort Tamil villages by the Tamil place name (after last dot)
+    tamilVillages.sort((a, b) {
+      final aWord = _extractTamilWord(a['city'] as String);
+      final bWord = _extractTamilWord(b['city'] as String);
+
+      // Tamil Unicode sorting - this will sort by Tamil character order
+      return _compareTamilStrings(aWord, bWord);
+    });
+
+    // Sort English villages by the English place name (after last dot)
+    englishVillages.sort((a, b) {
+      final aWord = _extractTamilWord(a['city'] as String);
+      final bWord = _extractTamilWord(b['city'] as String);
+
+      // Case-insensitive English sorting
+      return aWord.toLowerCase().compareTo(bWord.toLowerCase());
+    });
+
+    // Combine: Tamil first, then English
+    return [...tamilVillages, ...englishVillages];
+  }
+
+// Helper method for Tamil string comparison
+  int _compareTamilStrings(String a, String b) {
+    // Tamil character order mapping
+    final tamilOrder = {
+      'அ': 1, 'ஆ': 2, 'இ': 3, 'ஈ': 4, 'உ': 5, 'ஊ': 6, 'எ': 7, 'ஏ': 8,
+      'ஐ': 9, 'ஒ': 10, 'ஓ': 11, 'ஔ': 12,
+      'க': 13, 'ங': 14, 'ச': 15, 'ஞ': 16, 'ட': 17, 'ண': 18, 'த': 19, 'ந': 20,
+      'ப': 21, 'ம': 22, 'ய': 23, 'ர': 24, 'ல': 25, 'வ': 26, 'ழ': 27, 'ள': 28,
+      'ற': 29, 'ன': 30,
+      // Combined characters
+      'கா': 13, 'கி': 13, 'கீ': 13, 'கு': 13, 'கூ': 13, 'கெ': 13, 'கே': 13, 'கை': 13, 'கொ': 13, 'கோ': 13, 'கௌ': 13,
+    };
+
+    // Get first character of each string
+    final aFirstChar = a.isNotEmpty ? a[0] : '';
+    final bFirstChar = b.isNotEmpty ? b[0] : '';
+
+    final aOrder = tamilOrder[aFirstChar] ?? aFirstChar.codeUnitAt(0);
+    final bOrder = tamilOrder[bFirstChar] ?? bFirstChar.codeUnitAt(0);
+
+    if (aOrder != bOrder) {
+      return aOrder.compareTo(bOrder);
+    }
+
+    // If first characters are same, use normal string comparison
+    return a.compareTo(b);
+  }
+
   void _filterVillages(String query) {
     setState(() {
       if (query.isEmpty) {
         _filteredVillages = List.from(_villages);
       } else {
-        _filteredVillages = _villages.where((village) {
+        final filtered = _villages.where((village) {
           final city = village['city'].toString().toLowerCase();
           final searchLower = query.toLowerCase();
           return city.contains(searchLower);
         }).toList();
+
+        // Apply sorting to filtered results as well
+        _filteredVillages = _sortVillages(filtered);
       }
     });
   }
