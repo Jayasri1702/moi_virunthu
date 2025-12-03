@@ -2012,6 +2012,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               customerName: _customerName,
               city: _city,
               customerPhone: _customerPhone,
+              isUncle: entry['is_uncle'] ?? false,  // ✅ ADD THIS LINE
+
             );
 
             if (file != null && mounted) {
@@ -2291,6 +2293,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerName: _customerName,
           city: _city,
           customerPhone: _customerPhone,
+          isUncle: _isUncle,  // ✅ ADD THIS LINE
         );
 
         if (file != null && mounted) {
@@ -3183,6 +3186,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         customerName: _customerName,
         city: _city,
         customerPhone: _customerPhone,
+        isUncle: _isUncle,  // ✅ ADD THIS LINE
       );
 
       if (file != null && mounted) {

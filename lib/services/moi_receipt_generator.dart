@@ -5,8 +5,29 @@ import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class MoiReceiptGenerator {
+  // Cache for base64 logo
+  static String? _cachedLogoBase64;
+
+  // Load and cache logo as base64
+  static Future<String> _getLogoBase64() async {
+    if (_cachedLogoBase64 != null) {
+      return _cachedLogoBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/images/money_transfer.png');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedLogoBase64 = base64Encode(bytes);
+      return _cachedLogoBase64!;
+    } catch (e) {
+      print('Error loading logo: $e');
+      return ''; // Return empty string if logo fails to load
+    }
+  }
   // Generate single MOI receipt
   static Future<File?> generateSingleMoiReceipt({
     required BuildContext context,
@@ -27,8 +48,10 @@ class MoiReceiptGenerator {
     String? customerName,
     String? city,
     String? customerPhone,
+    bool isUncle = false,  // ✅ ADD THIS LINE
   }) async {
     try {
+      final logoBase64 = await _getLogoBase64();
       // Use different template based on payment method
       final htmlContent = paymentMethod == 'CASH'
           ? _generateSingleMoiHtml(
@@ -48,6 +71,8 @@ class MoiReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        logoBase64: logoBase64,  // ADD THIS
+        isUncle: isUncle,
       )
           : _generateSingleMoiHtmlOthers(
         serialNo: serialNo,
@@ -65,6 +90,8 @@ class MoiReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        logoBase64: logoBase64,  // ADD THIS
+        isUncle: isUncle,
       );
 
       final output = await getTemporaryDirectory();
@@ -177,6 +204,8 @@ class MoiReceiptGenerator {
     String? customerName,
     String? city,
     String? customerPhone,
+    required String logoBase64,
+    bool isUncle = false,
   }) {
     // ✅ FIXED: Use current date/time for receipt generation
     final now = DateTime.now();
@@ -303,19 +332,58 @@ class MoiReceiptGenerator {
   border: 3px solid black;
   padding: 0;
 }
+
+.uncle-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 6px 0 4px 0;
+  text-align: center;
+  color: #000;
+}
+
+.uncle-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 6px 0 4px 0;
+  text-align: center;
+  color: #000;
+}
     
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-    }
+.logo-header {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  gap: 10px;
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.company-info {
+  width: 100%;
+  text-align: center;
+}
+
+.company-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tamil-heading {
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.company-phone {
+  font-size: 11px;
+  color: #000;
+}
     
     .divider {
   border-top: 2px solid black;
@@ -411,10 +479,16 @@ class MoiReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">Single Receipt</div>
   
   <div class="outer-box">
-    <div class="company-name">Hi Tech Moi</div>
+    <div class="logo-header">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+      <div class="company-info">
+        <div class="company-name">Hi Tech Moi</div>
+        <div class="tamil-heading">ஹை-டெக் மொய்</div>
+        <div class="company-phone">9043606296, 9047556443</div>
+      </div>
+    </div>
   
   <div class="divider"></div>
   
@@ -435,6 +509,8 @@ class MoiReceiptGenerator {
   ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
   
   <div class="person-details">$personDisplay</div>
+  
+  ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
   
   ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   
@@ -476,6 +552,8 @@ class MoiReceiptGenerator {
     String? customerName,
     String? city,
     String? customerPhone,
+    required String logoBase64,
+    bool isUncle = false,
   }) {
     // ✅ FIXED: Use current date/time
     final now = DateTime.now();
@@ -529,18 +607,43 @@ class MoiReceiptGenerator {
   padding: 0;
 }
     
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-    }
+.logo-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  gap: 6px;
+  text-align: center;
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.company-info {
+  width: 100%;
+  text-align: center;
+}
+
+.company-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tamil-heading {
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.company-phone {
+  font-size: 11px;
+  color: #000;
+}
     
     .divider {
   border-top: 2px solid black;
@@ -641,12 +744,16 @@ class MoiReceiptGenerator {
     }
   </style>
 </head>
-<body>
-  <div class="header">Cheque / Advance / UPI Receipt</div>
-  
+<body>  
   <div class="outer-box">
-  
-  <div class="company-name">Hi Tech Moi</div>
+    <div class="logo-header">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+      <div class="company-info">
+        <div class="company-name">Hi Tech Moi</div>
+        <div class="tamil-heading">ஹை-டெக் மொய்</div>
+        <div class="company-phone">9043606296, 9047556443</div>
+      </div>
+    </div>
   
   <div class="divider"></div>
   
@@ -667,6 +774,8 @@ class MoiReceiptGenerator {
   
   ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
   ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+  
+  ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
   
   ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   
@@ -751,6 +860,7 @@ class MoiReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        isUncle: entry['is_uncle'] ?? false,
       );
 
       if (file != null) {
@@ -776,6 +886,7 @@ class MoiReceiptGenerator {
     String? customerPhone,
   }) async {
     try {
+      final logoBase64 = await _getLogoBase64();
       bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
 
       final htmlContent = hasOthersPayment
@@ -789,6 +900,7 @@ class MoiReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        logoBase64: logoBase64,
       )
           : _generateGroupMoiHtml(
         groupId: groupId,
@@ -801,6 +913,7 @@ class MoiReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        logoBase64: logoBase64,
       );
 
       final output = await getTemporaryDirectory();
@@ -907,6 +1020,7 @@ class MoiReceiptGenerator {
     String? customerName,
     String? city,
     String? customerPhone,
+    required String logoBase64,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1059,18 +1173,43 @@ class MoiReceiptGenerator {
   padding: 0;
 }
     
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-    }
+.logo-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  gap: 6px;
+  text-align: center;
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.company-info {
+  width: 100%;
+  text-align: center;
+}
+
+.company-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tamil-heading {
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.company-phone {
+  font-size: 11px;
+  color: #000;
+}
     
     .divider {
   border-top: 2px solid black;
@@ -1183,12 +1322,16 @@ class MoiReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">Group Moi Receipt</div>
   <div class="outer-box">
+    <div class="logo-header">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+      <div class="company-info">
+        <div class="company-name">Hi Tech Moi</div>
+        <div class="tamil-heading">ஹை-டெக் மொய்</div>
+        <div class="company-phone">9043606296, 9047556443</div>
+      </div>
+    </div>
   
-  <div class="company-name">Hi Tech Moi</div>
-  
-
   <div class="divider"></div>
   
   <div class="date-time-row">
@@ -1237,6 +1380,7 @@ class MoiReceiptGenerator {
     String? customerName,
     String? city,
     String? customerPhone,
+    required String logoBase64,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1320,18 +1464,41 @@ class MoiReceiptGenerator {
   padding: 0;
 }
     
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-    }
+.logo-header {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  gap: 10px;
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.company-info {
+  width: 100%;
+  text-align: center;
+}
+
+.company-name {
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tamil-heading {
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.company-phone {
+  font-size: 11px;
+  color: #000;
+}
     
    .divider {
   border-top: 2px solid black;
@@ -1445,9 +1612,15 @@ class MoiReceiptGenerator {
   </style>
 </head>
 <body>
-  <div class="header">Group Cheque / Advance / UPI Receipt</div>
   <div class="outer-box">
-  <div class="company-name">Hi Tech Moi</div>
+    <div class="logo-header">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+      <div class="company-info">
+        <div class="company-name">Hi Tech Moi</div>
+        <div class="tamil-heading">ஹை-டெக் மொய்</div>
+        <div class="company-phone">9043606296, 9047556443</div>
+      </div>
+    </div>
   
   <div class="divider"></div>
   
