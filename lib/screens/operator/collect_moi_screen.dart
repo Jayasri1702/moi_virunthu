@@ -939,7 +939,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // ✅ STEP 1: Check internet connection FIRST
     if (!await NetworkUtils.checkConnectionBeforeRequest(context,
         onRetry: _handleGroup)) {
-      // Dialog will be shown by NetworkUtils.checkConnectionBeforeRequest
       return;
     }
 
@@ -956,9 +955,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
         return;
       }
-
-      // If there ARE changes, proceed with update
-      // (continue below to update logic)
     }
 
     // Validate form (without denomination)
@@ -980,7 +976,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         int.tryParse(_amountController.text) == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter amount before adding to group!'),
+          content: Text('Amount is mandatory! Please enter the amount.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -1004,10 +1000,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
+    // ✅ NEW: Check for duplicate in MOI Details BEFORE adding
+    if (!_isEditMode || _editingMoiId == null) {
+      final isDuplicate = await _checkDuplicateInMoiDetails();
+      if (isDuplicate) {
+        return; // Don't proceed if duplicate found
+      }
+    }
+
     try {
       // ✅ CASE 1: Editing an existing entry in MOI Details (with changes)
       if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
-        // ✅ Check if this would create a duplicate in the group
+        // ✅ Check if this would create a duplicate in the group (excluding current entry)
         bool isDuplicate = _groupedMois.any((entry) {
           if (entry['id'] == _editingMoiId) return false; // Skip current entry
 
@@ -1090,7 +1094,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // Get or create group ID
-      // Get or create group ID
       int groupId;
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
@@ -1115,8 +1118,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'living_place': _livingPlaceController.text.trim(),
         'notes': _notesController.text.trim(),
         'amount': int.tryParse(_amountController.text) ?? 0,
-        'payment_method':
-        _paymentMethod, // ✅ FIXED - use current payment method
+        'payment_method': _paymentMethod,
         'is_uncle': _isUncle,
         'persons': _buildPersonsData(),
         'group_id': groupId,
@@ -1141,6 +1143,401 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
     }
+  }
+  // ✅ NEW: Check for duplicate in BOTH MOI Details AND Database
+  Future<bool> _checkDuplicateInMoiDetails() async {
+    try {
+      // Get values to check
+      String villageName = _villageController.text.trim();
+      int amount = int.tryParse(_amountController.text) ?? 0;
+      String person1Name = _person1Field1Controller.text.trim();
+      String person1Job = _person1Field2Controller.text.trim();
+
+      // ✅ STEP 1: Check in MOI Details box (local list)
+      bool foundInMoiDetails = _groupedMois.any((entry) {
+        // Skip if this is the entry we're editing
+        if (_isEditMode && _editingMoiId != null && entry['id'] == _editingMoiId) {
+          return false;
+        }
+
+        // Check village name (case-insensitive)
+        String entryVillage = entry['village_name'] ?? '';
+        if (entryVillage.toLowerCase() != villageName.toLowerCase()) return false;
+
+        // Check amount
+        int entryAmount = 0;
+        var entryAmountValue = entry['amount'];
+        if (entryAmountValue is int) {
+          entryAmount = entryAmountValue;
+        } else if (entryAmountValue is double) {
+          entryAmount = entryAmountValue.toInt();
+        } else if (entryAmountValue != null) {
+          entryAmount = int.tryParse(entryAmountValue.toString()) ?? 0;
+        }
+        if (entryAmount != amount) return false;
+
+        // Check persons
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+
+          // Check Person 1 name and job
+          if (personsList.isNotEmpty) {
+            var p1 = personsList[0];
+            String entryP1Name = p1['name'] ?? '';
+            String entryP1Job = p1['job'] ?? '';
+
+            if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) return false;
+            if (person1Job.isNotEmpty && entryP1Job.toLowerCase() != person1Job.toLowerCase()) return false;
+          }
+        }
+
+        // All fields match
+        return true;
+      });
+
+      if (foundInMoiDetails) {
+        // Show popup for MOI Details duplicate
+        final shouldProceed = await _showDuplicateInMoiDetailsDialog();
+        return !shouldProceed; // Return true if duplicate should prevent adding
+      }
+
+      // ✅ STEP 2: Check in Database (entire mois table for this event)
+      final response = await _supabase
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false);
+
+      List<Map<String, dynamic>> matchingEntries = [];
+
+      // Check each entry for matches
+      for (var entry in response) {
+        // Skip if this is the entry we're currently editing
+        if (_isEditMode && _editingMoiId != null && entry['id'] == _editingMoiId) {
+          continue;
+        }
+
+        // Check village name (case-insensitive)
+        String entryVillage = entry['village_name'] ?? '';
+        if (entryVillage.toLowerCase() != villageName.toLowerCase()) continue;
+
+        // Check amount
+        int entryAmount = 0;
+        var entryAmountValue = entry['amount'];
+        if (entryAmountValue is int) {
+          entryAmount = entryAmountValue;
+        } else if (entryAmountValue is double) {
+          entryAmount = entryAmountValue.toInt();
+        } else if (entryAmountValue is num) {
+          entryAmount = entryAmountValue.toInt();
+        }
+        if (entryAmount != amount) continue;
+
+        // Check persons
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+
+          // Check Person 1 name and job
+          if (personsList.isNotEmpty) {
+            var p1 = personsList[0];
+            String entryP1Name = p1['name'] ?? '';
+            String entryP1Job = p1['job'] ?? '';
+
+            if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) continue;
+
+            // Only check job if current entry has a job entered
+            if (person1Job.isNotEmpty &&
+                entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
+          }
+        }
+
+        // All fields match - add to matching entries
+        matchingEntries.add(entry);
+      }
+
+      if (matchingEntries.isNotEmpty) {
+        // Show popup with all matching entries from database
+        final shouldProceed = await _showDuplicateInDatabaseDialog(matchingEntries);
+        return !shouldProceed; // Return true if duplicate should prevent adding
+      }
+
+      return false; // No duplicate found in either MOI Details or Database
+    } catch (e) {
+      print('Error checking duplicate: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _checkDuplicateInMoiDetails,
+          customMessage: 'Error checking for duplicates',
+        );
+      }
+      return false;
+    }
+  }
+
+// ✅ Dialog for MOI Details duplicate (shows simpler message)
+  Future<bool> _showDuplicateInMoiDetailsDialog() async {
+    // Build current entry details
+    String entryDetails = '';
+    entryDetails += '📍 Village: ${_villageController.text.trim()}\n';
+    entryDetails += '💰 Amount: ₹${_amountController.text.trim()}\n';
+    entryDetails += '\n👤 Person 1:\n';
+    entryDetails += '  Name: ${_person1Field1Controller.text.trim()}\n';
+    if (_person1Field2Controller.text.trim().isNotEmpty) {
+      entryDetails += '  Job: ${_person1Field2Controller.text.trim()}\n';
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '⚠️ Entry Already Exists in MOI Details!',
+          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This entry already exists in the MOI Details box above with the same:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  border: Border.all(color: Colors.orange, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• Village Name', style: TextStyle(fontSize: 11)),
+                    const Text('• Amount', style: TextStyle(fontSize: 11)),
+                    const Text('• Person 1 Name', style: TextStyle(fontSize: 11)),
+                    if (_person1Field2Controller.text.trim().isNotEmpty)
+                      const Text('• Person 1 Job', style: TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Current Entry Details:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                entryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Do you want to add this entry anyway?',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.green[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'ADD ANYWAY',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
+  }
+
+// ✅ Dialog for Database duplicate (shows detailed comparison)
+  Future<bool> _showDuplicateInDatabaseDialog(
+      List<Map<String, dynamic>> existingEntries) async {
+
+    // Get serial numbers of all matching entries
+    String serialNumbers = existingEntries.map((e) => 'O${e['serial_no']}').join(', ');
+
+    // Build current entry details
+    String currentEntryDetails = '';
+    currentEntryDetails += '📍 Village: ${_villageController.text.trim()}\n';
+    currentEntryDetails += '💰 Amount: ₹${_amountController.text.trim()}\n';
+    currentEntryDetails += '\n👤 Person 1:\n';
+    currentEntryDetails += '  Name: ${_person1Field1Controller.text.trim()}\n';
+    if (_person1Field2Controller.text.trim().isNotEmpty) {
+      currentEntryDetails += '  Job: ${_person1Field2Controller.text.trim()}\n';
+    }
+
+    // Build details of first matching entry (as example)
+    String existingEntryDetails = '';
+    if (existingEntries.isNotEmpty) {
+      var entry = existingEntries[0];
+
+      existingEntryDetails += '📍 Village: ${entry['village_name'] ?? 'N/A'}\n';
+      existingEntryDetails += '🏙️ Living Place: ${entry['living_place'] ?? 'N/A'}\n';
+      existingEntryDetails += '📞 Phone: ${entry['phone'] ?? 'N/A'}\n';
+      existingEntryDetails += '💰 Amount: ₹${entry['amount']}\n';
+      existingEntryDetails += '💳 Payment: ${entry['payment_method'] ?? 'N/A'}\n';
+      existingEntryDetails += '👤 Uncle: ${(entry['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var p1 = personsList[0];
+          existingEntryDetails += '\n👤 Person 1:\n';
+          existingEntryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
+          existingEntryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
+        }
+        if (personsList.length > 1) {
+          var p2 = personsList[1];
+          existingEntryDetails += '\n👤 Person 2:\n';
+          existingEntryDetails += '  Details: ${p2['details'] ?? 'N/A'}\n';
+        }
+      }
+
+      if (entry['notes'] != null && entry['notes'].toString().isNotEmpty) {
+        existingEntryDetails += '\n📝 Notes: ${entry['notes']}\n';
+      }
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '⚠️ Duplicate Entry Found in Database!',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                existingEntries.length == 1
+                    ? 'This entry already exists in Serial No: $serialNumbers'
+                    : 'This entry already exists in ${existingEntries.length} records: $serialNumbers',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  border: Border.all(color: Colors.red, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Matching Fields:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.red),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('• Village Name', style: TextStyle(fontSize: 11)),
+                    const Text('• Amount', style: TextStyle(fontSize: 11)),
+                    const Text('• Person 1 Name', style: TextStyle(fontSize: 11)),
+                    if (_person1Field2Controller.text.trim().isNotEmpty)
+                      const Text('• Person 1 Job', style: TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Current Entry:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                currentEntryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Existing Entry Details:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                existingEntryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Do you want to add this entry anyway?',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.green[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'ADD ANYWAY',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
   // ✅ NEW: Helper method to build persons data
