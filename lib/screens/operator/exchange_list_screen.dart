@@ -80,12 +80,14 @@ class _ExchangeListScreenState extends State<ExchangeListScreen> {
   String _formatDateTime(String? dateStr) {
     if (dateStr == null) return 'N/A';
     try {
-      final date = DateTime.parse(dateStr);
-      return DateFormat('dd-MM-yyyy hh:mm a').format(date);
+      final utcDate = DateTime.parse(dateStr).toUtc();
+      final localDate = utcDate.toLocal(); // 🔥 Convert to local timezone
+      return DateFormat('dd-MM-yyyy hh:mm a').format(localDate);
     } catch (e) {
       return dateStr;
     }
   }
+
 
   Map<String, Map<String, int>> _splitDenominations(
       Map<String, dynamic> netDenom) {
