@@ -403,14 +403,14 @@ class DenominationReceiptGenerator {
       $denominationRows
       <tr class="total-row">
         <td colspan="2" style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">
-          ருபாய் கைஇருப்பு
+          ரூபாய் கையிருப்பு
         </td>
         <td style="border: 2px solid black; border-top: none; padding: 5px; text-align: center; font-size: 13px;">${_formatAmount(finalBalance)}</td>
       </tr>
     </table>
     
     <div class="summary-item">
-      <span class="summary-label">ரூபாய் பெறப்பட்டது</span>
+      <span class="summary-label">பெறப்பட்ட தொகை</span>
       <span class="summary-value">${_formatAmount(totalCashCollected.round())}</span>
     </div>
     
