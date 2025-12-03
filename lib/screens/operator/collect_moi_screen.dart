@@ -177,6 +177,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = moiData['is_uncle'] ?? false;
       _currentGroupId = moiData['group_id'];
 
+      // ✅ NEW: Lock payment method if this is a grouped entry
+      if (_currentGroupId != null) {
+        _lockedPaymentMethod = moiData['payment_method'] ?? 'CASH';
+      }
+
       if (moiData['persons'] != null) {
         List<dynamic> personsList = moiData['persons'] as List;
         if (personsList.isNotEmpty) {
@@ -1342,7 +1347,32 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // ✅ NEW: ADD THIS CHECK - Force entries to go through MOI Details first
+    if (_isEditMode && _editingMoiId != null && _currentGroupId != null && !_hasNoChanges()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              '⚠️ You have unsaved changes! Please press "Group" (Ctrl+Enter) to confirm your edits before saving.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+// ✅ FIX 2: Check if form has data but not in MOI Details (user clicked "Add Entry" but didn't press "Group")
+    if (_groupedMois.isEmpty && _hasFormData()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              '⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+// ✅ Check if MOI Details is completely empty
     if (_groupedMois.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1556,6 +1586,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               }
             }
 
+            // ✅ FIX: Get amount correctly from entry
+            int entryAmount = 0;
+            var amountValue = entry['amount'];
+            if (amountValue is int) {
+              entryAmount = amountValue;
+            } else if (amountValue is double) {
+              entryAmount = amountValue.toInt();
+            } else if (amountValue != null) {
+              entryAmount = int.tryParse(amountValue.toString()) ?? 0;
+            }
+
             final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
               context: context,
               serialNo: entry['serial_no'],
@@ -1568,9 +1609,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               person1Job: person1Job,
               person2Details: person2Details,
               phone: entry['phone'],
-              amount: _paymentMethod == 'CASH'
-                  ? _getTotalAmount()
-                  : int.tryParse(_amountController.text) ?? 0,
+              amount: entryAmount, // ✅ FIX: Use entry amount directly
               paymentMethod: _paymentMethod,
               denominations: denominations, // ✅ Using form denominations
               customerName: _customerName,
@@ -1681,7 +1720,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           return;
         }
 
-// Generate receipt based on selection
+        // Generate receipt based on selection
         if (receiptType == 'single') {
           await _generateSplitGroupReceipts();
         } else if (receiptType == 'group') {
@@ -4098,6 +4137,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           // If no more entries, clear group
           if (_groupedMois.isEmpty) {
+            _lockedPaymentMethod = null; // ✅ Unlock payment method
             _currentGroupId = null;
           }
         });

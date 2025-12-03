@@ -408,6 +408,7 @@ class _CreateOperatorScreenState extends State<CreateOperatorScreen> {
                                   keyboardType: TextInputType.phone,
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(10),
                                   ],
                                   validator: (value) {
                                     if (value == null || value.trim().isEmpty) {
