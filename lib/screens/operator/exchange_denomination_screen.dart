@@ -7,10 +7,12 @@ class ExchangeDenominationScreen extends StatefulWidget {
   const ExchangeDenominationScreen({super.key});
 
   @override
-  State<ExchangeDenominationScreen> createState() => _ExchangeDenominationScreenState();
+  State<ExchangeDenominationScreen> createState() =>
+      _ExchangeDenominationScreenState();
 }
 
-class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen> {
+class _ExchangeDenominationScreenState
+    extends State<ExchangeDenominationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _supabase = Supabase.instance.client;
 
@@ -126,18 +128,36 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
 
       // Initialize totals
       Map<String, int> collected = {
-        '500': 0, '200': 0, '100': 0, '50': 0,
-        '20': 0, '10': 0, '5': 0, '1': 0,
+        '500': 0,
+        '200': 0,
+        '100': 0,
+        '50': 0,
+        '20': 0,
+        '10': 0,
+        '5': 0,
+        '1': 0,
       };
 
       Map<String, int> withdrawn = {
-        '500': 0, '200': 0, '100': 0, '50': 0,
-        '20': 0, '10': 0, '5': 0, '1': 0,
+        '500': 0,
+        '200': 0,
+        '100': 0,
+        '50': 0,
+        '20': 0,
+        '10': 0,
+        '5': 0,
+        '1': 0,
       };
 
       Map<String, int> exchanged = {
-        '500': 0, '200': 0, '100': 0, '50': 0,
-        '20': 0, '10': 0, '5': 0, '1': 0,
+        '500': 0,
+        '200': 0,
+        '100': 0,
+        '50': 0,
+        '20': 0,
+        '10': 0,
+        '5': 0,
+        '1': 0,
       };
 
       // Calculate collected (CASH only, from ALL operators)
@@ -147,7 +167,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (paymentMethod != 'CASH') continue; // Only count CASH payments
 
         for (var denom in denominations) {
-          collected['$denom'] = (collected['$denom'] ?? 0) +
+          collected['$denom'] =
+              (collected['$denom'] ?? 0) +
               ((entry['denom_$denom'] ?? 0) as int);
         }
       }
@@ -160,7 +181,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          withdrawn['$denom'] = (withdrawn['$denom'] ?? 0) +
+          withdrawn['$denom'] =
+              (withdrawn['$denom'] ?? 0) +
               ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
@@ -173,7 +195,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         if (denomData == null) continue;
 
         for (var denom in denominations) {
-          exchanged['$denom'] = (exchanged['$denom'] ?? 0) +
+          exchanged['$denom'] =
+              (exchanged['$denom'] ?? 0) +
               ((denomData['denom_$denom'] ?? 0) as int);
         }
       }
@@ -182,21 +205,37 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       // Calculate available = collected - withdrawn + exchanged
       setState(() {
         _availableBalance = {
-          '500': (collected['500'] ?? 0) - (withdrawn['500'] ?? 0) +
+          '500':
+              (collected['500'] ?? 0) -
+              (withdrawn['500'] ?? 0) +
               (exchanged['500'] ?? 0),
-          '200': (collected['200'] ?? 0) - (withdrawn['200'] ?? 0) +
+          '200':
+              (collected['200'] ?? 0) -
+              (withdrawn['200'] ?? 0) +
               (exchanged['200'] ?? 0),
-          '100': (collected['100'] ?? 0) - (withdrawn['100'] ?? 0) +
+          '100':
+              (collected['100'] ?? 0) -
+              (withdrawn['100'] ?? 0) +
               (exchanged['100'] ?? 0),
-          '50': (collected['50'] ?? 0) - (withdrawn['50'] ?? 0) +
+          '50':
+              (collected['50'] ?? 0) -
+              (withdrawn['50'] ?? 0) +
               (exchanged['50'] ?? 0),
-          '20': (collected['20'] ?? 0) - (withdrawn['20'] ?? 0) +
+          '20':
+              (collected['20'] ?? 0) -
+              (withdrawn['20'] ?? 0) +
               (exchanged['20'] ?? 0),
-          '10': (collected['10'] ?? 0) - (withdrawn['10'] ?? 0) +
+          '10':
+              (collected['10'] ?? 0) -
+              (withdrawn['10'] ?? 0) +
               (exchanged['10'] ?? 0),
-          '5': (collected['5'] ?? 0) - (withdrawn['5'] ?? 0) +
+          '5':
+              (collected['5'] ?? 0) -
+              (withdrawn['5'] ?? 0) +
               (exchanged['5'] ?? 0),
-          '1': (collected['1'] ?? 0) - (withdrawn['1'] ?? 0) +
+          '1':
+              (collected['1'] ?? 0) -
+              (withdrawn['1'] ?? 0) +
               (exchanged['1'] ?? 0),
         };
         _isLoadingBalance = false;
@@ -252,8 +291,17 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     int count1 = int.tryParse(_received1Controller.text) ?? 0;
 
     setState(() {
-      _receivedTotalCount = count500 + count200 + count100 + count50 + count20 + count10 + count5 + count1;
-      _receivedTotalAmount = (count500 * 500) +
+      _receivedTotalCount =
+          count500 +
+          count200 +
+          count100 +
+          count50 +
+          count20 +
+          count10 +
+          count5 +
+          count1;
+      _receivedTotalAmount =
+          (count500 * 500) +
           (count200 * 200) +
           (count100 * 100) +
           (count50 * 50) +
@@ -275,8 +323,17 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     int count1 = int.tryParse(_returned1Controller.text) ?? 0;
 
     setState(() {
-      _returnedTotalCount = count500 + count200 + count100 + count50 + count20 + count10 + count5 + count1;
-      _returnedTotalAmount = (count500 * 500) +
+      _returnedTotalCount =
+          count500 +
+          count200 +
+          count100 +
+          count50 +
+          count20 +
+          count10 +
+          count5 +
+          count1;
+      _returnedTotalAmount =
+          (count500 * 500) +
           (count200 * 200) +
           (count100 * 100) +
           (count50 * 50) +
@@ -330,7 +387,9 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       if (returnedCount > 0) {
         int available = _availableBalance[denom] ?? 0;
         if (returnedCount > available) {
-          errors.add('₹$denom: Trying to return $returnedCount but only $available available (total for event)');
+          errors.add(
+            '₹$denom: Trying to return $returnedCount but only $available available (total for event)',
+          );
         }
       }
     });
@@ -341,10 +400,7 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
         builder: (context) => AlertDialog(
           title: const Text(
             'Insufficient Denomination',
-            style: TextStyle(
-              color: Colors.red,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -357,24 +413,34 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
               const SizedBox(height: 8),
               const Text(
                 '(Based on total collected by all operators)',
-                style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
               const SizedBox(height: 12),
-              ...errors.map((error) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        error,
-                        style: const TextStyle(fontSize: 14),
+              ...errors.map(
+                (error) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 20,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          error,
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              )),
+              ),
             ],
           ),
           actions: [
@@ -401,7 +467,11 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
 
     if (_receivedTotalAmount <= 0 || _returnedTotalAmount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter both received and returned denomination details')),
+        const SnackBar(
+          content: Text(
+            'Please enter both received and returned denomination details',
+          ),
+        ),
       );
       return;
     }
@@ -513,14 +583,15 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       });
 
       // Generate exchange receipt with proper operator name
-      final receiptFile = await ExchangeReceiptGenerator.generateExchangeReceipt(
-        context: context,
-        operatorName: operatorName,
-        exchangeDate: DateTime.now(),
-        exchangeTime: TimeOfDay.now(),
-        receivedDenominations: receivedDenominations,
-        returnedDenominations: returnedDenominations,
-      );
+      final receiptFile =
+          await ExchangeReceiptGenerator.generateExchangeReceipt(
+            context: context,
+            operatorName: operatorName,
+            exchangeDate: DateTime.now(),
+            exchangeTime: TimeOfDay.now(),
+            receivedDenominations: receivedDenominations,
+            returnedDenominations: returnedDenominations,
+          );
 
       if (receiptFile != null) {
         print('Exchange receipt generated: ${receiptFile.path}');
@@ -529,7 +600,9 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Exchange of ₹${_receivedTotalAmount.toStringAsFixed(0)} saved successfully!'),
+            content: Text(
+              'Exchange of ₹${_receivedTotalAmount.toStringAsFixed(0)} saved successfully!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -647,32 +720,68 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _buildDenomRow('500', _received500Controller, isReceived: true),
+                            _buildDenomRow(
+                              '500',
+                              _received500Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('200', _received200Controller, isReceived: true),
+                            _buildDenomRow(
+                              '200',
+                              _received200Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('100', _received100Controller, isReceived: true),
+                            _buildDenomRow(
+                              '100',
+                              _received100Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('50', _received50Controller, isReceived: true),
+                            _buildDenomRow(
+                              '50',
+                              _received50Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('20', _received20Controller, isReceived: true),
+                            _buildDenomRow(
+                              '20',
+                              _received20Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('10', _received10Controller, isReceived: true),
+                            _buildDenomRow(
+                              '10',
+                              _received10Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('5', _received5Controller, isReceived: true),
+                            _buildDenomRow(
+                              '5',
+                              _received5Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('1', _received1Controller, isReceived: true),
+                            _buildDenomRow(
+                              '1',
+                              _received1Controller,
+                              isReceived: true,
+                            ),
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.blue[50],
-                                border: Border.all(color: Colors.blue, width: 2),
+                                border: Border.all(
+                                  color: Colors.blue,
+                                  width: 2,
+                                ),
                               ),
                               child: Column(
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         'Total Count: $_receivedTotalCount',
@@ -685,7 +794,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text(
                                         'Total Received:',
@@ -754,32 +864,68 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                               ),
                             ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('500', _returned500Controller, isReceived: false),
+                            _buildDenomRow(
+                              '500',
+                              _returned500Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('200', _returned200Controller, isReceived: false),
+                            _buildDenomRow(
+                              '200',
+                              _returned200Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('100', _returned100Controller, isReceived: false),
+                            _buildDenomRow(
+                              '100',
+                              _returned100Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('50', _returned50Controller, isReceived: false),
+                            _buildDenomRow(
+                              '50',
+                              _returned50Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('20', _returned20Controller, isReceived: false),
+                            _buildDenomRow(
+                              '20',
+                              _returned20Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('10', _returned10Controller, isReceived: false),
+                            _buildDenomRow(
+                              '10',
+                              _returned10Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('5', _returned5Controller, isReceived: false),
+                            _buildDenomRow(
+                              '5',
+                              _returned5Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 8),
-                            _buildDenomRow('1', _returned1Controller, isReceived: false),
+                            _buildDenomRow(
+                              '1',
+                              _returned1Controller,
+                              isReceived: false,
+                            ),
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
                                 color: Colors.green[50],
-                                border: Border.all(color: Colors.green, width: 2),
+                                border: Border.all(
+                                  color: Colors.green,
+                                  width: 2,
+                                ),
                               ),
                               child: Column(
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         'Total Count: $_returnedTotalCount',
@@ -792,7 +938,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                                   ),
                                   const SizedBox(height: 4),
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       const Text(
                                         'Total Returned:',
@@ -836,7 +983,10 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                                   backgroundColor: Colors.blue,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.zero,
-                                    side: const BorderSide(color: Colors.black, width: 2),
+                                    side: const BorderSide(
+                                      color: Colors.black,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                                 child: const Text(
@@ -860,7 +1010,10 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                                   backgroundColor: Colors.orange,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.zero,
-                                    side: const BorderSide(color: Colors.black, width: 2),
+                                    side: const BorderSide(
+                                      color: Colors.black,
+                                      width: 2,
+                                    ),
                                   ),
                                 ),
                                 child: const Text(
@@ -914,7 +1067,11 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     );
   }
 
-  Widget _buildDenomRow(String denomination, TextEditingController controller, {required bool isReceived}) {
+  Widget _buildDenomRow(
+    String denomination,
+    TextEditingController controller, {
+    required bool isReceived,
+  }) {
     int available = _availableBalance[denomination] ?? 0;
 
     return Column(
@@ -989,7 +1146,8 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Text(
-                      ((int.tryParse(controller.text) ?? 0) * int.parse(denomination))
+                      ((int.tryParse(controller.text) ?? 0) *
+                              int.parse(denomination))
                           .toString(),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
