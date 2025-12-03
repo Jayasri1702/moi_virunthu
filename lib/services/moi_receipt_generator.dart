@@ -9,6 +9,32 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 
 class MoiReceiptGenerator {
+
+  // Format number with commas (Indian numbering system)
+  static String _formatAmount(num amount) {
+    final roundedAmount = amount.round();
+    final str = roundedAmount.toString();
+
+    if (str.length <= 3) return str;
+
+    // Indian numbering: last 3 digits, then groups of 2
+    final lastThree = str.substring(str.length - 3);
+    final remaining = str.substring(0, str.length - 3);
+
+    String result = '';
+    int count = 0;
+    for (int i = remaining.length - 1; i >= 0; i--) {
+      if (count == 2) {
+        result = ',$result';
+        count = 0;
+      }
+      result = remaining[i] + result;
+      count++;
+    }
+
+    return '$result,$lastThree';
+  }
+
   // Cache for base64 logo
   static String? _cachedLogoBase64;
 
@@ -340,20 +366,14 @@ class MoiReceiptGenerator {
   text-align: center;
   color: #000;
 }
-
-.uncle-indicator {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 6px 0 4px 0;
-  text-align: center;
-  color: #000;
-}
     
 .logo-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 10px;
+  gap: 6px;
+  text-align: center;
 }
 
 .logo {
@@ -505,17 +525,17 @@ class MoiReceiptGenerator {
   
   <div class="serial-no">வ.எண் : $serialNo</div>
   
-  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
-  
-  <div class="person-details">$personDisplay</div>
-  
-  ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
-  
-  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
-  
-  <div class="amount-label">தொகை</div>
-  <div class="amount">₹${amount.round()}</div>
+ ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+
+<div class="person-details">$personDisplay</div>
+
+${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
+
+${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
+<div class="amount-label">தொகை</div>
+<div class="amount">₹${_formatAmount(amount)}</div>
   
   ${denomTable.isNotEmpty ? '<div class="table-title">நோட்டு விபரம்</div>' : ''}
   ${denomTable.isNotEmpty ? '<table>$denomTable</table>' : ''}
@@ -656,7 +676,13 @@ class MoiReceiptGenerator {
   font-size: 14px;
   border-bottom: 2px solid black;
 }
-
+.uncle-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 6px 0 4px 0;
+  text-align: center;
+  color: #000;
+}
 .left-section {
   text-align: left;
   padding: 8px;
@@ -770,17 +796,17 @@ class MoiReceiptGenerator {
   
   <div class="serial-no">வ.எண் : $serialNo</div>
   
-  <div class="person-details">$personDisplay</div>
-  
-  ${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-  ${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
-  
-  ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
-  
-  ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
-  
-  <div class="amount-label">தொகை</div>
-  <div class="amount">₹${amount.round()}</div>
+${villageName != null && villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+${livingPlace != null && livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+
+<div class="person-details">$personDisplay</div>
+
+${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
+
+${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
+<div class="amount-label">தொகை</div>
+<div class="amount">₹${_formatAmount(amount)}</div>
   
   <div class="payment-method-box">Cheque / Advance / UPI</div>
   
@@ -797,7 +823,6 @@ class MoiReceiptGenerator {
 ''';
   }
 
-  // Generate split group receipts (individual receipts for each entry)
   static Future<List<File>> generateSplitGroupReceipts({
     required BuildContext context,
     required String operatorName,
@@ -1028,21 +1053,32 @@ class MoiReceiptGenerator {
 
     String entriesHtml = '';
     for (var entry in groupEntries) {
+      // Build full person display like single receipt
       String personDisplay = '';
       if (entry['persons'] != null) {
         List<dynamic> personsList = entry['persons'] as List;
-        List<String> names = [];
-        for (var person in personsList) {
-          String name = person['name'] ?? '';
+        if (personsList.isNotEmpty) {
+          String name = personsList[0]['name'] ?? '';
+          String job = personsList[0]['job'] ?? '';
           if (name.isNotEmpty) {
-            names.add(name);
+            personDisplay += '$name\n';
+            if (job.isNotEmpty) {
+              personDisplay += '$job\n';
+            }
           }
         }
-        personDisplay = names.join(', ');
+        if (personsList.length > 1) {
+          String details = personsList[1]['details'] ?? '';
+          if (details.isNotEmpty) {
+            personDisplay += details;
+          }
+        }
       }
 
       String villageName = entry['village_name'] ?? '';
       String livingPlace = entry['living_place'] ?? '';
+      String phone = entry['phone'] ?? '';
+      bool isUncle = entry['is_uncle'] ?? false;
 
       var amountValue = entry['amount'];
       int amount = 0;
@@ -1055,16 +1091,18 @@ class MoiReceiptGenerator {
       }
 
       entriesHtml += '''
-      <div class="entry-block">
-        <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
-        <div class="person-name">$personDisplay</div>
-        ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-        ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
-        <div class="amount-label">தொகை</div>
-        <div class="entry-amount">₹$amount</div>
-      </div>
-      <div class="divider"></div>
-    ''';
+    <div class="entry-block">
+      <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
+      ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+      ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+      ${personDisplay.isNotEmpty ? '<div class="person-details" style="font-size: 14px; margin: 6px 0; white-space: pre-line;">$personDisplay</div>' : ''}
+      ${isUncle ? '<div class="uncle-indicator" style="font-size: 12px; margin: 4px 0;">தாய்மாமன்</div>' : ''}
+      ${phone.isNotEmpty ? '<div class="phone" style="font-size: 12px; margin: 4px 0;">($phone)</div>' : ''}
+      <div class="amount-label">தொகை</div>
+      <div class="entry-amount">₹${_formatAmount(amount)}</div>
+    </div>
+    <div class="divider"></div>
+  ''';
     }
 
     String denomTable = '';
@@ -1171,6 +1209,14 @@ class MoiReceiptGenerator {
     .outer-box {
   border: 3px solid black;
   padding: 0;
+}
+
+.uncle-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 6px 0 4px 0;
+  text-align: center;
+  color: #000;
 }
     
 .logo-header {
@@ -1349,7 +1395,7 @@ class MoiReceiptGenerator {
   
   <div class="total-section">
     <div class="total-label">மொத்த தொகை</div>
-    <div class="total-amount">₹$displayTotal</div>
+    <div class="total-amount">₹${_formatAmount(totalAmount)}</div>
   </div>
   
   ${denomTable.isNotEmpty ? '<div class="table-title">நோட்டு விபரம்</div>' : ''}
@@ -1388,21 +1434,32 @@ class MoiReceiptGenerator {
 
     String entriesHtml = '';
     for (var entry in groupEntries) {
+      // Build full person display like single receipt
       String personDisplay = '';
       if (entry['persons'] != null) {
         List<dynamic> personsList = entry['persons'] as List;
-        List<String> names = [];
-        for (var person in personsList) {
-          String name = person['name'] ?? '';
+        if (personsList.isNotEmpty) {
+          String name = personsList[0]['name'] ?? '';
+          String job = personsList[0]['job'] ?? '';
           if (name.isNotEmpty) {
-            names.add(name);
+            personDisplay += '$name\n';
+            if (job.isNotEmpty) {
+              personDisplay += '$job\n';
+            }
           }
         }
-        personDisplay = names.join(', ');
+        if (personsList.length > 1) {
+          String details = personsList[1]['details'] ?? '';
+          if (details.isNotEmpty) {
+            personDisplay += details;
+          }
+        }
       }
 
       String villageName = entry['village_name'] ?? '';
       String livingPlace = entry['living_place'] ?? '';
+      String phone = entry['phone'] ?? '';
+      bool isUncle = entry['is_uncle'] ?? false;
 
       var amountValue = entry['amount'];
       int amount = 0;
@@ -1415,16 +1472,18 @@ class MoiReceiptGenerator {
       }
 
       entriesHtml += '''
-      <div class="entry-block">
-        <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
-        <div class="person-name">$personDisplay</div>
-        ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
-        ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
-        <div class="amount-label">தொகை</div>
-        <div class="entry-amount">₹$amount</div>
-      </div>
-      <div class="divider"></div>
-    ''';
+    <div class="entry-block">
+      <div class="serial-no">வ.எண் : ${entry['serial_no']}</div>
+      ${villageName.isNotEmpty ? '<div class="village-info">$villageName</div>' : ''}
+      ${livingPlace.isNotEmpty ? '<div class="village-info">$livingPlace</div>' : ''}
+      ${personDisplay.isNotEmpty ? '<div class="person-details" style="font-size: 14px; margin: 6px 0; white-space: pre-line;">$personDisplay</div>' : ''}
+      ${isUncle ? '<div class="uncle-indicator" style="font-size: 12px; margin: 4px 0;">தாய்மாமன்</div>' : ''}
+      ${phone.isNotEmpty ? '<div class="phone" style="font-size: 12px; margin: 4px 0;">($phone)</div>' : ''}
+      <div class="amount-label">தொகை</div>
+      <div class="entry-amount">₹${_formatAmount(amount)}</div>
+    </div>
+    <div class="divider"></div>
+  ''';
     }
 
     int displayTotal = totalAmount.round();
@@ -1463,12 +1522,14 @@ class MoiReceiptGenerator {
   border: 3px solid black;
   padding: 0;
 }
-    
+
 .logo-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 10px;
+  gap: 6px;
+  text-align: center;
 }
 
 .logo {
@@ -1480,6 +1541,13 @@ class MoiReceiptGenerator {
 .company-info {
   width: 100%;
   text-align: center;
+}
+.uncle-indicator {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 6px 0 4px 0;
+  text-align: center;
+  color: #000;
 }
 
 .company-name {
@@ -1639,7 +1707,7 @@ class MoiReceiptGenerator {
   
   <div class="total-section">
     <div class="total-label">மொத்த தொகை</div>
-    <div class="total-amount">₹$displayTotal</div>
+   <div class="total-amount">₹${_formatAmount(totalAmount)}</div>
   </div>
   
   <div class="payment-method-box">Cheque / Advance / UPI</div>

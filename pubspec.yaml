@@ -73,3 +73,8 @@ flutter:
         - asset: assets/fonts/NotoSerifTamil-Regular.ttf
         - asset: assets/fonts/NotoSerifTamil-Bold.ttf
           weight: 700
+
+
+    - family: Altroned
+      fonts:
+        - asset: assets/fonts/ALTRONED_Trial.ttf
