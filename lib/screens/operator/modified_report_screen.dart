@@ -71,14 +71,18 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
       final response = await _supabase
           .from('mois')
           .select('''
-            id,
-            serial_no,
-            amount,
-            village_name,
-            phone,
-            persons,
-            old_data
-          ''')
+          id,
+          serial_no,
+          amount,
+          village_name,
+          living_place,
+          phone,
+          notes,
+          payment_method,
+          is_uncle,
+          persons,
+          old_data
+        ''')
           .eq('event_id', widget.eventId)
           .not('old_data', 'is', null)
           .order('serial_no', ascending: true);
@@ -173,20 +177,20 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
       List<Map<String, dynamic>> flattened = [];
       dynamic current = oldData;
 
-      // Traverse nested structure from newest to oldest
       while (current != null && current is Map) {
         Map<String, dynamic> snapshot = {
           'village_name': current['village_name'],
+          'living_place': current['living_place'],
           'amount': current['amount'],
           'persons': current['persons'],
           'phone': current['phone'],
+          'notes': current['notes'],
+          'payment_method': current['payment_method'],
+          'is_uncle': current['is_uncle'],
           'timestamp': current['updated_at'],
         };
 
-        // Insert at beginning to maintain chronological order (oldest first)
         flattened.insert(0, snapshot);
-
-        // Move to next nested level
         current = current['old_data'];
       }
 
@@ -200,36 +204,178 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
   Map<String, List<String>> _getChangedFields(Map<String, dynamic> oldValue, Map<String, dynamic> newValue) {
     Map<String, List<String>> changes = {};
 
+    // Helper function to format amount without .0
+    String formatAmount(dynamic amount) {
+      if (amount == null) return '';
+      if (amount is num) {
+        // Check if it's a whole number
+        if (amount == amount.toInt()) {
+          return amount.toInt().toString();
+        }
+        return amount.toString();
+      }
+      return amount.toString();
+    }
+
+    // Helper function to compare numeric values properly
+    bool areNumbersDifferent(dynamic old, dynamic new_) {
+      if (old == null && new_ == null) return false;
+      if (old == null || new_ == null) return true;
+
+      // Try to parse as numbers
+      num? oldNum;
+      num? newNum;
+
+      if (old is num) {
+        oldNum = old;
+      } else {
+        oldNum = num.tryParse(old.toString());
+      }
+
+      if (new_ is num) {
+        newNum = new_;
+      } else {
+        newNum = num.tryParse(new_.toString());
+      }
+
+      // If both are valid numbers, compare numerically
+      if (oldNum != null && newNum != null) {
+        return oldNum != newNum;
+      }
+
+      // Otherwise compare as strings
+      return old.toString() != new_.toString();
+    }
+
     // Check village_name
-    final oldVillage = oldValue['village_name']?.toString() ?? '';
-    final newVillage = newValue['village_name']?.toString() ?? '';
-    if (oldVillage != newVillage) {
-      changes['Village'] = [oldVillage, newVillage];
+    final oldVillage = oldValue['village_name']?.toString().trim() ?? '';
+    final newVillage = newValue['village_name']?.toString().trim() ?? '';
+    if (oldVillage != newVillage && (oldVillage.isNotEmpty || newVillage.isNotEmpty)) {
+      changes['Village'] = [
+        oldVillage.isEmpty ? '(empty)' : oldVillage,
+        newVillage.isEmpty ? '(empty)' : newVillage
+      ];
     }
 
-    // Check amount
-    final oldAmount = oldValue['amount']?.toString() ?? '';
-    final newAmount = newValue['amount']?.toString() ?? '';
-    if (oldAmount != newAmount) {
-      changes['Amount'] = [oldAmount, newAmount];
+    // Check living_place
+    final oldLivingPlace = oldValue['living_place']?.toString().trim() ?? '';
+    final newLivingPlace = newValue['living_place']?.toString().trim() ?? '';
+    if (oldLivingPlace != newLivingPlace && (oldLivingPlace.isNotEmpty || newLivingPlace.isNotEmpty)) {
+      changes['Living City'] = [
+        oldLivingPlace.isEmpty ? '(empty)' : oldLivingPlace,
+        newLivingPlace.isEmpty ? '(empty)' : newLivingPlace
+      ];
     }
 
-    // Check persons
-    final oldPersons = _formatPersons(oldValue['persons']);
-    final newPersons = _formatPersons(newValue['persons']);
-    if (oldPersons != newPersons) {
-      changes['Persons'] = [oldPersons, newPersons];
+    // Check amount - WITH PROPER NUMERIC COMPARISON
+    if (areNumbersDifferent(oldValue['amount'], newValue['amount'])) {
+      final oldAmountFormatted = formatAmount(oldValue['amount']);
+      final newAmountFormatted = formatAmount(newValue['amount']);
+      if (oldAmountFormatted.isNotEmpty || newAmountFormatted.isNotEmpty) {
+        changes['Amount'] = [
+          oldAmountFormatted.isEmpty ? '₹0' : '₹$oldAmountFormatted',
+          newAmountFormatted.isEmpty ? '₹0' : '₹$newAmountFormatted'
+        ];
+      }
     }
 
     // Check phone
-    final oldPhone = oldValue['phone']?.toString() ?? '';
-    final newPhone = newValue['phone']?.toString() ?? '';
-    if (oldPhone != newPhone) {
-      changes['Phone'] = [oldPhone, newPhone];
+    final oldPhone = oldValue['phone']?.toString().trim() ?? '';
+    final newPhone = newValue['phone']?.toString().trim() ?? '';
+    if (oldPhone != newPhone && (oldPhone.isNotEmpty || newPhone.isNotEmpty)) {
+      changes['Phone'] = [
+        oldPhone.isEmpty ? '(empty)' : oldPhone,
+        newPhone.isEmpty ? '(empty)' : newPhone
+      ];
+    }
+
+    // Check notes
+    final oldNotes = oldValue['notes']?.toString().trim() ?? '';
+    final newNotes = newValue['notes']?.toString().trim() ?? '';
+    if (oldNotes != newNotes && (oldNotes.isNotEmpty || newNotes.isNotEmpty)) {
+      changes['Notes'] = [
+        oldNotes.isEmpty ? '(empty)' : oldNotes,
+        newNotes.isEmpty ? '(empty)' : newNotes
+      ];
+    }
+
+    // Check payment_method
+    final oldPaymentMethod = oldValue['payment_method']?.toString().trim() ?? '';
+    final newPaymentMethod = newValue['payment_method']?.toString().trim() ?? '';
+    if (oldPaymentMethod != newPaymentMethod && (oldPaymentMethod.isNotEmpty || newPaymentMethod.isNotEmpty)) {
+      changes['Payment Method'] = [
+        oldPaymentMethod.isEmpty ? '(empty)' : oldPaymentMethod,
+        newPaymentMethod.isEmpty ? '(empty)' : newPaymentMethod
+      ];
+    }
+
+    // Check is_uncle
+    final oldIsUncle = oldValue['is_uncle']?.toString() ?? 'false';
+    final newIsUncle = newValue['is_uncle']?.toString() ?? 'false';
+    if (oldIsUncle != newIsUncle) {
+      changes['Uncle'] = [
+        oldIsUncle == 'true' ? 'Yes' : 'No',
+        newIsUncle == 'true' ? 'Yes' : 'No'
+      ];
+    }
+
+    // Check Person 1 - Name
+    String oldP1Name = '';
+    String newP1Name = '';
+
+    if (oldValue['persons'] != null && oldValue['persons'] is List && (oldValue['persons'] as List).isNotEmpty) {
+      oldP1Name = oldValue['persons'][0]['name']?.toString().trim() ?? '';
+    }
+    if (newValue['persons'] != null && newValue['persons'] is List && (newValue['persons'] as List).isNotEmpty) {
+      newP1Name = newValue['persons'][0]['name']?.toString().trim() ?? '';
+    }
+
+    if (oldP1Name != newP1Name && (oldP1Name.isNotEmpty || newP1Name.isNotEmpty)) {
+      changes['Person 1 - Name'] = [
+        oldP1Name.isEmpty ? '(empty)' : oldP1Name,
+        newP1Name.isEmpty ? '(empty)' : newP1Name
+      ];
+    }
+
+    // Check Person 1 - Job
+    String oldP1Job = '';
+    String newP1Job = '';
+
+    if (oldValue['persons'] != null && oldValue['persons'] is List && (oldValue['persons'] as List).isNotEmpty) {
+      oldP1Job = oldValue['persons'][0]['job']?.toString().trim() ?? '';
+    }
+    if (newValue['persons'] != null && newValue['persons'] is List && (newValue['persons'] as List).isNotEmpty) {
+      newP1Job = newValue['persons'][0]['job']?.toString().trim() ?? '';
+    }
+
+    if (oldP1Job != newP1Job && (oldP1Job.isNotEmpty || newP1Job.isNotEmpty)) {
+      changes['Person 1 - Job'] = [
+        oldP1Job.isEmpty ? '(empty)' : oldP1Job,
+        newP1Job.isEmpty ? '(empty)' : newP1Job
+      ];
+    }
+
+    // Check Person 2 - Details
+    String oldP2Details = '';
+    String newP2Details = '';
+
+    if (oldValue['persons'] != null && oldValue['persons'] is List && (oldValue['persons'] as List).length > 1) {
+      oldP2Details = oldValue['persons'][1]['details']?.toString().trim() ?? '';
+    }
+    if (newValue['persons'] != null && newValue['persons'] is List && (newValue['persons'] as List).length > 1) {
+      newP2Details = newValue['persons'][1]['details']?.toString().trim() ?? '';
+    }
+
+    if (oldP2Details != newP2Details && (oldP2Details.isNotEmpty || newP2Details.isNotEmpty)) {
+      changes['Person 2 - Details'] = [
+        oldP2Details.isEmpty ? '(empty)' : oldP2Details,
+        newP2Details.isEmpty ? '(empty)' : newP2Details
+      ];
     }
 
     return changes;
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -462,7 +608,6 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
       ),
     );
   }
-
   Widget _buildModernCard(Map<String, dynamic> entry, bool isExpanded, String entryId) {
     final serialNo = entry['serial_no']?.toString() ?? 'N/A';
     final personName = _getPersonName(entry['persons']);
@@ -470,16 +615,22 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
 
     final currentValues = {
       'village_name': entry['village_name'],
+      'living_place': entry['living_place'],
       'amount': entry['amount'],
       'persons': entry['persons'],
       'phone': entry['phone'],
+      'notes': entry['notes'],
+      'payment_method': entry['payment_method'],
+      'is_uncle': entry['is_uncle'],
     };
 
-    Map<String, dynamic> latestOldValues = changeHistory.isNotEmpty
-        ? changeHistory.last
+    // FIX: Get the FIRST (oldest) snapshot to compare with current
+    Map<String, dynamic> oldestValues = changeHistory.isNotEmpty
+        ? changeHistory.first  // Changed from .last to .first
         : {};
 
-    final changedFields = _getChangedFields(latestOldValues, currentValues);
+    // This now shows ALL changed fields from original to current
+    final changedFields = _getChangedFields(oldestValues, currentValues);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -664,12 +815,13 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.all(12),
-            itemCount: history.length,
+
+            // ✅ EXCLUDE LAST CHANGE
+            itemCount: history.length > 1 ? history.length - 1 : 0,
+
             itemBuilder: (context, index) {
               final oldSnapshot = history[index];
-              final newSnapshot = index < history.length - 1
-                  ? history[index + 1]
-                  : currentValues;
+              final newSnapshot = history[index + 1];
 
               final changes = _getChangedFields(oldSnapshot, newSnapshot);
               final changeNumber = index + 1;
