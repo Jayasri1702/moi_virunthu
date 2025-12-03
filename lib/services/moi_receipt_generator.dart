@@ -54,6 +54,27 @@ class MoiReceiptGenerator {
       return ''; // Return empty string if logo fails to load
     }
   }
+
+  // Cache for base64 font
+  static String? _cachedFontBase64;
+
+// Load and cache font as base64
+  static Future<String> _getFontBase64() async {
+    if (_cachedFontBase64 != null) {
+      return _cachedFontBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/fonts/ALTRONED_Trial.ttf');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedFontBase64 = base64Encode(bytes);
+      return _cachedFontBase64!;
+    } catch (e) {
+      print('Error loading font: $e');
+      return '';
+    }
+  }
+
   // Generate single MOI receipt
   static Future<File?> generateSingleMoiReceipt({
     required BuildContext context,
@@ -77,7 +98,10 @@ class MoiReceiptGenerator {
     bool isUncle = false,  // ✅ ADD THIS LINE
   }) async {
     try {
+
       final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
       // Use different template based on payment method
       final htmlContent = paymentMethod == 'CASH'
           ? _generateSingleMoiHtml(
@@ -98,6 +122,7 @@ class MoiReceiptGenerator {
         city: city,
         customerPhone: customerPhone,
         logoBase64: logoBase64,  // ADD THIS
+        fontBase64: fontBase64,
         isUncle: isUncle,
       )
           : _generateSingleMoiHtmlOthers(
@@ -117,6 +142,7 @@ class MoiReceiptGenerator {
         city: city,
         customerPhone: customerPhone,
         logoBase64: logoBase64,  // ADD THIS
+        fontBase64: fontBase64,
         isUncle: isUncle,
       );
 
@@ -231,6 +257,7 @@ class MoiReceiptGenerator {
     String? city,
     String? customerPhone,
     required String logoBase64,
+    required String fontBase64,
     bool isUncle = false,
   }) {
     // ✅ FIXED: Use current date/time for receipt generation
@@ -332,6 +359,10 @@ class MoiReceiptGenerator {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
+  @font-face {
+  font-family: 'Altroned';
+  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+}
     * {
       margin: 0;
       padding: 0;
@@ -369,11 +400,9 @@ class MoiReceiptGenerator {
     
 .logo-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 6px;
-  text-align: center;
+  gap: 10px;
 }
 
 .logo {
@@ -388,6 +417,7 @@ class MoiReceiptGenerator {
 }
 
 .company-name {
+font-family: 'Altroned', sans-serif;
   font-size: 18px;
   font-weight: bold;
   color: #000;
@@ -573,6 +603,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     String? city,
     String? customerPhone,
     required String logoBase64,
+    required String fontBase64,
     bool isUncle = false,
   }) {
     // ✅ FIXED: Use current date/time
@@ -600,6 +631,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
+  @font-face {
+  font-family: 'Altroned';
+  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+}
     * {
       margin: 0;
       padding: 0;
@@ -629,11 +664,9 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     
 .logo-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 6px;
-  text-align: center;
+  gap: 10px;
 }
 
 .logo {
@@ -648,6 +681,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 }
 
 .company-name {
+font-family: 'Altroned', sans-serif;
   font-size: 18px;
   font-weight: bold;
   color: #000;
@@ -911,7 +945,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     String? customerPhone,
   }) async {
     try {
+
       final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
       bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
 
       final htmlContent = hasOthersPayment
@@ -926,6 +963,8 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
         city: city,
         customerPhone: customerPhone,
         logoBase64: logoBase64,
+        fontBase64: fontBase64,
+
       )
           : _generateGroupMoiHtml(
         groupId: groupId,
@@ -939,6 +978,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
         city: city,
         customerPhone: customerPhone,
         logoBase64: logoBase64,
+        fontBase64: fontBase64,
       );
 
       final output = await getTemporaryDirectory();
@@ -1046,6 +1086,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     String? city,
     String? customerPhone,
     required String logoBase64,
+    required String fontBase64,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1184,6 +1225,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
+  @font-face {
+  font-family: 'Altroned';
+  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+}
     * {
       margin: 0;
       padding: 0;
@@ -1221,11 +1266,9 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     
 .logo-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 6px;
-  text-align: center;
+  gap: 10px;
 }
 
 .logo {
@@ -1240,6 +1283,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 }
 
 .company-name {
+font-family: 'Altroned', sans-serif;
   font-size: 18px;
   font-weight: bold;
   color: #000;
@@ -1427,6 +1471,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     String? city,
     String? customerPhone,
     required String logoBase64,
+    required String fontBase64,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1496,6 +1541,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
+  @font-face {
+  font-family: 'Altroned';
+  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+}
     * {
       margin: 0;
       padding: 0;
@@ -1525,11 +1574,9 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 
 .logo-header {
   display: flex;
-  flex-direction: column;
   align-items: center;
   padding: 8px;
-  gap: 6px;
-  text-align: center;
+  gap: 10px;
 }
 
 .logo {
@@ -1551,6 +1598,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 }
 
 .company-name {
+font-family: 'Altroned', sans-serif;
   font-size: 18px;
   font-weight: bold;
   color: #000;
