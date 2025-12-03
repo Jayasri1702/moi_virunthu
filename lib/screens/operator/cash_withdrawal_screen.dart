@@ -39,6 +39,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   // Available balances (TOTAL across all operators)
   Map<String, int> _availableBalance = {};
   bool _isLoadingBalance = false;
+  bool _isSaving = false;
 
   // Track if withdrawal was just saved
   bool _withdrawalSaved = false;
@@ -443,6 +444,9 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   }
 
   Future<void> _saveWithdrawal() async {
+    // Prevent multiple clicks
+    if (_isSaving) return;
+
     if (_formKey.currentState?.validate() != true) {
       return;
     }
@@ -466,13 +470,18 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       return;
     }
 
-    // Check for duplicate withdrawal
-    bool isDuplicate = await _checkDuplicateWithdrawal();
-    if (isDuplicate) {
-      return; // Stop if duplicate found
-    }
+    // Set loading state
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
+      // Check for duplicate withdrawal
+      bool isDuplicate = await _checkDuplicateWithdrawal();
+      if (isDuplicate) {
+        return; // Stop if duplicate found
+      }
+
       final eventId = eventData?['id'];
       final operatorId = eventData?['operator_id'];
 
@@ -584,6 +593,13 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           customMessage: 'Error saving withdrawal',
         );
       }
+    } finally {
+      // Always remove loading state
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
@@ -639,278 +655,311 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Cash Withdrawal',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          if (_isLoadingBalance)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _isSaving,
+          child: Scaffold(
+            backgroundColor: Colors.grey[100],
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 1,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: () => Navigator.pop(context),
               ),
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'CASH WITHDRAWAL FORM',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+              title: const Text(
+                'Cash Withdrawal',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              actions: [
+                if (_isLoadingBalance)
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Requested By
-                _buildInputField('Requested By', _requestedByController, required: true),
-
-                const SizedBox(height: 16),
-
-                // Phone Number with validation
-                _buildPhoneInputField(),
-
-                const SizedBox(height: 16),
-
-                // Denomination Table
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
+              ],
+            ),
+            body: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Withdrawal Amount (Enter Denomination)',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Total available across all operators for this event',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDenomRow('500', _denom500Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('200', _denom200Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('100', _denom100Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('50', _denom50Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('20', _denom20Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('10', _denom10Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('5', _denom5Controller),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('1', _denom1Controller),
-                      const SizedBox(height: 16),
+                      // Header
                       Container(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'CASH WITHDRAWAL FORM',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Requested By
+                      _buildInputField('Requested By', _requestedByController, required: true),
+
+                      const SizedBox(height: 16),
+
+                      // Phone Number with validation
+                      _buildPhoneInputField(),
+
+                      const SizedBox(height: 16),
+
+                      // Denomination Table
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
                           border: Border.all(color: Colors.black, width: 2),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              'Total Count: $_totalCount',
-                              style: const TextStyle(
+                            const Text(
+                              'Withdrawal Amount (Enter Denomination)',
+                              style: TextStyle(
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 14,
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Total available across all operators for this event',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDenomRow('500', _denom500Controller),
                             const SizedBox(height: 8),
-                            Text(
-                              'Total Withdrawal Amount: ₹${_totalAmount.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 16,
-                                color: Colors.red,
+                            _buildDenomRow('200', _denom200Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('100', _denom100Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('50', _denom50Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('20', _denom20Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('10', _denom10Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('5', _denom5Controller),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('1', _denom1Controller),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                border: Border.all(color: Colors.black, width: 2),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total Count: $_totalCount',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Total Withdrawal Amount: ₹${_totalAmount.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 16,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                // Reason
-                Container(
-                  height: 120,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Reason for Withdrawal',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                      // Reason
+                      Container(
+                        height: 120,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Reason for Withdrawal',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Expanded(
+                              child: TextField(
+                                controller: _reasonController,
+                                maxLines: null,
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText: 'Enter reason...',
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Expanded(
-                        child: TextField(
-                          controller: _reasonController,
-                          maxLines: null,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Enter reason...',
+
+                      const SizedBox(height: 20),
+
+                      // Action Buttons
+                      Column(
+                        children: [
+                          // Save and Clear buttons
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: 50,
+                                  child: ElevatedButton(
+                                    onPressed: _saveWithdrawal,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.zero,
+                                        side: const BorderSide(color: Colors.black, width: 2),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Save Withdrawal',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 50,
+                                  child: ElevatedButton(
+                                    onPressed: _clearAllFields,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.orange,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.zero,
+                                        side: const BorderSide(color: Colors.black, width: 2),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Clear',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 20),
+                          const SizedBox(height: 12),
 
-                // Action Buttons
-                Column(
-                  children: [
-                    // Save and Clear buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
+                          // WhatsApp button - disabled until withdrawal is saved
+                          SizedBox(
+                            width: double.infinity,
                             height: 50,
-                            child: ElevatedButton(
-                              onPressed: _saveWithdrawal,
+                            child: ElevatedButton.icon(
+                              onPressed: _withdrawalSaved ? _sendReceiptToWhatsApp : null,
+                              icon: Icon(
+                                Icons.send,
+                                color: _withdrawalSaved ? Colors.white : Colors.grey[400],
+                              ),
+                              label: Text(
+                                _withdrawalSaved ? 'Send Receipt to WhatsApp' : 'Save Withdrawal First',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _withdrawalSaved ? Colors.white : Colors.grey[400],
+                                ),
+                              ),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
+                                backgroundColor: _withdrawalSaved ? const Color(0xFF25D366) : Colors.grey[300],
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.zero,
                                   side: const BorderSide(color: Colors.black, width: 2),
                                 ),
                               ),
-                              child: const Text(
-                                'Save Withdrawal',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _clearAllFields,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.zero,
-                                  side: const BorderSide(color: Colors.black, width: 2),
-                                ),
-                              ),
-                              child: const Text(
-                                'Clear',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // WhatsApp button - disabled until withdrawal is saved
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _withdrawalSaved ? _sendReceiptToWhatsApp : null,
-                        icon: Icon(
-                          Icons.send,
-                          color: _withdrawalSaved ? Colors.white : Colors.grey[400],
-                        ),
-                        label: Text(
-                          _withdrawalSaved ? 'Send Receipt to WhatsApp' : 'Save Withdrawal First',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: _withdrawalSaved ? Colors.white : Colors.grey[400],
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _withdrawalSaved ? const Color(0xFF25D366) : Colors.grey[300],
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.zero,
-                            side: const BorderSide(color: Colors.black, width: 2),
-                          ),
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
 
-                const SizedBox(height: 20),
-              ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
-      ),
+        // Loading overlay - this will be on top and block everything
+        if (_isSaving)
+          Container(
+            color: Colors.black.withOpacity(0.7),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    strokeWidth: 4,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Saving withdrawal...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 

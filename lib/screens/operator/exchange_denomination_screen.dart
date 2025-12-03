@@ -45,6 +45,7 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
   // Available balances (TOTAL across all operators)
   Map<String, int> _availableBalance = {};
   bool _isLoadingBalance = false;
+  bool _isSaving = false; // Add this line
 
   @override
   void didChangeDependencies() {
@@ -391,6 +392,9 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
   }
 
   Future<void> _saveExchange() async {
+    // Prevent multiple clicks
+    if (_isSaving) return;
+
     if (_formKey.currentState?.validate() != true) {
       return;
     }
@@ -416,6 +420,11 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
     if (!_validateReturnedDenominations()) {
       return;
     }
+
+    // Set loading state
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
       final eventId = eventData?['id'];
@@ -539,329 +548,369 @@ class _ExchangeDenominationScreenState extends State<ExchangeDenominationScreen>
           customMessage: 'Error saving exchange',
         );
       }
+    } finally {
+      // Always remove loading state
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Exchange Denomination',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          if (_isLoadingBalance)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _isSaving,
+          child: Scaffold(
+            backgroundColor: Colors.grey[100],
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 1,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: () => Navigator.pop(context),
               ),
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue,
-                    border: Border.all(color: Colors.black, width: 2),
-                  ),
-                  child: const Center(
-                    child: Text(
-                      'Exchange Denomination Receipt',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+              title: const Text(
+                'Exchange Denomination',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              actions: [
+                if (_isLoadingBalance)
+                  const Padding(
+                    padding: EdgeInsets.all(16.0),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Received Section
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.blue, width: 3),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        color: Colors.blue,
-                        child: const Center(
-                          child: Text(
-                            'Received',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDenomRow('500', _received500Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('200', _received200Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('100', _received100Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('50', _received50Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('20', _received20Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('10', _received10Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('5', _received5Controller, isReceived: true),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('1', _received1Controller, isReceived: true),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blue[50],
-                          border: Border.all(color: Colors.blue, width: 2),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Total Count: $_receivedTotalCount',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Total Received:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    '₹${_receivedTotalAmount.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.blue,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Returned Section
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.green, width: 3),
-                  ),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        color: Colors.green,
-                        child: const Center(
-                          child: Text(
-                            'Returned',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Total available across all operators for this event',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('500', _returned500Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('200', _returned200Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('100', _returned100Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('50', _returned50Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('20', _returned20Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('10', _returned10Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('5', _returned5Controller, isReceived: false),
-                      const SizedBox(height: 8),
-                      _buildDenomRow('1', _returned1Controller, isReceived: false),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.green[50],
-                          border: Border.all(color: Colors.green, width: 2),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'Total Count: $_returnedTotalCount',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Total Returned:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                                Flexible(
-                                  child: Text(
-                                    '₹${_returnedTotalAmount.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: Colors.green,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _saveExchange,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: const BorderSide(color: Colors.black, width: 2),
-                            ),
-                          ),
-                          child: const Text(
-                            'Save Exchange',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _clearAllFields,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                              side: const BorderSide(color: Colors.black, width: 2),
-                            ),
-                          ),
-                          child: const Text(
-                            'Clear',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
               ],
             ),
+            body: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      // Header
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          border: Border.all(color: Colors.black, width: 2),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'Exchange Denomination Receipt',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Received Section
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.blue, width: 3),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              color: Colors.blue,
+                              child: const Center(
+                                child: Text(
+                                  'Received',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildDenomRow('500', _received500Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('200', _received200Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('100', _received100Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('50', _received50Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('20', _received20Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('10', _received10Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('5', _received5Controller, isReceived: true),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('1', _received1Controller, isReceived: true),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[50],
+                                border: Border.all(color: Colors.blue, width: 2),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Total Count: $_receivedTotalCount',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Total Received:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Colors.blue,
+                                        ),
+                                      ),
+                                      Flexible(
+                                        child: Text(
+                                          '₹${_receivedTotalAmount.toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: Colors.blue,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Returned Section
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.green, width: 3),
+                        ),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              color: Colors.green,
+                              child: const Center(
+                                child: Text(
+                                  'Returned',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text(
+                                'Total available across all operators for this event',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('500', _returned500Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('200', _returned200Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('100', _returned100Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('50', _returned50Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('20', _returned20Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('10', _returned10Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('5', _returned5Controller, isReceived: false),
+                            const SizedBox(height: 8),
+                            _buildDenomRow('1', _returned1Controller, isReceived: false),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green[50],
+                                border: Border.all(color: Colors.green, width: 2),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        'Total Count: $_returnedTotalCount',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Total Returned:',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                      Flexible(
+                                        child: Text(
+                                          '₹${_returnedTotalAmount.toStringAsFixed(0)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: Colors.green,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Action Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _saveExchange,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.zero,
+                                    side: const BorderSide(color: Colors.black, width: 2),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Save Exchange',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: _clearAllFields,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.zero,
+                                    side: const BorderSide(color: Colors.black, width: 2),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Clear',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+        // Loading overlay - blocks all interactions
+        if (_isSaving)
+          Container(
+            color: Colors.black.withOpacity(0.7),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    strokeWidth: 4,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Saving exchange...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
