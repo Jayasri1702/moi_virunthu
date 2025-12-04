@@ -219,16 +219,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     children: [
                       Expanded(
                         child: _buildGridButton('Collect Moi', Icons.add, () {
-                          final eventDataWithOperator = Map<String,
-                              dynamic>.from(eventData!);
+                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
+
+                          // ADD these lines to include skip flags
+                          eventDataWithOperator['skip_denomination'] = eventData!['skip_denomination'] ?? false;
+                          eventDataWithOperator['skip_print'] = eventData!['skip_print'] ?? false;
+                          eventDataWithOperator['skip_whatsapp'] = eventData!['skip_whatsapp'] ?? false;
 
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (context) => const CollectMoiScreen(),
-                              settings: RouteSettings(
-                                  arguments: eventDataWithOperator),
+                              settings: RouteSettings(arguments: eventDataWithOperator),
                             ),
                           );
                         }),

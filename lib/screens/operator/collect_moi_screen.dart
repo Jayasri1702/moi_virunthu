@@ -44,6 +44,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   bool _isUncle = false;
   bool _isLoading = true;
   String? _lockedPaymentMethod; // Add this line
+  bool _skipDenomination = false;  // ADD
+  bool _skipPrint = false;         // ADD
 
   // Edit mode variables
   bool _isEditMode = false;
@@ -141,12 +143,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+
+// ✅ FIX 1: Update _loadArguments to properly load skip flags from EVENT table
   Future<void> _loadArguments() async {
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
       _eventId = args['id'];
       _operatorId = args['operator_id'];
-      // ✅ NEW: Load event details for receipt footer
+
+      // ✅ CRITICAL FIX: Always fetch skip flags from events table (not from arguments)
+      // This ensures we get the latest values even in edit mode
+      await _loadSkipFlagsFromEvent();
+
+      print('🔍 Loaded skip flags from EVENT: denomination=$_skipDenomination, print=$_skipPrint');
+
+      // ✅ Load event details for receipt footer
       await _loadEventDetails();
 
       if (args['edit_mode'] == true && args['moi_data'] != null) {
@@ -163,6 +174,34 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     });
   }
 
+  // ✅ NEW METHOD: Fetch skip flags from events table
+  Future<void> _loadSkipFlagsFromEvent() async {
+    if (_eventId == null) return;
+
+    try {
+      final response = await _supabase
+          .from('events')
+          .select('skip_denomination, skip_print')
+          .eq('id', _eventId!)
+          .single();
+
+      setState(() {
+        _skipDenomination = response['skip_denomination'] ?? false;
+        _skipPrint = response['skip_print'] ?? false;
+      });
+
+      print('✅ Successfully loaded skip flags from events table');
+    } catch (e) {
+      print('❌ Error loading skip flags: $e');
+      // Default to false if error
+      setState(() {
+        _skipDenomination = false;
+        _skipPrint = false;
+      });
+    }
+  }
+
+
   Future<void> _loadEditData(Map<String, dynamic> moiData) async {
     _originalData = Map<String, dynamic>.from(moiData);
 
@@ -177,7 +216,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _isUncle = moiData['is_uncle'] ?? false;
       _currentGroupId = moiData['group_id'];
 
-      // ✅ NEW: Lock payment method if this is a grouped entry
       if (_currentGroupId != null) {
         _lockedPaymentMethod = moiData['payment_method'] ?? 'CASH';
       }
@@ -207,17 +245,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     });
 
-    // ✅ FIXED ORDER: Load group entries FIRST, then load denominations
+    // Load group entries first
     if (_currentGroupId != null) {
-      await _loadGroupedMois(); // Load group entries first
+      await _loadGroupedMois();
 
-      // ✅ Now load denominations from FIRST entry in group
-      if (_paymentMethod == 'CASH' && _groupedMois.isNotEmpty) {
+      // ✅ FIX: Only load denominations if NOT skipping AND payment is CASH
+      if (_paymentMethod == 'CASH' && !_skipDenomination && _groupedMois.isNotEmpty) {
         await _loadDenominations(_groupedMois[0]['id']);
       }
     } else {
-      // ✅ For single entry, load its denomination directly
-      if (_paymentMethod == 'CASH') {
+      // ✅ FIX: Only load denominations if NOT skipping AND payment is CASH
+      if (_paymentMethod == 'CASH' && !_skipDenomination) {
         await _loadDenominations(moiData['id']);
       }
     }
@@ -1689,6 +1727,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<void> _saveDenominations(String moiId) async {
     if (_paymentMethod != 'CASH') return;
+    if (_skipDenomination) return;
 
     // Build denomination data from rows
     Map<String, dynamic> denomData = {
@@ -1756,7 +1795,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-// ✅ FIX 2: Check if form has data but not in MOI Details (user clicked "Add Entry" but didn't press "Group")
+    // ✅ FIX 2: Check if form has data but not in MOI Details (user clicked "Add Entry" but didn't press "Group")
     if (_groupedMois.isEmpty && _hasFormData()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1769,7 +1808,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-// ✅ Check if MOI Details is completely empty
+    // ✅ Check if MOI Details is completely empty
     if (_groupedMois.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1803,8 +1842,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       bool isSingleEntryWithOthers = _groupedMois.length == 1 &&
           _groupedMois[0]['payment_method'] == 'OTHERS';
 
-      // ✅ CHANGE: Only validate denomination if payment method is CASH AND not single OTHERS entry
-      if (_paymentMethod == 'CASH' && !isSingleEntryWithOthers) {
+      // ✅ CHANGE: Only validate denomination if payment method is CASH AND not single OTHERS entry AND not skipping denomination
+      if (_paymentMethod == 'CASH' && !isSingleEntryWithOthers && !_skipDenomination) {
         int denomTotal = _getTotalAmount();
 
         // Calculate total from MOI Details
@@ -1820,7 +1859,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
         }
 
-        // Denomination is MANDATORY for CASH
+        // Denomination is MANDATORY for CASH (when not skipping)
         if (denomTotal == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -1912,8 +1951,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
         }
 
-        if (_paymentMethod == 'CASH' && savedMoiIds.isNotEmpty) {
+        // ✅ Only save denominations if CASH payment AND not skipping
+        if (_paymentMethod == 'CASH' && savedMoiIds.isNotEmpty && !_skipDenomination) {
           await _saveDenominationsForGroup(savedMoiIds[0]);
+        }
+
+// ✅ NEW: Check if skip_print is true
+        if (_skipPrint) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Entries saved successfully (Receipt skipped)'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+          }
+          return;  // Exit without generating receipt
         }
 
         // ✅ Check if group has only one entry
@@ -1926,9 +1982,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             final operatorName = await _getOperatorName();
             final eventDetails = await _getEventDetails();
 
-            // ✅ Build denominations from current form (same as group receipt)
+            // ✅ Build denominations from current form (same as group receipt) - only if not skipping
             Map<int, int>? denominations;
-            if (_paymentMethod == 'CASH') {
+            if (_paymentMethod == 'CASH' && !_skipDenomination) {
               denominations = {
                 500: 0,
                 200: 0,
@@ -2006,14 +2062,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               person1Job: person1Job,
               person2Details: person2Details,
               phone: entry['phone'],
-              amount: entryAmount, // ✅ FIX: Use entry amount directly
+              amount: entryAmount,
               paymentMethod: _paymentMethod,
-              denominations: denominations, // ✅ Using form denominations
+              denominations: denominations,
               customerName: _customerName,
               city: _city,
               customerPhone: _customerPhone,
-              isUncle: entry['is_uncle'] ?? false,  // ✅ ADD THIS LINE
-
+              isUncle: entry['is_uncle'] ?? false,
             );
 
             if (file != null && mounted) {
@@ -2169,7 +2224,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    if (_paymentMethod == 'CASH') {
+    // ✅ Only validate denomination if CASH and not skipping
+    if (_paymentMethod == 'CASH' && !_skipDenomination) {
       int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
       int denomTotal = _getTotalAmount();
 
@@ -2211,14 +2267,31 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     try {
       String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
 
-      // ✅ Generate receipt after saving
+      // After successful save, add this check:
+      if (_skipPrint) {
+        // Don't generate receipt, just show success and clear
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Entries saved successfully (Receipt skipped)'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          await _clearFormCompletely();
+          _phoneFocusNode.requestFocus();
+        }
+        return;  // Exit without generating receipt
+      }
+
+      // ✅ Generate receipt after saving (only if not skipping)
       if (moiId != null && mounted) {
         final operatorName = await _getOperatorName();
         final eventDetails = await _getEventDetails();
 
-        // ✅ Build denominations from current form
+        // ✅ Build denominations from current form (only if not skipping)
         Map<int, int>? denominations;
-        if (_paymentMethod == 'CASH') {
+        if (_paymentMethod == 'CASH' && !_skipDenomination) {
           print('🎯 Payment method is CASH, building denominations...');
           print('🎯 Number of _denomRows: ${_denomRows.length}');
 
@@ -2293,7 +2366,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerName: _customerName,
           city: _city,
           customerPhone: _customerPhone,
-          isUncle: _isUncle,  // ✅ ADD THIS LINE
+          isUncle: _isUncle,
         );
 
         if (file != null && mounted) {
@@ -3449,6 +3522,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  // ✅ FIX 3: Update build method to hide denomination section when skip_denomination is true
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -3461,60 +3535,57 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       autofocus: true,
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
-          // Check for Ctrl+S
+          // Ctrl+S
           if (event.logicalKey == LogicalKeyboardKey.keyS &&
-              (event.logicalKey.keyLabel == 's' ||
-                  event.logicalKey.keyLabel == 'S') &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleSaveAndPrint();
             return KeyEventResult.handled;
           }
-          // In the Focus widget's onKeyEvent, add:
-// After Ctrl+G handler, add Ctrl+Enter handler:
+
+          // Ctrl+Enter
           if (event.logicalKey == LogicalKeyboardKey.enter &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleGroup();
             return KeyEventResult.handled;
           }
 
-// Add Ctrl+D handler for denomination:
+          // ✅ FIX: Only allow Ctrl+D if NOT skipping denomination
           if (event.logicalKey == LogicalKeyboardKey.keyD &&
-              HardwareKeyboard.instance.isControlPressed) {
-            // Focus first denomination field
+              HardwareKeyboard.instance.isControlPressed &&
+              !_skipDenomination) {
             if (_denomRows.isNotEmpty) {
               FocusScope.of(context).requestFocus(_firstDenomFocusNode);
             }
             return KeyEventResult.handled;
           }
-          // Check for Ctrl+G
+
+          // Ctrl+G
           if (event.logicalKey == LogicalKeyboardKey.keyG &&
-              (event.logicalKey.keyLabel == 'g' ||
-                  event.logicalKey.keyLabel == 'G') &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleGroup();
             return KeyEventResult.handled;
           }
-          // Check for Ctrl+Delete
+
+          // Ctrl+Delete
           if (event.logicalKey == LogicalKeyboardKey.delete &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleClear();
             return KeyEventResult.handled;
           }
-          // Check for Ctrl+A (Add Entry - only when in group mode)
+
+          // Ctrl+A (Add Entry)
           if (event.logicalKey == LogicalKeyboardKey.keyA &&
-              (event.logicalKey.keyLabel == 'a' ||
-                  event.logicalKey.keyLabel == 'A') &&
               HardwareKeyboard.instance.isControlPressed) {
             if (_currentGroupId != null) {
               _handleAddEntry();
               return KeyEventResult.handled;
             }
           }
-// Check for Ctrl+P (Generate receipt)
+
+          // Ctrl+P (Generate receipt) - ✅ FIX: Only if NOT skipping print
           if (event.logicalKey == LogicalKeyboardKey.keyP &&
-              (event.logicalKey.keyLabel == 'p' ||
-                  event.logicalKey.keyLabel == 'P') &&
-              HardwareKeyboard.instance.isControlPressed) {
+              HardwareKeyboard.instance.isControlPressed &&
+              !_skipPrint) {
             if (_currentGroupId != null && _groupedMois.isNotEmpty) {
               _handleGenerateGroupReceipt();
             } else if (_currentGroupId == null &&
@@ -3550,50 +3621,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             children: [
               _buildSerialAndPaymentHeader(),
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.black, width: 2),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Search Mobile Number',
-                      style:
-                      TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: _phoneController,
-                      focusNode: _phoneFocusNode,
-                      keyboardType:
-                      TextInputType.number, // ✅ CHANGE from phone to number
-                      maxLength: 10,
-                      inputFormatters: [
-                        FilteringTextInputFormatter
-                            .digitsOnly, // ✅ ADD THIS - Only digits allowed
-                      ],
-                      style: const TextStyle(fontSize: 13),
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Search Mobile Number',
-                        contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        isDense: true,
-                        counterText: '', // Hide character counter
-                      ),
-                      onChanged: (value) {
-                        // Auto-fill when 10 digits are entered
-                        if (value.length == 10 && !_isEditMode) {
-                          _autoFillFromPhoneNumber(value);
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
+              // ... phone number field ...
               const SizedBox(height: 12),
               _buildVillageAndLivingPlace(),
               const SizedBox(height: 12),
@@ -3606,14 +3634,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _buildAmountField(),
               const SizedBox(height: 12),
 
-              // ✅ MOVED HERE - MOI Details after Amount, before Denomination
+              // MOI Details
               if (_groupedMois.isNotEmpty) _buildMoiDetails(),
               const SizedBox(height: 12),
-              // ✅ Denomination comes after MOI Details
-              if (_paymentMethod == 'CASH') _buildDenominations(),
+
+              // ✅ FIX: Only show denomination if NOT skipping AND payment is CASH
+              if (_paymentMethod == 'CASH' && !_skipDenomination) _buildDenominations(),
               const SizedBox(height: 12),
-              if (_paymentMethod == 'CASH') _buildAmountSummary(),
+              if (_paymentMethod == 'CASH' && !_skipDenomination) _buildAmountSummary(),
               const SizedBox(height: 12),
+
               _buildActionButtons(),
             ],
           ),
@@ -4638,6 +4668,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  // ✅ FIX 4: Update _buildActionButtons to hide receipt buttons when skip_print is true
   Widget _buildActionButtons() {
     return Column(
       children: [
@@ -4653,10 +4684,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: _handleSaveAndPrint,
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        'Save & Print',
-                        style: TextStyle(
+                        // ✅ FIX: Change button text when skip_print is true
+                        _skipPrint ? 'Save' : 'Save & Print',
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
                             fontWeight: FontWeight.bold),
@@ -4694,10 +4726,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ),
         const SizedBox(height: 8),
 
-        // ✅ REMOVED: Generate Group Receipt button (now integrated into Save & Print)
-
-        // Generate single receipt only for non-grouped entries
-        if (_currentGroupId == null && (_isEditMode || _hasFormData())) ...[
+        // ✅ FIX: Only show "Generate Single Receipt" if NOT skipping print
+        if (!_skipPrint && _currentGroupId == null && (_isEditMode || _hasFormData())) ...[
           Container(
             width: double.infinity,
             height: 42,

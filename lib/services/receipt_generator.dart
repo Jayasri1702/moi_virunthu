@@ -7,8 +7,49 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdf/pdf.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class ReceiptGenerator {
+  // Cache for base64 logo
+  static String? _cachedLogoBase64;
+
+// Cache for base64 font
+  static String? _cachedFontBase64;
+
+// Load and cache logo as base64
+  static Future<String> _getLogoBase64() async {
+    if (_cachedLogoBase64 != null) {
+      return _cachedLogoBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/images/money_transfer.png');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedLogoBase64 = base64Encode(bytes);
+      return _cachedLogoBase64!;
+    } catch (e) {
+      print('Error loading logo: $e');
+      return '';
+    }
+  }
+
+// Load and cache font as base64
+  static Future<String> _getFontBase64() async {
+    if (_cachedFontBase64 != null) {
+      return _cachedFontBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/fonts/ALTRONED_Trial.ttf');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedFontBase64 = base64Encode(bytes);
+      return _cachedFontBase64!;
+    } catch (e) {
+      print('Error loading font: $e');
+      return '';
+    }
+  }
   static Future<File?> generateReceiptPDF({
     required BuildContext context,
     required String customerName,
@@ -20,6 +61,8 @@ class ReceiptGenerator {
     required TimeOfDay? selectedTime,
   }) async {
     try {
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
       // Create HTML content
       final htmlContent = _generateHtmlContent(
         customerName: customerName,
@@ -29,6 +72,8 @@ class ReceiptGenerator {
         eventTypeName: eventTypeName,
         selectedDate: selectedDate,
         selectedTime: selectedTime,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
       );
 
       // Get temporary directory
@@ -135,6 +180,8 @@ class ReceiptGenerator {
     required String eventTypeName,
     required DateTime selectedDate,
     required TimeOfDay? selectedTime,
+    required String logoBase64,
+    required String fontBase64,
   }) {
     final receiptNo = '00';
     final dateStr = DateFormat('dd-MM-yyyy').format(selectedDate);
@@ -150,6 +197,47 @@ class ReceiptGenerator {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
+  @font-face {
+  font-family: 'Altroned';
+  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+}
+.logo-header {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  gap: 10px;
+  border-bottom: 2px solid black;
+}
+
+.logo {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.company-info {
+  width: 100%;
+  text-align: center;
+}
+
+.company-name {
+  font-family: 'Altroned', sans-serif;
+  font-size: 18px;
+  font-weight: bold;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tamil-heading {
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 3px;
+}
+
+.company-phone {
+  font-size: 11px;
+  color: #000;
+}
   * {
     margin: 0;
     padding: 0;
@@ -291,9 +379,14 @@ class ReceiptGenerator {
 <div class="header">Sample Event Receipt</div>
 
   <div class="outer-box">
-    
+  <div class="logo-header">
+    <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+    <div class="company-info">
       <div class="company-name">Hi Tech Moi</div>
+      <div class="tamil-heading">ஹை-டெக் மொய்</div>
+      <div class="company-phone">9043606296, 9047556443</div>
     </div>
+  </div>
     
     <div class="date-time-section">
       <div class="date-time-left">

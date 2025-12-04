@@ -159,6 +159,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   // ✅ UPDATE: Modified _populateFields to properly set event type
+  // ✅ UPDATED: Modified _populateFields to properly set ALL fields including skip flags
   void _populateFields() {
     if (_editingEvent == null) return;
 
@@ -167,7 +168,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _title.text = _editingEvent!['title'] ?? '';
     _venue.text = _editingEvent!['venue'] ?? '';
     _city.text = _editingEvent!['city'] ?? '';
-    _eventFor.text= _editingEvent!['event_for'] ?? '';
+    _eventFor.text = _editingEvent!['event_for'] ?? '';
     _totalComputers.text = _editingEvent!['total_computers']?.toString() ?? '0';
     _bookedAmount.text = _editingEvent!['booked_amount']?.toString() ?? '0.00';
     _advanceAmount.text = _editingEvent!['advance_amount']?.toString() ?? '0.00';
@@ -188,13 +189,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     // ✅ FIX: Set the event type from saved data
-    // This now works because _eventTypes is already loaded
     if (_editingEvent!['event_type'] != null) {
       _selectedEventType = _editingEvent!['event_type'];
     }
 
     final status = _editingEvent!['status']?.toString() ?? 'upcoming';
     _selectedStatus = status[0].toUpperCase() + status.substring(1).toLowerCase();
+
+    // ✅ NEW: Set skip_denomination and skip_print from database
+    _skipDenomination = _editingEvent!['skip_denomination'] ?? false;
+    _skipPrint = _editingEvent!['skip_print'] ?? false;
   }
 
   Future<void> _loadAssignedOperators() async {
@@ -256,7 +260,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             : null,
         'venue': _venue.text.trim().isEmpty ? null : _venue.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
-        'event_for':_eventFor.text.trim().isEmpty ? null : _remark.text.trim(),
+        'event_for': _eventFor.text.trim().isEmpty ? null : _eventFor.text.trim(),
         'total_computers': int.tryParse(_totalComputers.text) ?? 0,
         'booked_amount': double.tryParse(_bookedAmount.text) ?? 0,
         'advance_amount': double.tryParse(_advanceAmount.text) ?? 0,
@@ -265,6 +269,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
+        'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
+        'skip_print': _skipPrint,               // ✅ ADD THIS LINE
       };
 
       String eventId;
@@ -890,8 +896,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             : null,
         'venue': _venue.text.trim().isEmpty ? null : _venue.text.trim(),
         'city': _city.text.trim().isEmpty ? null : _city.text.trim(),
-        'event_for':_eventFor.text.trim().isEmpty ? null : _remark.text.trim(),
-        'event_for': _eventFor.text.trim().isEmpty ? null : _eventFor.text.trim(), // ✅ ADD THIS LINE
+        'event_for': _eventFor.text.trim().isEmpty ? null : _eventFor.text.trim(), // ✅ FIX: Remove the duplicate line above
         'total_computers': int.tryParse(_totalComputers.text) ?? 0,
         'booked_amount': double.tryParse(_bookedAmount.text) ?? 0,
         'advance_amount': double.tryParse(_advanceAmount.text) ?? 0,
@@ -901,7 +906,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
-        'skip_print': _skipPrint, // ✅ ADD THIS LINE
+        'skip_print': _skipPrint,               // ✅ ADD THIS LINE
       };
 
       String eventId;

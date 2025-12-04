@@ -569,8 +569,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    final titleFontSize = (width / 8).clamp(65.0, 130.0);
-    final textFontSize = (width / 10).clamp(55.0, 110.0);
+    final titleFontSize = (width / 8).clamp(55.0, 110.0);  // Reduced from 65-130 to 55-110
+    final textFontSize = (width / 10).clamp(45.0, 95.0);   // Reduced from 55-110 to 45-95
     final lineHeight = (height * 0.10).clamp(90.0, 170.0);
 
     final eventType = fields['Event Type'] ?? 'MOI EVENT';
@@ -694,22 +694,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       final PdfBitmap bitmap = PdfBitmap(pngBytes);
       final Size pageSize = firstPage.getClientSize();
 
-      final double imgRatio = bitmap.width / bitmap.height;
-      final double pageRatio = pageSize.width / pageSize.height;
-      double drawWidth = pageSize.width;
-      double drawHeight = pageSize.height;
-
-      if (imgRatio > pageRatio) {
-        drawWidth = pageSize.width;
-        drawHeight = drawWidth / imgRatio;
-      } else {
-        drawHeight = pageSize.height;
-        drawWidth = drawHeight * imgRatio;
-      }
-
-      final double left = (pageSize.width - drawWidth) / 2;
-      final double top = (pageSize.height - drawHeight) / 2;
-      g.drawImage(bitmap, Rect.fromLTWH(left, top, drawWidth, drawHeight));
+// Draw image to fill the entire page (no margins)
+      g.drawImage(bitmap, Rect.fromLTWH(0, 0, pageSize.width, pageSize.height));
 
       final PdfDocument serverDoc = PdfDocument(inputBytes: serverPdfBytes);
 
