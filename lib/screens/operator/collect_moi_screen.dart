@@ -2298,7 +2298,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               print('🎯 Single receipt generated, attempting WhatsApp send...');
               String? phoneNumber = entry['phone'];
               if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+                await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: entry['serial_no']);
               }
 
               Navigator.pushNamed(
@@ -2603,7 +2603,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           print('🎯 Single receipt generated, attempting WhatsApp send...');
           String? phoneNumber = _phoneController.text.trim();
           if (phoneNumber.isNotEmpty) {
-            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: _serialNo);
           }
 
           Navigator.pushNamed(
@@ -2683,7 +2683,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
 
         if (phoneNumbers.isNotEmpty) {
-          await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers);
+          await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers, receiptNo: _groupedMois[0]['serial_no']);
         }
 
         Navigator.pushNamed(
@@ -2793,7 +2793,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
 
         if (phoneNumbers.isNotEmpty) {
-          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers);
+          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers, receiptNo: _currentGroupId);
         }
 
         Navigator.pushNamed(
@@ -3533,7 +3533,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         print('🎯 Single receipt generated, attempting WhatsApp send...');
         String? phoneNumber = _phoneController.text.trim();
         if (phoneNumber.isNotEmpty) {
-          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: _serialNo);
         }
 
         Navigator.pushNamed(
@@ -3569,7 +3569,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 // ✅ FIXED: Updated _sendReceiptToWhatsApp method to accept phone numbers
 // Replace the existing _sendReceiptToWhatsApp method (around line 1950) with this:
 
-  Future<void> _sendReceiptToWhatsApp(File pdfFile, String receiptType, {List<String>? phoneNumbers}) async {
+  Future<void> _sendReceiptToWhatsApp(File pdfFile, String receiptType, {List<String>? phoneNumbers, int? receiptNo}) async {
     try {
       print('📱 ========== WHATSAPP SEND STARTED ==========');
       print('📱 Event ID: $_eventId');
@@ -3666,6 +3666,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           request.fields['phone_number'] = cleanedPhone;
           request.fields['to_whatsapp'] = toWhatsApp;
           request.fields['receipt_type'] = receiptType;
+          request.fields['receipt_no'] = receiptNo?.toString() ?? '';
 
           // Add PDF file
           var pdfMultipart = await http.MultipartFile.fromPath(
@@ -3912,7 +3913,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
 
           if (phoneNumbers.isNotEmpty) {
-            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers);
+            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers, receiptNo: _currentGroupId);
           }
 
           Navigator.pushNamed(
@@ -3969,7 +3970,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
 
           if (phoneNumbers.isNotEmpty) {
-            await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers);
+            await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers, receiptNo: _groupedMois[0]['serial_no']);
           }
 
           Navigator.pushNamed(

@@ -25,12 +25,16 @@ dependencies:
   flutter_local_notifications: ^17.0.0
   open_file: ^3.3.2
   connectivity_plus: ^6.0.0
+  file_picker: ^8.0.0
+
+
 
 
   # PDF-related libs
   printing: ^5.14.2        # used for printing & convertHtml
   pdf: ^3.11.3             # only needed for PdfPageFormat (convertHtml)
   syncfusion_flutter_pdf: ^31.2.15
+
 
   # Sharing + files
   share_plus: ^12.0.0

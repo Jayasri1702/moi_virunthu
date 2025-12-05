@@ -13,6 +13,20 @@ import '../../services/receipt_generator.dart';
 import 'package:printing/printing.dart';
 import '../../services/final_moi_report_screen.dart';
 import '../../utils/network_utils.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter/services.dart';
+
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -21,28 +35,24 @@ class EventDashboardScreen extends StatefulWidget {
   State<EventDashboardScreen> createState() => _EventDashboardScreenState();
 }
 
-// Around line 16-18, modify the state variables:
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   Map<String, dynamic>? eventData;
   String operatorName = '';
   String? operatorId;
-
-  bool _isAdminView = false; // This already exists
+  bool _isAdminView = false;
+  int _noOfDownloads = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute
-        .of(context)
-        ?.settings
-        .arguments;
+    final args = ModalRoute.of(context)?.settings.arguments;
     if (args != null && args is Map<String, dynamic>) {
       setState(() {
         eventData = args;
         operatorName = args['_operator_name'] ?? '';
         operatorId = args['_operator_id'];
-        // ✅ MODIFY THIS LINE - Check for explicit admin view flag
         _isAdminView = args['_is_admin_view'] == true;
+        _noOfDownloads = args['no_of_downloads'] ?? 0;
       });
     }
   }
@@ -55,6 +65,472 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     } catch (e) {
       return dateStr;
     }
+  }
+
+// Add these as class-level variables at the top of your State class:
+  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (details) async {
+        if (details.payload != null) {
+          await OpenFile.open(details.payload);
+        }
+      },
+    );
+
+    // Request notification permission for Android 13+
+    if (Platform.isAndroid) {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    }
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      // For Android 13+ (API 33+), we need different permissions
+      if (await Permission.photos.isGranted ||
+          await Permission.videos.isGranted ||
+          await Permission.audio.isGranted) {
+        return true;
+      }
+
+      if (Platform.isAndroid) {
+        // For Android 13+ (API 33+)
+        final photoStatus = await Permission.photos.request();
+        if (photoStatus.isGranted) return true;
+      }
+
+      // For Android 11-12
+      if (await Permission.manageExternalStorage.isGranted) {
+        return true;
+      }
+      final manageStatus = await Permission.manageExternalStorage.request();
+      if (manageStatus.isGranted) return true;
+
+      // For Android 10 and below
+      final storageStatus = await Permission.storage.request();
+      return storageStatus.isGranted;
+    }
+    return true;
+  }
+
+  Future<void> _showDownloadNotification(String fileName, String filePath) async {
+    final androidDetails = AndroidNotificationDetails(
+      'download_channel',
+      'Downloads',
+      channelDescription: 'File download notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(
+        'Tap to open the file',
+        contentTitle: 'Download Complete',
+      ),
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'Download Complete',
+      fileName,
+      notificationDetails,
+      payload: filePath,
+    );
+  }
+
+  Future<void> _downloadReceipts() async {
+    // Step 1: Request storage permission
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Storage permission is required to download files'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Step 2: Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final eventId = eventData!['id'];
+      final eventTitle = eventData!['title'];
+
+      print('📥 ========== DOWNLOAD STARTED ==========');
+      print('📥 Event ID: $eventId');
+      print('📥 Event Title: $eventTitle');
+
+      // Step 3: Get auth token
+      final session = Supabase.instance.client.auth.currentSession;
+      final authToken = session?.accessToken;
+
+      print('📥 Auth token present: ${authToken != null}');
+
+      // Step 4: Make POST request to download receipts
+      final response = await http.post(
+        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts-download'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (authToken != null) 'Authorization': 'Bearer $authToken',
+        },
+        body: json.encode({
+          'event_id': eventId,
+          'event_title': eventTitle,
+        }),
+      );
+
+      print('📥 Response status: ${response.statusCode}');
+      print('📥 Response headers: ${response.headers}');
+      print('📥 =====================================');
+
+      // Step 5: Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      // Step 6: Check for success
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Get the ZIP file bytes
+        final bytes = response.bodyBytes;
+        print('📥 Downloaded ${bytes.length} bytes');
+
+        // Step 7: Save file to Downloads directory
+        String? savedFilePath;
+        String? savedFileName;
+
+        if (Platform.isAndroid) {
+          // FIXED: Changed from 'Download' to 'Downloads'
+          final downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            await downloadsDir.create(recursive: true);
+          }
+
+          // Create filename with timestamp
+          final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+          final fileName = 'receipts_${eventTitle.replaceAll(' ', '_')}_$timestamp.zip';
+
+          // Save file
+          final file = File('${downloadsDir.path}/$fileName');
+          await file.writeAsBytes(bytes);
+
+          savedFilePath = file.path;
+          savedFileName = fileName;
+
+          // Debug logs
+          print('✅ File saved to: ${file.path}');
+          print('📁 File exists: ${await file.exists()}');
+          print('📁 File size: ${await file.length()} bytes');
+        } else if (Platform.isIOS) {
+          // iOS: Save to app documents directory
+          final appDir = await getApplicationDocumentsDirectory();
+          final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+          final fileName = 'receipts_${eventTitle.replaceAll(' ', '_')}_$timestamp.zip';
+
+          final file = File('${appDir.path}/$fileName');
+          await file.writeAsBytes(bytes);
+
+          savedFilePath = file.path;
+          savedFileName = fileName;
+
+          print('✅ File saved to: ${file.path}');
+        }
+
+        // Step 8: Update download count in database
+        await Supabase.instance.client
+            .from('events')
+            .update({
+          'no_of_downloads': _noOfDownloads + 1,
+        })
+            .eq('id', eventId);
+
+        // Step 9: Update local state
+        setState(() {
+          _noOfDownloads += 1;
+          if (eventData != null) {
+            eventData!['no_of_downloads'] = _noOfDownloads;
+          }
+        });
+
+        // Step 10: Show notification
+        if (savedFileName != null && savedFilePath != null) {
+          await _showDownloadNotification(savedFileName, savedFilePath);
+
+          // Step 11: Show success message with open action
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ Receipts saved to Downloads/$savedFileName\nTap notification to open'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'OPEN',
+                  textColor: Colors.white,
+                  onPressed: () async {
+                    final result = await OpenFile.open(savedFilePath);
+                    print('Open file result: ${result.message}');
+
+                    // If no app found, show instructions
+                    if (result.type == ResultType.noAppToOpen) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Please install a ZIP file manager app to open this file.\n\nFile location: $savedFilePath'),
+                            backgroundColor: Colors.orange,
+                            duration: const Duration(seconds: 7),
+                            action: SnackBarAction(
+                              label: 'COPY PATH',
+                              textColor: Colors.white,
+                              onPressed: () {
+                                // FIXED: Added null check for clipboard
+                                if (savedFilePath != null) {
+                                  Clipboard.setData(ClipboardData(text: savedFilePath));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Path copied to clipboard')),
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+            );
+          }
+        }
+      } else {
+        // Parse error message from response
+        String errorMessage = 'Failed to download receipts (Status: ${response.statusCode})';
+        try {
+          final errorBody = json.decode(response.body);
+          if (errorBody['error'] != null) {
+            errorMessage = errorBody['error'];
+          } else if (errorBody['message'] != null) {
+            errorMessage = errorBody['message'];
+          }
+        } catch (e) {
+          if (response.body.isNotEmpty) {
+            errorMessage = response.body;
+          }
+        }
+
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      print('❌ Error downloading receipts: $e');
+
+      // Close loading dialog if still open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        // Show detailed error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error downloading receipts: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'RETRY',
+              textColor: Colors.white,
+              onPressed: _downloadReceipts,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteReceipts() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Receipts'),
+        content: const Text(
+          'Are you sure you want to delete all receipts for this event? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final eventId = eventData!['id'];
+
+      // Reset the download count in the database
+      await Supabase.instance.client
+          .from('events')
+          .update({
+        'no_of_downloads': 0,
+      })
+          .eq('id', eventId);
+
+      // Update local state
+      setState(() {
+        _noOfDownloads = 0;
+        if (eventData != null) {
+          eventData!['no_of_downloads'] = 0;
+        }
+      });
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipts deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting receipts: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'RETRY',
+              textColor: Colors.white,
+              onPressed: _deleteReceipts,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showExportReceiptsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Export Receipts'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (_noOfDownloads > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Text(
+                  'Downloads: $_noOfDownloads',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _downloadReceipts();
+              },
+              icon: const Icon(Icons.download),
+              label: const Text('Download'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8F8F8F),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: _noOfDownloads >= 1
+                  ? () {
+                Navigator.pop(context);
+                _deleteReceipts();
+              }
+                  : null,
+              icon: const Icon(Icons.delete),
+              label: const Text('Delete'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.grey[300],
+                disabledForegroundColor: Colors.grey[600],
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -102,11 +578,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               width: double.infinity,
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(24),
-              // Change from vertical: 16
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12), // Add this
-                boxShadow: [ // Add this shadow
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
                   BoxShadow(
                     color: Colors.grey.withOpacity(0.2),
                     spreadRadius: 1,
@@ -115,7 +590,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
                 ],
               ),
-              // Remove: border: Border.all(color: Colors.black, width: 2),
               child: const Text(
                 'Dashboard',
                 style: TextStyle(
@@ -133,8 +607,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12), // Add this
-                boxShadow: [ // Add this shadow
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
                   BoxShadow(
                     color: Colors.grey.withOpacity(0.2),
                     spreadRadius: 1,
@@ -143,7 +617,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
                 ],
               ),
-              // Remove: border: Border.all(color: Colors.black, width: 2),
               child: Column(
                 children: [
                   Text(
@@ -199,7 +672,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             const SizedBox(height: 20),
 
             // Action Buttons
-            // Action Buttons - Grid Layout
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
@@ -221,8 +693,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         child: _buildGridButton('Collect Moi', Icons.add, () {
                           final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
-
-                          // ADD these lines to include skip flags
                           eventDataWithOperator['skip_denomination'] = eventData!['skip_denomination'] ?? false;
                           eventDataWithOperator['skip_print'] = eventData!['skip_print'] ?? false;
                           eventDataWithOperator['skip_whatsapp'] = eventData!['skip_whatsapp'] ?? false;
@@ -238,10 +708,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton(
-                            'Collection Details', Icons.person, () {
-                          final eventDataWithOperator = Map<String,
-                              dynamic>.from(eventData!);
+                        child: _buildGridButton('Collection Details', Icons.person, () {
+                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
 
                           Navigator.pushNamed(
@@ -258,8 +726,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton(
-                            'Cash Withdrawal', Icons.money_off, () {
+                        child: _buildGridButton('Cash Withdrawal', Icons.money_off, () {
                           Navigator.pushNamed(
                             context,
                             '/operator/cash_withdrawal',
@@ -272,8 +739,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton(
-                            'Exchange Deno', Icons.swap_horiz, () {
+                        child: _buildGridButton('Exchange Deno', Icons.swap_horiz, () {
                           Navigator.pushNamed(
                             context,
                             '/operator/exchange-denomination',
@@ -290,8 +756,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton(
-                            'Uncle Re-order', Icons.sort_by_alpha, () {
+                        child: _buildGridButton('Uncle Re-order', Icons.sort_by_alpha, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -303,13 +768,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton(
-                            'Correct Village', Icons.location_city, () {
+                        child: _buildGridButton('Correct Village', Icons.location_city, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (
-                                  context) =>  CorrectVillageNamesScreen(
+                              builder: (context) => CorrectVillageNamesScreen(
                                   eventId: eventData!['id']
                               ),
                             ),
@@ -323,8 +786,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildGridButton('Correct Person', Icons
-                              .person_search, () {
+                          child: _buildGridButton('Correct Person', Icons.person_search, () {
                             Navigator.pushNamed(
                               context,
                               '/admin/correct-person-data',
@@ -337,7 +799,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Container(), // Empty placeholder
+                          child: Container(),
                         ),
                       ],
                     ),
@@ -358,30 +820,26 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton(
-                            'Similar Entries', Icons.content_copy, () {
+                        child: _buildGridButton('Similar Entries', Icons.content_copy, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  SimilarEntriesScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => SimilarEntriesScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton(
-                            'Cash Deno', Icons.currency_rupee, () {
+                        child: _buildGridButton('Cash Deno', Icons.currency_rupee, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  DenominationScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => DenominationScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
@@ -392,15 +850,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton(
-                            'Double Entries', Icons.filter_2, () {
+                        child: _buildGridButton('Double Entries', Icons.filter_2, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  DoubleEntriesScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => DoubleEntriesScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
@@ -411,10 +867,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  UserWiseCollectionScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => UserWiseCollectionScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
@@ -425,31 +880,27 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Cash Management',
-                            Icons.account_balance_wallet, () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      CashManagementScreen(
-                                        eventId: eventData!['id'],
-                                        operatorId: operatorId,
-                                      ),
-                                ),
-                              );
-                            }),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildGridButton(
-                            'Modified Report', Icons.edit_note, () {
+                        child: _buildGridButton('Cash Management', Icons.account_balance_wallet, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  ModifiedReportScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => CashManagementScreen(
+                                eventId: eventData!['id'],
+                                operatorId: operatorId,
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildGridButton('Modified Report', Icons.edit_note, () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ModifiedReportScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
@@ -460,25 +911,37 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton(
-                            'Sample Receipt', Icons.receipt, () {
+                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
                           _showSampleReceipt();
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton(
-                            'Final Moi Report', Icons.assessment, () {
+                        child: _buildGridButton('Final Moi Report', Icons.assessment, () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  FinalMoiReportScreen(
-                                    eventId: eventData!['id'],
-                                  ),
+                              builder: (context) => FinalMoiReportScreen(
+                                eventId: eventData!['id'],
+                              ),
                             ),
                           );
                         }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Export Receipts Button
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildGridButton('Export Receipts', Icons.file_download, () {
+                          _showExportReceiptsDialog();
+                        }),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Container(),
                       ),
                     ],
                   ),
@@ -488,34 +951,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton(String label, VoidCallback onPressed) {
-    return Container(
-      width: double.infinity,
-      height: 60,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black, width: 2),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          child: Center(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
         ),
       ),
     );
@@ -600,12 +1035,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         );
       }
 
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) =>
-        const Center(
+        builder: (context) => const Center(
           child: CircularProgressIndicator(),
         ),
       );
@@ -621,101 +1054,94 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         selectedTime: eventTime,
       );
 
-      // Close loading indicator
       if (mounted) Navigator.pop(context);
 
       if (file != null && mounted) {
-        // Read the PDF file
         final pdfBytes = await file.readAsBytes();
 
-        // Show receipt in a dialog with print option
         showDialog(
           context: context,
-          builder: (context) =>
-              Dialog(
-                child: Container(
-                  width: 400,
-                  constraints: const BoxConstraints(maxHeight: 700),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Header with close button
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            bottom: BorderSide(color: Colors.grey[300]!),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Sample Receipt',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
+          builder: (context) => Dialog(
+            child: Container(
+              width: 400,
+              constraints: const BoxConstraints(maxHeight: 700),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey[300]!),
                       ),
-                      // PDF Preview
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: PdfPreview(
-                            build: (format) => pdfBytes,
-                            allowPrinting: false,
-                            allowSharing: false,
-                            canChangePageFormat: false,
-                            canChangeOrientation: false,
-                            canDebug: false,
-                            pdfFileName: 'receipt_$customerName.pdf',
-                            actions: const [], // Remove default toolbar actions
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Sample Receipt',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      // Custom Print Button at bottom
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border(
-                            top: BorderSide(color: Colors.grey[300]!),
-                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
                         ),
-                        child: ElevatedButton.icon(
-                          onPressed: () async {
-                            await Printing.layoutPdf(
-                              onLayout: (format) => pdfBytes,
-                            );
-                          },
-                          icon: const Icon(Icons.print, size: 24),
-                          label: const Text(
-                            'Print Receipt',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFB846D7),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: PdfPreview(
+                        build: (format) => pdfBytes,
+                        allowPrinting: false,
+                        allowSharing: false,
+                        canChangePageFormat: false,
+                        canChangeOrientation: false,
+                        canDebug: false,
+                        pdfFileName: 'receipt_$customerName.pdf',
+                        actions: const [],
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(
+                        top: BorderSide(color: Colors.grey[300]!),
+                      ),
+                    ),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Printing.layoutPdf(
+                          onLayout: (format) => pdfBytes,
+                        );
+                      },
+                      icon: const Icon(Icons.print, size: 24),
+                      label: const Text(
+                        'Print Receipt',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFB846D7),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ),
+          ),
         );
       } else {
         if (mounted) {
@@ -728,7 +1154,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         }
       }
     } catch (e) {
-      // Close loading if still showing
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
@@ -744,4 +1169,3 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 }
-
