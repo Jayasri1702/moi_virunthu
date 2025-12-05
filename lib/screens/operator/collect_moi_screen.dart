@@ -1647,6 +1647,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return true;
   }
 
+  bool _isFormDataNotInGroupedMois() {
+    // If editing, ignore this scenario
+    if (_isEditMode) return false;
+
+    // If MOI Details is empty, definitely not grouped
+    if (_groupedMois.isEmpty) return false;
+
+    // ✅ FIX: Check if current form data (serial + phone) exists in _groupedMois
+    final currentPhone = _phoneController.text.trim();
+    final currentSerial = _serialNo;
+
+    // If this exact serial OR phone exists in grouped list, it means form data IS in MOI Details
+    bool existsInGroup = _groupedMois.any((entry) =>
+    entry['serial_no'] == currentSerial ||
+        (currentPhone.isNotEmpty && entry['phone'] == currentPhone)
+    );
+
+    // Return TRUE if form has data but NOT in grouped list (ungrouped)
+    return !existsInGroup && _hasFormData();
+  }
+
+
   Future<String?> _saveMoi(int? groupId, {bool forceUpdate = false}) async {
     List<Map<String, dynamic>> personsData = [];
 
@@ -1768,7 +1790,110 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleSaveAndPrint() async {
-    // ✅ FIRST: Check if editing a single entry with no changes (before anything else)
+    // ✅ STEP 0: Check if input fields have data (ungrouped data)
+    bool hasUngroupedData = _person1Field1Controller.text.trim().isNotEmpty ||
+        _person1Field2Controller.text.trim().isNotEmpty ||
+        _person2Controller.text.trim().isNotEmpty ||
+        _villageController.text.trim().isNotEmpty ||
+        _livingPlaceController.text.trim().isNotEmpty ||
+        _amountController.text.trim().isNotEmpty;
+
+    if (hasUngroupedData && !_isEditMode) {
+      final shouldProceed = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            '⚠️ Ungrouped Data Detected!',
+            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'You have data in the input fields that has not been added to MOI Details.',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange[50],
+                  border: Border.all(color: Colors.orange, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '⚠️ Input fields must be empty before saving!',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange,
+                          fontSize: 13),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Please choose one of the following:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Text('1. Click "Group" to add this data to MOI Details',
+                        style: TextStyle(fontSize: 11)),
+                    Text('2. Click "Clear" to discard this data',
+                        style: TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'What would you like to do?',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'clear'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.red[100],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: const Text(
+                'CLEAR DATA',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'group'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.blue[100],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ),
+              child: const Text(
+                'GROUP FIRST',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldProceed == 'clear') {
+        await _clearFormForNextEntry();
+        _phoneFocusNode.requestFocus();
+        return;
+      } else if (shouldProceed == 'group') {
+        // Don't proceed with save, let user click Group button
+        return;
+      } else {
+        // User closed dialog without choosing
+        return;
+      }
+    }
+
+    // ✅ STEP 1: Check if editing a single entry with no changes
     if (_isEditMode &&
         _editingMoiId != null &&
         _currentGroupId == null &&
@@ -1783,6 +1908,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+    // ✅ STEP 2: Check if editing grouped entry with unsaved changes
     if (_isEditMode && _editingMoiId != null && _currentGroupId != null && !_hasNoChanges()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1795,20 +1921,110 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // ✅ FIX 2: Check if form has data but not in MOI Details (user clicked "Add Entry" but didn't press "Group")
-    if (_groupedMois.isEmpty && _hasFormData()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              '⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
+    // ✅ STEP 3: Check for ungrouped data in form (handles BOTH empty and non-empty _groupedMois)
+    if (_hasFormData()) {
+      // Check if this form data is already in MOI Details
+      bool isAlreadyGrouped = _groupedMois.any((entry) {
+        // Compare by serial number (most reliable unique identifier)
+        return entry['serial_no'] == _serialNo;
+      });
+
+      if (!isAlreadyGrouped) {
+        // Form has data but it's NOT in MOI Details - show warning popup
+        final shouldDiscard = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text(
+              '⚠️ Entry Not Grouped!',
+              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _groupedMois.isEmpty
+                      ? 'You have entered data in the form but have not added it to MOI Details yet.'
+                      : 'You filled a new entry but did NOT click "Group" to add it to MOI Details.',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    border: Border.all(color: Colors.orange, width: 2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '⚠️ This entry will NOT be saved!',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                            fontSize: 13),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'To save this entry, please:',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
+                      Text('1. Click "Group" button (or press Ctrl+Enter)',
+                          style: TextStyle(fontSize: 11)),
+                      Text('2. Then click "Save & Print"',
+                          style: TextStyle(fontSize: 11)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Do you want to discard this entry and continue?',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.grey[200],
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: const Text(
+                  'CANCEL',
+                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.red[100],
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                ),
+                child: const Text(
+                  'DISCARD & CONTINUE',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldDiscard != true) {
+          return; // User cancelled
+        }
+        // User chose to discard
+        await _clearFormCompletely();
+        _phoneFocusNode.requestFocus();
+        return;
+      }
     }
 
-    // ✅ Check if MOI Details is completely empty
+    // ✅ STEP 4: Check if MOI Details is completely empty
     if (_groupedMois.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -3622,6 +3838,50 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _buildSerialAndPaymentHeader(),
               const SizedBox(height: 12),
               // ... phone number field ...
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.black, width: 2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Search Mobile Number',
+                    style:
+                    TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: _phoneController,
+                    focusNode: _phoneFocusNode,
+                    keyboardType:
+                    TextInputType.number, // ✅ CHANGE from phone to number
+                    maxLength: 10,
+                    inputFormatters: [
+                      FilteringTextInputFormatter
+                          .digitsOnly, // ✅ ADD THIS - Only digits allowed
+                    ],
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      hintText: 'Search Mobile Number',
+                      contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      isDense: true,
+                      counterText: '', // Hide character counter
+                    ),
+                    onChanged: (value) {
+                      // Auto-fill when 10 digits are entered
+                      if (value.length == 10 && !_isEditMode) {
+                        _autoFillFromPhoneNumber(value);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
               const SizedBox(height: 12),
               _buildVillageAndLivingPlace(),
               const SizedBox(height: 12),
