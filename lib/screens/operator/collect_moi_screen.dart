@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/moi_receipt_generator.dart';
 import '../../utils/network_utils.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'dart:io';
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -2266,6 +2268,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               entryAmount = int.tryParse(amountValue.toString()) ?? 0;
             }
 
+            // ✅ STEP 2: Update _handleSaveAndPrint method
+// Find the section where single entry receipt is generated (around line 1200)
+// Replace this part:
+
             final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
               context: context,
               serialNo: entry['serial_no'],
@@ -2288,6 +2294,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             );
 
             if (file != null && mounted) {
+              // ✅ FIXED: Send to the entry's phone number
+              print('🎯 Single receipt generated, attempting WhatsApp send...');
+              String? phoneNumber = entry['phone'];
+              if (phoneNumber != null && phoneNumber.isNotEmpty) {
+                await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+              }
+
               Navigator.pushNamed(
                 context,
                 '/operator/moi-receipt-preview',
@@ -2586,6 +2599,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (file != null && mounted) {
+          // ✅ FIXED: Send to the entry's phone number
+          print('🎯 Single receipt generated, attempting WhatsApp send...');
+          String? phoneNumber = _phoneController.text.trim();
+          if (phoneNumber.isNotEmpty) {
+            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+          }
+
           Navigator.pushNamed(
             context,
             '/operator/moi-receipt-preview',
@@ -2652,6 +2672,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
 
       if (files.isNotEmpty && mounted) {
+        // ✅ FIXED: Send to each entry's phone number
+        print('🎯 Split receipts generated, attempting WhatsApp send...');
+        List<String> phoneNumbers = [];
+        for (var entry in entriesWithDenoms) {
+          String? phone = entry['phone'];
+          if (phone != null && phone.isNotEmpty) {
+            phoneNumbers.add(phone);
+          }
+        }
+
+        if (phoneNumbers.isNotEmpty) {
+          await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers);
+        }
+
         Navigator.pushNamed(
           context,
           '/operator/moi-receipt-preview',
@@ -2660,7 +2694,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             'receipt_files': files,
           },
         );
-      } else {
+      }else {
         throw Exception('Failed to generate receipts');
       }
     } catch (e) {
@@ -2729,6 +2763,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
 
+      // ✅ STEP 4: Update _generateConsolidatedGroupReceipt method (around line 1420)
+
       final file = await MoiReceiptGenerator.generateGroupMoiReceipt(
         context: context,
         groupId: _currentGroupId!,
@@ -2740,12 +2776,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         totalDenominations: totalDenominations.values.any((v) => v > 0)
             ? totalDenominations
             : null,
-        customerName: _customerName, // ✅ NEW
-        city: _city, // ✅ NEW
-        customerPhone: _customerPhone, // ✅ NEW
+        customerName: _customerName,
+        city: _city,
+        customerPhone: _customerPhone,
       );
 
       if (file != null && mounted) {
+        // ✅ FIXED: Send group receipt to all group members' phone numbers
+        print('🎯 Group receipt generated, attempting WhatsApp send...');
+        List<String> phoneNumbers = [];
+        for (var entry in _groupedMois) {
+          String? phone = entry['phone'];
+          if (phone != null && phone.isNotEmpty) {
+            phoneNumbers.add(phone);
+          }
+        }
+
+        if (phoneNumbers.isNotEmpty) {
+          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers);
+        }
+
         Navigator.pushNamed(
           context,
           '/operator/moi-receipt-preview',
@@ -3475,10 +3525,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         customerName: _customerName,
         city: _city,
         customerPhone: _customerPhone,
-        isUncle: _isUncle,  // ✅ ADD THIS LINE
+        isUncle: _isUncle,
       );
 
       if (file != null && mounted) {
+        // ✅ FIXED: Send to the entry's phone number
+        print('🎯 Single receipt generated, attempting WhatsApp send...');
+        String? phoneNumber = _phoneController.text.trim();
+        if (phoneNumber.isNotEmpty) {
+          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber]);
+        }
+
         Navigator.pushNamed(
           context,
           '/operator/moi-receipt-preview',
@@ -3487,7 +3544,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             'receipt_file': file,
           },
         );
-      } else {
+      }else {
         throw Exception('Failed to generate receipt');
       }
     } catch (e) {
@@ -3502,6 +3559,180 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ STEP 1: Replace the _sendReceiptToWhatsApp method (around line 1950)
+// Delete the old method and replace with this:
+
+
+// ✅ FIXED: Updated _sendReceiptToWhatsApp method to accept phone numbers
+// Replace the existing _sendReceiptToWhatsApp method (around line 1950) with this:
+
+  Future<void> _sendReceiptToWhatsApp(File pdfFile, String receiptType, {List<String>? phoneNumbers}) async {
+    try {
+      print('📱 ========== WHATSAPP SEND STARTED ==========');
+      print('📱 Event ID: $_eventId');
+      print('📱 Receipt Type: $receiptType');
+      print('📱 PDF Path: ${pdfFile.path}');
+      print('📱 Phone Numbers to send: $phoneNumbers');
+
+      // Step 1: Get skip_whatsapp flag from events table
+      print('📱 Fetching event details from database...');
+      final eventResponse = await _supabase
+          .from('events')
+          .select('skip_whatsapp')
+          .eq('id', _eventId!)
+          .single();
+
+      print('📱 Event Response: $eventResponse');
+
+      bool skipWhatsApp = eventResponse['skip_whatsapp'] ?? false;
+      print('📱 skip_whatsapp from DB: $skipWhatsApp');
+
+      // Step 2: Check if we should skip WhatsApp
+      if (skipWhatsApp) {
+        print('⏭️ SKIPPING WhatsApp - skip_whatsapp is TRUE');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏭️ WhatsApp sending skipped (disabled in event settings)'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 3: Validate phone numbers
+      if (phoneNumbers == null || phoneNumbers.isEmpty) {
+        print('⏭️ SKIPPING WhatsApp - No phone numbers provided');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏭️ WhatsApp skipped - No phone numbers available'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 4: Clean and format phone numbers
+      List<String> validPhones = [];
+      for (String phoneNum in phoneNumbers) {  // ✅ Changed to phoneNum
+        String cleanedPhone = phoneNum.replaceAll(RegExp(r'\D'), '');
+        if (phoneNum.isEmpty) continue;
+
+        if (cleanedPhone.length == 10) {
+          cleanedPhone = '91$cleanedPhone'; // Add India country code
+          validPhones.add(cleanedPhone);
+        }
+      }
+
+      if (validPhones.isEmpty) {
+        print('⏭️ SKIPPING WhatsApp - No valid phone numbers after cleaning');
+        return;
+      }
+
+      print('📱 Valid phone numbers: $validPhones');
+
+      // Step 5: Prepare form data
+      String toWhatsApp = (!skipWhatsApp).toString();
+
+      // Step 6: Send to each phone number
+      int successCount = 0;
+      int failCount = 0;
+
+      for (String cleanedPhone in validPhones) {
+        try {
+          print('📤 Sending to: $cleanedPhone');
+
+          var request = http.MultipartRequest(
+            'POST',
+            Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts_handler'),
+          );
+
+          // Add authorization header
+          final session = _supabase.auth.currentSession;
+          if (session != null) {
+            request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+          }
+
+          // Add form fields
+          request.fields['event_id'] = _eventId!;
+          request.fields['phone_number'] = cleanedPhone;
+          request.fields['to_whatsapp'] = toWhatsApp;
+          request.fields['receipt_type'] = receiptType;
+
+          // Add PDF file
+          var pdfMultipart = await http.MultipartFile.fromPath(
+            'pdf',
+            pdfFile.path,
+            filename: 'receipt_${DateTime.now().millisecondsSinceEpoch}.pdf',
+          );
+          request.files.add(pdfMultipart);
+
+          // Send request
+          final streamedResponse = await request.send();
+          final responseBody = await streamedResponse.stream.bytesToString();
+
+          if (streamedResponse.statusCode == 200) {
+            print('✅ SUCCESS: Receipt sent to $cleanedPhone');
+            successCount++;
+          } else {
+            print('❌ FAILED: Receipt not sent to $cleanedPhone (${streamedResponse.statusCode})');
+            failCount++;
+          }
+        } catch (e) {
+          print('❌ ERROR sending to $cleanedPhone: $e');
+          failCount++;
+        }
+      }
+
+      // Show final status
+      if (mounted) {
+        if (successCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Receipt sent to $successCount number(s)${failCount > 0 ? ', $failCount failed' : ''}'),
+              backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ Failed to send receipts via WhatsApp'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      print('📱 ========== SUMMARY ==========');
+      print('📱 Success: $successCount');
+      print('📱 Failed: $failCount');
+      print('📱 ==============================');
+
+    } catch (e, stackTrace) {
+      print('❌ ========== EXCEPTION ==========');
+      print('❌ Error sending receipt to WhatsApp: $e');
+      print('❌ Stack trace: $stackTrace');
+      print('❌ ================================');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ WhatsApp error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -3651,6 +3882,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           );
         }
 
+        // ✅ STEP 4: Update _generateConsolidatedGroupReceipt method (around line 1420)
+
         final file = await MoiReceiptGenerator.generateGroupMoiReceipt(
           context: context,
           groupId: _currentGroupId!,
@@ -3662,12 +3895,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           totalDenominations: totalDenominations.values.any((v) => v > 0)
               ? totalDenominations
               : null,
-          customerName: _customerName, // ✅ NEW
-          city: _city, // ✅ NEW
-          customerPhone: _customerPhone, // ✅ NEW
+          customerName: _customerName,
+          city: _city,
+          customerPhone: _customerPhone,
         );
 
         if (file != null && mounted) {
+          // ✅ FIXED: Send group receipt to all members
+          print('🎯 Group receipt generated, attempting WhatsApp send...');
+          List<String> phoneNumbers = [];
+          for (var entry in _groupedMois) {
+            String? phone = entry['phone'];
+            if (phone != null && phone.isNotEmpty) {
+              phoneNumbers.add(phone);
+            }
+          }
+
+          if (phoneNumbers.isNotEmpty) {
+            await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers);
+          }
+
           Navigator.pushNamed(
             context,
             '/operator/moi-receipt-preview',
@@ -3676,7 +3923,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'receipt_file': file,
             },
           );
-        } else {
+        }else {
           throw Exception('Failed to generate group receipt');
         }
       } else {
@@ -3711,6 +3958,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (files.isNotEmpty && mounted) {
+          // ✅ FIXED: Send to each entry's phone number
+          print('🎯 Split receipts generated, attempting WhatsApp send...');
+          List<String> phoneNumbers = [];
+          for (var entry in entriesWithDenoms) {
+            String? phone = entry['phone'];
+            if (phone != null && phone.isNotEmpty) {
+              phoneNumbers.add(phone);
+            }
+          }
+
+          if (phoneNumbers.isNotEmpty) {
+            await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers);
+          }
+
           Navigator.pushNamed(
             context,
             '/operator/moi-receipt-preview',
@@ -3719,7 +3980,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'receipt_files': files,
             },
           );
-        } else {
+        }
+        else {
           throw Exception('Failed to generate receipts');
         }
       }

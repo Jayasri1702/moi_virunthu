@@ -26,6 +26,7 @@ dependencies:
   open_file: ^3.3.2
   connectivity_plus: ^6.0.0
 
+
   # PDF-related libs
   printing: ^5.14.2        # used for printing & convertHtml
   pdf: ^3.11.3             # only needed for PdfPageFormat (convertHtml)

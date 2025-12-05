@@ -20,6 +20,7 @@ class CreateEventScreen extends StatefulWidget {
 class _CreateEventScreenState extends State<CreateEventScreen> {
   Map<String, dynamic>? _editingEvent;
   bool _isEditMode = false;
+  bool _skipWhatsApp = false;
   final _formKey = GlobalKey<FormState>();
   final _auth = AuthService();
 
@@ -163,6 +164,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void _populateFields() {
     if (_editingEvent == null) return;
 
+    _skipWhatsApp = _editingEvent!['skip_whatsapp'] ?? false;
     _customerName.text = _editingEvent!['customer_name'] ?? '';
     _contactNumber.text = _editingEvent!['customer_phone'] ?? '';
     _title.text = _editingEvent!['title'] ?? '';
@@ -907,6 +909,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
         'skip_print': _skipPrint,               // ✅ ADD THIS LINE
+        'skip_whatsapp': _skipWhatsApp,         // ✅ ADD THIS LINE
       };
 
       String eventId;
@@ -1263,6 +1266,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _selectedOperators.clear();
       _skipDenomination = false;
       _skipPrint = false;
+      _skipWhatsApp = false;
       if (_eventTypes.isNotEmpty) {
         _selectedEventType = _eventTypes[0]['id'];
       }
@@ -1863,6 +1867,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     width: 24,
                                     height: 24,
                                     child: Checkbox(
+                                      value: _skipWhatsApp,
+                                      onChanged: (value) {
+                                        setState(() => _skipWhatsApp = value ?? false);
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Expanded(
+                                    child: Text(
+                                      'Skip WhatsApp',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: Checkbox(
                                       value: _skipDenomination,
                                       onChanged: (value) {
                                         setState(() => _skipDenomination = value ?? false);
@@ -1901,6 +1927,33 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 ],
                               ),
                             ] else ...[
+                              Row(
+                                children: [
+                                  const SizedBox(width: 170),
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: Checkbox(
+                                            value: _skipWhatsApp,
+                                            onChanged: (value) {
+                                              setState(() => _skipWhatsApp = value ?? false);
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'Skip WhatsApp',
+                                          style: TextStyle(fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
                               Row(
                                 children: [
                                   const SizedBox(width: 170),
