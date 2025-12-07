@@ -2672,18 +2672,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
 
       if (files.isNotEmpty && mounted) {
-        // ✅ FIXED: Send to each entry's phone number
         print('🎯 Split receipts generated, attempting WhatsApp send...');
-        List<String> phoneNumbers = [];
-        for (var entry in entriesWithDenoms) {
-          String? phone = entry['phone'];
-          if (phone != null && phone.isNotEmpty) {
-            phoneNumbers.add(phone);
-          }
-        }
 
-        if (phoneNumbers.isNotEmpty) {
-          await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers, receiptNo: _groupedMois[0]['serial_no']);
+        // Send each receipt to its corresponding phone number
+        for (int i = 0; i < files.length && i < entriesWithDenoms.length; i++) {
+          String? phone = entriesWithDenoms[i]['phone'];
+          if (phone != null && phone.isNotEmpty) {
+            await _sendReceiptToWhatsApp(
+                files[i],  // ✅ Send the i-th receipt
+                'mois',
+                phoneNumbers: [phone],  // ✅ Send to only this phone number
+                receiptNo: entriesWithDenoms[i]['serial_no']
+            );
+          }
         }
 
         Navigator.pushNamed(
@@ -3959,18 +3960,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (files.isNotEmpty && mounted) {
-          // ✅ FIXED: Send to each entry's phone number
           print('🎯 Split receipts generated, attempting WhatsApp send...');
-          List<String> phoneNumbers = [];
-          for (var entry in entriesWithDenoms) {
-            String? phone = entry['phone'];
-            if (phone != null && phone.isNotEmpty) {
-              phoneNumbers.add(phone);
-            }
-          }
 
-          if (phoneNumbers.isNotEmpty) {
-            await _sendReceiptToWhatsApp(files[0], 'mois', phoneNumbers: phoneNumbers, receiptNo: _groupedMois[0]['serial_no']);
+          // Send each receipt to its corresponding phone number
+          for (int i = 0; i < files.length && i < entriesWithDenoms.length; i++) {
+            String? phone = entriesWithDenoms[i]['phone'];
+            if (phone != null && phone.isNotEmpty) {
+              await _sendReceiptToWhatsApp(
+                  files[i],  // ✅ Send the i-th receipt
+                  'mois',
+                  phoneNumbers: [phone],  // ✅ Send to only this phone number
+                  receiptNo: entriesWithDenoms[i]['serial_no']
+              );
+            }
           }
 
           Navigator.pushNamed(

@@ -422,33 +422,80 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
       final eventId = eventData!['id'];
 
-      // Reset the download count in the database
-      await Supabase.instance.client
-          .from('events')
-          .update({
-        'no_of_downloads': 0,
-      })
-          .eq('id', eventId);
+      print('🗑️ ========== DELETE STARTED ==========');
+      print('🗑️ Event ID: $eventId');
 
-      // Update local state
-      setState(() {
-        _noOfDownloads = 0;
-        if (eventData != null) {
-          eventData!['no_of_downloads'] = 0;
-        }
-      });
+      // Get auth token
+      final session = Supabase.instance.client.auth.currentSession;
+      final authToken = session?.accessToken;
+
+      print('🗑️ Auth token present: ${authToken != null}');
+
+      // Make DELETE request to the API
+      final response = await http.delete(
+        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/delete_receipts'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (authToken != null) 'Authorization': 'Bearer $authToken',
+        },
+        body: json.encode({
+          'event_id': eventId,
+        }),
+      );
+
+      print('🗑️ Response status: ${response.statusCode}');
+      print('🗑️ Response body: ${response.body}');
+      print('🗑️ =====================================');
 
       if (mounted) Navigator.pop(context);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Receipts deleted successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      // Check for success (200-299 status codes)
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Reset the download count in the database
+        await Supabase.instance.client
+            .from('events')
+            .update({
+          'no_of_downloads': 0,
+        })
+            .eq('id', eventId);
+
+        // Update local state
+        setState(() {
+          _noOfDownloads = 0;
+          if (eventData != null) {
+            eventData!['no_of_downloads'] = 0;
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Receipts deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        // Parse error message from response
+        String errorMessage = 'Failed to delete receipts (Status: ${response.statusCode})';
+        try {
+          final errorBody = json.decode(response.body);
+          if (errorBody['error'] != null) {
+            errorMessage = errorBody['error'];
+          } else if (errorBody['message'] != null) {
+            errorMessage = errorBody['message'];
+          }
+        } catch (e) {
+          if (response.body.isNotEmpty) {
+            errorMessage = response.body;
+          }
+        }
+
+        throw Exception(errorMessage);
       }
     } catch (e) {
+      print('❌ Error deleting receipts: $e');
+
       if (mounted && Navigator.canPop(context)) {
         Navigator.pop(context);
       }
