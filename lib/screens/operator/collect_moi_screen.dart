@@ -38,6 +38,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _amountFocusNode = FocusNode();
   final _firstDenomFocusNode = FocusNode(); // For Ctrl+D shortcut
 
+  bool _isSerialReserved = false;
+  String? _reservedSerialId; // Track the reservation record ID
+
   // State variables
   String? _eventId;
   String? _operatorId;
@@ -428,25 +431,27 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (_eventId == null) return;
 
     try {
-      // ✅ FIXED: Get highest serial number for the EVENT (not operator-specific)
-      final response = await _supabase
-          .from('mois')
-          .select('serial_no')
-          .eq('event_id', _eventId!)
-          .eq('is_deleted', false)
-          .order('serial_no', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      // ✅ CRITICAL: Reserve serial number atomically by inserting a placeholder
+      final response = await _supabase.rpc(
+          'reserve_next_moi_serial',
+          params: {
+            'event_id_param': _eventId,
+            'operator_id_param': _operatorId
+          }
+      );
 
       setState(() {
-        _serialNo = (response != null && response['serial_no'] != null)
-            ? (response['serial_no'] as int) + 1
-            : 1;
+        _serialNo = response as int;
+        // Store the reserved serial for this session
+        _isSerialReserved = true;
       });
+
+      print('✅ Reserved serial number: $_serialNo for operator: $_operatorId');
     } catch (e) {
-      print('Error loading serial number: $e');
+      print('Error reserving serial number: $e');
       setState(() {
         _serialNo = 1;
+        _isSerialReserved = false;
       });
     }
   }
@@ -713,18 +718,54 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   // Check if auto-filled data was modified
+  // Check if auto-filled data was modified
   bool _hasAutoFilledDataChanged() {
-    if (_autoFilledData == null) return false;
+    if (_autoFilledData == null) {
+      print('⏭️ No auto-filled data to compare');
+      return false;
+    }
+
+    // Get current data from FIRST grouped entry (not form fields, as they might be cleared)
+    String currentLivingPlace = '';
+    String currentVillage = '';
+    String currentP1Name = '';
+    String currentP1Job = '';
+    String currentP2Details = '';
+
+    if (_groupedMois.isNotEmpty) {
+      var firstEntry = _groupedMois[0];
+      currentLivingPlace = firstEntry['living_place'] ?? '';
+      currentVillage = firstEntry['village_name'] ?? '';
+
+      if (firstEntry['persons'] != null) {
+        List<dynamic> personsList = firstEntry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          currentP1Name = personsList[0]['name'] ?? '';
+          currentP1Job = personsList[0]['job'] ?? '';
+        }
+        if (personsList.length > 1) {
+          currentP2Details = personsList[1]['details'] ?? '';
+        }
+      }
+    }
+
+    print('🔍 Comparing auto-filled data:');
+    print('  Living Place: "$currentLivingPlace" vs "${_autoFilledData!['living_place']}"');
+    print('  Village: "$currentVillage" vs "${_autoFilledData!['village_name']}"');
 
     // Check if living place changed
-    String currentLivingPlace = _livingPlaceController.text.trim();
     String originalLivingPlace = _autoFilledData!['living_place'] ?? '';
-    if (currentLivingPlace != originalLivingPlace) return true;
+    if (currentLivingPlace != originalLivingPlace) {
+      print('✅ Living place changed!');
+      return true;
+    }
 
     // Check if village name changed
-    String currentVillage = _villageController.text.trim();
     String originalVillage = _autoFilledData!['village_name'] ?? '';
-    if (currentVillage != originalVillage) return true;
+    if (currentVillage != originalVillage) {
+      print('✅ Village name changed!');
+      return true;
+    }
 
     // Check if person data changed
     if (_autoFilledData!['persons'] != null) {
@@ -735,46 +776,58 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         String origP1Name = origP1['name'] ?? '';
         String origP1Job = origP1['job'] ?? '';
 
-        if (_person1Field1Controller.text.trim() != origP1Name) return true;
-        if (_person1Field2Controller.text.trim() != origP1Job) return true;
+        if (currentP1Name != origP1Name) {
+          print('✅ Person 1 name changed!');
+          return true;
+        }
+        if (currentP1Job != origP1Job) {
+          print('✅ Person 1 job changed!');
+          return true;
+        }
       }
 
       if (originalPersons.length > 1) {
         var origP2 = originalPersons[1];
         String origP2Details = origP2['details'] ?? '';
 
-        if (_person2Controller.text.trim() != origP2Details) return true;
+        if (currentP2Details != origP2Details) {
+          print('✅ Person 2 details changed!');
+          return true;
+        }
       }
     }
 
+    print('❌ No changes detected');
     return false;
   }
 
   Future<void> _updateAllEntriesWithPhoneNumber(String phoneNumber) async {
     try {
-      // Build persons data
+      // ✅ FIX: Get data from FIRST GROUPED ENTRY (not from cleared form controllers)
+      String? livingPlace;
+      String? villageName;
       List<Map<String, dynamic>> personsData = [];
-      if (_person1Field1Controller.text.trim().isNotEmpty ||
-          _person1Field2Controller.text.trim().isNotEmpty) {
-        personsData.add({
-          'name': _person1Field1Controller.text.trim(),
-          'job': _person1Field2Controller.text.trim(),
-        });
+
+      if (_groupedMois.isNotEmpty) {
+        var firstEntry = _groupedMois[0];
+        livingPlace = firstEntry['living_place'];
+        villageName = firstEntry['village_name'];
+
+        // Get persons data from first entry
+        if (firstEntry['persons'] != null) {
+          personsData = List<Map<String, dynamic>>.from(firstEntry['persons']);
+        }
       }
-      if (_person2Controller.text.trim().isNotEmpty) {
-        personsData.add({
-          'details': _person2Controller.text.trim(),
-        });
-      }
+
+      print('🔄 Updating all entries with phone: $phoneNumber');
+      print('📍 Living Place: $livingPlace');
+      print('📍 Village Name: $villageName');
+      print('👥 Persons Data: $personsData');
 
       // Update all entries with this phone number
       final updateData = {
-        'living_place': _livingPlaceController.text.trim().isEmpty
-            ? null
-            : _livingPlaceController.text.trim(),
-        'village_name': _villageController.text.trim().isEmpty
-            ? null
-            : _villageController.text.trim(),
+        'living_place': livingPlace,
+        'village_name': villageName,
         'persons': personsData,
         'updated_at': DateTime.now().toIso8601String(),
       };
@@ -956,26 +1009,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<int> _getNextGroupId() async {
     try {
-      final maxGroupResponse = await _supabase
-          .from('mois')
-          .select('group_id')
-          .eq('event_id', _eventId!)
-          .eq('is_deleted', false)
-          .not('group_id', 'is', null)
-          .order('group_id', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      // ✅ Reserve group ID atomically
+      final response = await _supabase.rpc(
+          'reserve_next_moi_group_id',
+          params: {
+            'event_id_param': _eventId,
+            'operator_id_param': _operatorId
+          }
+      );
 
-      return (maxGroupResponse != null && maxGroupResponse['group_id'] != null)
-          ? (maxGroupResponse['group_id'] as int) + 1
-          : 1;
+      int groupId = response as int;
+      print('✅ Reserved group ID: $groupId for operator: $_operatorId');
+      return groupId;
     } catch (e) {
-      print('Error getting next group ID: $e');
+      print('Error reserving group ID: $e');
       return 1;
     }
   }
 
   Future<void> _handleGroup() async {
+
     // ✅ STEP 1: Check internet connection FIRST
     if (!await NetworkUtils.checkConnectionBeforeRequest(context,
         onRetry: _handleGroup)) {
@@ -1145,9 +1198,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (_groupedMois.isEmpty) {
         _lockedPaymentMethod = _paymentMethod;
       }
-
-      // Get next serial number
-      await _loadNextSerialNo();
 
       // Create temporary entry (not saved to DB yet)
       final tempEntry = {
@@ -1792,6 +1842,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleSaveAndPrint() async {
+
     // ✅ STEP 0: Check if input fields have data (ungrouped data)
     bool hasUngroupedData = _person1Field1Controller.text.trim().isNotEmpty ||
         _person1Field2Controller.text.trim().isNotEmpty ||
@@ -1896,7 +1947,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
 
     // ✅ STEP 1: Check if editing a single entry with no changes
-    if (_isEditMode &&
+    if (
+    _isEditMode &&
         _editingMoiId != null &&
         _currentGroupId == null &&
         _hasNoChanges()) {
@@ -2039,6 +2091,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+
     bool isFinalSave = _groupedMois.isNotEmpty;
 
     if (isFinalSave) {
@@ -2054,6 +2107,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
         );
         return;
+      }
+
+      // ✅ ✅ ✅ NOW CHECK FOR GLOBAL UPDATE (after all validations pass)
+      // Get phone number from the first grouped entry (form might be cleared)
+      String phoneNumber = '';
+      if (_groupedMois.isNotEmpty) {
+        phoneNumber = _groupedMois[0]['phone'] ?? '';
+      }
+
+      print('📞 Phone number for global update check: $phoneNumber');
+      print('📊 Auto-filled data: $_autoFilledData');
+      print('🔄 Has auto-filled data changed: ${_hasAutoFilledDataChanged()}');
+
+      if (phoneNumber.isNotEmpty &&
+          phoneNumber.length == 10 &&
+          _hasAutoFilledDataChanged()) {
+        print('🔔 Auto-filled data has changed! Showing global update dialog...');
+        final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
+        if (shouldUpdateAll) {
+          print('✅ User chose to update all entries');
+          await _updateAllEntriesWithPhoneNumber(phoneNumber);
+          print('✅ Global update completed');
+        } else {
+          print('❌ User chose to update only this entry');
+        }
+        // Reset auto-filled data after handling
+        _autoFilledData = null;
+      } else {
+        print('⏭️ Skipping global update check - conditions not met');
       }
 
       // ✅ NEW: Check if single entry with OTHERS payment method
@@ -2311,6 +2393,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               );
             }
 
+
+
             if (mounted) {
               await _clearFormCompletely();
               _phoneFocusNode.requestFocus();
@@ -2482,16 +2566,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
 
-    String phoneNumber = _phoneController.text.trim();
-    if (phoneNumber.isNotEmpty &&
-        phoneNumber.length == 10 &&
-        _hasAutoFilledDataChanged()) {
-      final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
-      if (shouldUpdateAll) {
-        await _updateAllEntriesWithPhoneNumber(phoneNumber);
-      }
-    }
-
     // Save single entry
     try {
       String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
@@ -2632,7 +2706,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
       }
     }
+
   }
+
 
   Future<void> _generateSplitGroupReceipts() async {
     setState(() => _isLoading = true);
@@ -3108,7 +3184,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _clearFormForNextEntry() async {
-    await _loadNextSerialNo();
 
     _phoneController.clear();
     _villageController.clear();
