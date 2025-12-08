@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/withdrawal_receipt_generator.dart';
 import '../../utils/network_utils.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 
 class CashWithdrawalScreen extends StatefulWidget {
   const CashWithdrawalScreen({super.key});
@@ -550,6 +552,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       });
 
       // Generate withdrawal receipt
+      // Generate withdrawal receipt
       final receiptFile = await WithdrawalReceiptGenerator.generateWithdrawalReceipt(
         context: context,
         operatorName: operatorName,
@@ -563,6 +566,35 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
 
       if (receiptFile != null) {
         print('Withdrawal receipt generated: ${receiptFile.path}');
+
+        // ✅ NEW: Check skip_whatsapp setting and submit to backend
+        try {
+          final eventData = await _supabase
+              .from('events')
+              .select('skip_whatsapp')
+              .eq('id', eventId)
+              .single();
+
+          final skipWhatsapp = eventData['skip_whatsapp'] ?? false;
+          final toWhatsapp = !skipWhatsapp; // Invert: if skip is false, send to whatsapp
+
+          print('📱 skip_whatsapp from DB: $skipWhatsapp');
+          print('📱 to_whatsapp being sent: $toWhatsapp');
+
+          // Submit receipt to backend
+          await _submitReceiptToBackend(
+            pdfFile: receiptFile,
+            eventId: eventId.toString(),
+            phoneNumber: _phoneController.text.trim(),
+            toWhatsapp: toWhatsapp,
+            receiptNo: withdrawalId, // Use the withdrawal ID as receipt number
+          );
+
+          print('✅ Receipt submitted to backend successfully');
+        } catch (e) {
+          print('❌ Error checking WhatsApp setting or submitting receipt: $e');
+          // Don't show error to user - this is a background operation
+        }
       }
 
       // Mark withdrawal as saved and store denominations
@@ -651,6 +683,62 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           customMessage: 'Error sending receipt to WhatsApp',
         );
       }
+    }
+  }
+
+  Future<void> _submitReceiptToBackend({
+    required File pdfFile,
+    required String eventId,
+    required String phoneNumber,
+    required bool toWhatsapp,
+    required dynamic receiptNo, // Changed from 'int' to 'dynamic' to accept both uuid and int
+  }) async {
+    try {
+      print('📱 ========== BACKEND SUBMISSION STARTED ==========');
+      print('📱 Event ID: $eventId');
+      print('📱 Phone Number: $phoneNumber'); // Will be empty string
+      print('📱 PDF Path: ${pdfFile.path}');
+      print('📱 to_whatsapp: $toWhatsapp'); // Will be false
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts_handler'),
+      );
+
+      // Add authorization header
+      final session = _supabase.auth.currentSession;
+      if (session != null) {
+        request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+
+      // Add form fields
+      request.fields['event_id'] = eventId;
+      request.fields['phone_number'] = phoneNumber; // Empty string
+      request.fields['to_whatsapp'] = toWhatsapp.toString(); // 'false'
+      request.fields['receipt_type'] = 'withdrawal';
+      request.fields['receipt_no'] = receiptNo.toString(); // Convert to string
+
+      // Add PDF file
+      var pdfMultipart = await http.MultipartFile.fromPath(
+        'pdf',
+        pdfFile.path,
+        filename: 'withdrawal_receipt_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      request.files.add(pdfMultipart);
+
+      // Send request
+      final streamedResponse = await request.send();
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode == 200) {
+        print('✅ SUCCESS: Receipt submitted to backend');
+      } else {
+        print('❌ FAILED: Receipt submission failed (${streamedResponse.statusCode})');
+        print('Response: $responseBody');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error submitting receipt to backend: $e');
+      print('Stack trace: $stackTrace');
     }
   }
 

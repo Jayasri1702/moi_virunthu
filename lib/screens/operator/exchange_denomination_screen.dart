@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/exchange_receipt_generator.dart'; // Add this import
 import '../../utils/network_utils.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 
 class ExchangeDenominationScreen extends StatefulWidget {
   const ExchangeDenominationScreen({super.key});
@@ -584,17 +586,34 @@ class _ExchangeDenominationScreenState
 
       // Generate exchange receipt with proper operator name
       final receiptFile =
-          await ExchangeReceiptGenerator.generateExchangeReceipt(
-            context: context,
-            operatorName: operatorName,
-            exchangeDate: DateTime.now(),
-            exchangeTime: TimeOfDay.now(),
-            receivedDenominations: receivedDenominations,
-            returnedDenominations: returnedDenominations,
-          );
-
+      await ExchangeReceiptGenerator.generateExchangeReceipt(
+        context: context,
+        operatorName: operatorName,
+        exchangeDate: DateTime.now(),
+        exchangeTime: TimeOfDay.now(),
+        receivedDenominations: receivedDenominations,
+        returnedDenominations: returnedDenominations,
+      );
       if (receiptFile != null) {
         print('Exchange receipt generated: ${receiptFile.path}');
+
+        // ✅ NEW: Submit exchange receipt without WhatsApp (exchanges don't need customer notifications)
+        try {
+          // Submit receipt to backend
+          // Exchange receipts don't send to WhatsApp and don't have customer phone numbers
+          await _submitReceiptToBackend(
+            pdfFile: receiptFile,
+            eventId: eventId.toString(),
+            phoneNumber: '', // Empty phone number for exchanges
+            toWhatsapp: false, // Never send exchanges to WhatsApp
+            receiptNo: exchangeId, // Use the exchange ID as receipt number
+          );
+
+          print('✅ Exchange receipt submitted to backend successfully');
+        } catch (e) {
+          print('❌ Error submitting exchange receipt: $e');
+          // Don't show error to user - this is a background operation
+        }
       }
 
       if (mounted) {
@@ -628,6 +647,62 @@ class _ExchangeDenominationScreenState
           _isSaving = false;
         });
       }
+    }
+  }
+
+  Future<void> _submitReceiptToBackend({
+    required File pdfFile,
+    required String eventId,
+    required String phoneNumber,
+    required bool toWhatsapp,
+    required int receiptNo,
+  }) async {
+    try {
+      print('📱 ========== BACKEND SUBMISSION STARTED (Exchange) ==========');
+      print('📱 Event ID: $eventId');
+      print('📱 Phone Number: $phoneNumber'); // Will be empty string
+      print('📱 PDF Path: ${pdfFile.path}');
+      print('📱 to_whatsapp: $toWhatsapp'); // Will be false
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts_handler'),
+      );
+
+      // Add authorization header
+      final session = _supabase.auth.currentSession;
+      if (session != null) {
+        request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+      }
+
+      // Add form fields
+      request.fields['event_id'] = eventId;
+      request.fields['phone_number'] = phoneNumber; // Empty string
+      request.fields['to_whatsapp'] = toWhatsapp.toString(); // 'false'
+      request.fields['receipt_type'] = 'exchange';
+      request.fields['receipt_no'] = receiptNo.toString();
+
+      // Add PDF file
+      var pdfMultipart = await http.MultipartFile.fromPath(
+        'pdf',
+        pdfFile.path,
+        filename: 'exchange_receipt_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      request.files.add(pdfMultipart);
+
+      // Send request
+      final streamedResponse = await request.send();
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode == 200) {
+        print('✅ SUCCESS: Exchange receipt submitted to backend');
+      } else {
+        print('❌ FAILED: Exchange receipt submission failed (${streamedResponse.statusCode})');
+        print('Response: $responseBody');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error submitting exchange receipt to backend: $e');
+      print('Stack trace: $stackTrace');
     }
   }
 

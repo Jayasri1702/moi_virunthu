@@ -431,27 +431,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (_eventId == null) return;
 
     try {
-      // ✅ CRITICAL: Reserve serial number atomically by inserting a placeholder
       final response = await _supabase.rpc(
-          'reserve_next_moi_serial',
-          params: {
-            'event_id_param': _eventId,
-            'operator_id_param': _operatorId
-          }
+        'get_next_serial_no',
+        params: {'p_event_id': _eventId},
       );
 
       setState(() {
         _serialNo = response as int;
-        // Store the reserved serial for this session
-        _isSerialReserved = true;
       });
-
-      print('✅ Reserved serial number: $_serialNo for operator: $_operatorId');
     } catch (e) {
-      print('Error reserving serial number: $e');
+      print('Error getting serial no: $e');
       setState(() {
         _serialNo = 1;
-        _isSerialReserved = false;
       });
     }
   }
@@ -1008,21 +999,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<int> _getNextGroupId() async {
+    if (_eventId == null) return 1;
+
     try {
-      // ✅ Reserve group ID atomically
       final response = await _supabase.rpc(
-          'reserve_next_moi_group_id',
-          params: {
-            'event_id_param': _eventId,
-            'operator_id_param': _operatorId
-          }
+        'get_next_group_id',
+        params: {'p_event_id': _eventId},
       );
 
-      int groupId = response as int;
-      print('✅ Reserved group ID: $groupId for operator: $_operatorId');
-      return groupId;
+      return response as int;
     } catch (e) {
-      print('Error reserving group ID: $e');
+      print('Error getting group ID: $e');
       return 1;
     }
   }
