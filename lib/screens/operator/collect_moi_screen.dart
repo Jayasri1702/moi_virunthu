@@ -1109,11 +1109,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // ✅ CASE 2: Adding NEW entry to MOI Details (in memory only - no RPC yet)
-      int groupId;
+      int? groupId;  // ✅ Changed to nullable
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
       } else {
-        groupId = await _getPreviewGroupId();  // Preview only
+        groupId = null;  // ✅ Let RPC generate it on first save
       }
 
       // Lock payment method after first entry
@@ -1121,6 +1121,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         _lockedPaymentMethod = _paymentMethod;
       }
 
+      // ✅ Create temporary entry (NOT SAVED TO DB)
       // ✅ Create temporary entry (NOT SAVED TO DB)
       final tempEntry = {
         'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
@@ -1133,12 +1134,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         'payment_method': _paymentMethod,
         'is_uncle': _isUncle,
         'persons': _buildPersonsData(),
-        'group_id': groupId,  // Preview group_id
-        'is_temp': true,  // ✅ Mark as temporary
+        'group_id': groupId,  // ✅ Will be null for first entry, then use actual from RPC
+        'is_temp': true,
       };
 
       setState(() {
-        _currentGroupId = groupId;
+        _currentGroupId = groupId;  // ✅ Will be null initially
         _groupedMois.add(tempEntry);
       });
 
@@ -2176,6 +2177,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               personsData = List<Map<String, dynamic>>.from(entry['persons']);
             }
 
+            int? groupIdToPass;
+            if (i == 0 && entry['is_temp'] == true) {
+              // First temp entry - let RPC generate
+              groupIdToPass = null;
+            } else {
+              // Use the group_id from previous entry or current group
+              groupIdToPass = _currentGroupId;
+            }
+
             final response = await _supabase.rpc('insert_moi_safe', params: {
               'p_event_id': _eventId,
               'p_operator_id': _operatorId,
@@ -2187,15 +2197,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'p_phone': entry['phone'],
               'p_is_uncle': entry['is_uncle'] ?? false,
               'p_notes': entry['notes'],
-              'p_group_id': _currentGroupId,  // ✅ USE SAME GROUP_ID
+              'p_group_id': groupIdToPass,  // ✅ null for first, actual for rest
             });
 
             String newMoiId = response['id'];
             int actualSerialNo = response['serial_no'];
             int actualGroupId = response['group_id'];
 
-            savedMoiIds.add(newMoiId);
-            tempIdToSerialMap[entry['id']] = actualSerialNo;
+// ✅ IMPORTANT: Update _currentGroupId after first save
+            if (i == 0) {
+              _currentGroupId = actualGroupId;  // ✅ Set the real group_id
+            }
 
             // ✅ Update the entry in _groupedMois with real data
             setState(() {
@@ -2387,8 +2399,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 },
               );
             }
-
-
 
             if (mounted) {
               await _clearFormCompletely();
