@@ -151,7 +151,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // ✅ NEW: Get preview serial number (for UI display only, not guaranteed)
   // ✅ REPLACE the entire function with this:
   Future<void> _loadPreviewSerialNo() async {
-    if (_eventId == null || _operatorId == null) return;
+    if (_eventId == null) return;
 
     try {
       // Get highest serial_no for THIS OPERATOR only (for preview)
@@ -159,7 +159,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .from('mois')
           .select('serial_no')
           .eq('event_id', _eventId!)
-          .eq('operator_id', _operatorId!)  // ✅ Filter by operator
           .eq('is_deleted', false)
           .order('serial_no', ascending: false)
           .limit(1)

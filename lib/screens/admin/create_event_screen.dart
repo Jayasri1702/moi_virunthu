@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:printing/printing.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
 import '../../services/receipt_generator.dart';
 import '../../services/auth_service.dart';
@@ -1395,7 +1390,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   isDense: true,
                                 ),
                                 keyboardType: TextInputType.phone,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(10),
+                                ],
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return 'Contact number is required';
