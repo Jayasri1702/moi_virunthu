@@ -5,6 +5,7 @@ import '../../utils/network_utils.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
+import '../../services/thermal_printer_service.dart';
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -2426,20 +2427,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             );
 
             if (file != null && mounted) {
-              print('🎯 Single receipt generated, attempting WhatsApp send...');
-              String? phoneNumber = entry['phone'];
-              if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: entry['serial_no']);
-              }
+              // ✅ Print directly to thermal printer instead of preview
+              final printerService = ThermalPrinterService();
+              await printerService.connectAndPrint(context, file);
 
-              Navigator.pushNamed(
-                context,
-                '/operator/moi-receipt-preview',
-                arguments: {
-                  'receipt_type': 'single',
-                  'receipt_file': file,
-                },
-              );
+              // Still send to WhatsApp if needed
+              String? phoneNumber = _phoneController.text.trim();
+              if (phoneNumber.isNotEmpty) {
+                await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: _serialNo);
+              }
             }
 
             if (mounted) {
@@ -2720,21 +2716,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (file != null && mounted) {
-          // ✅ FIXED: Send to the entry's phone number
-          print('🎯 Single receipt generated, attempting WhatsApp send...');
+          // ✅ Print directly to thermal printer instead of preview
+          final printerService = ThermalPrinterService();
+          await printerService.connectAndPrint(context, file);
+
+          // Still send to WhatsApp if needed
           String? phoneNumber = _phoneController.text.trim();
           if (phoneNumber.isNotEmpty) {
             await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: _serialNo);
           }
-
-          Navigator.pushNamed(
-            context,
-            '/operator/moi-receipt-preview',
-            arguments: {
-              'receipt_type': 'single',
-              'receipt_file': file,
-            },
-          );
         }
       }
 
@@ -2795,29 +2785,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
 
       if (files.isNotEmpty && mounted) {
-        print('🎯 Split receipts generated, attempting WhatsApp send...');
+        final printerService = ThermalPrinterService();
 
-        // Send each receipt to its corresponding phone number
-        for (int i = 0; i < files.length && i < entriesWithDenoms.length; i++) {
-          String? phone = entriesWithDenoms[i]['phone'];
-          if (phone != null && phone.isNotEmpty) {
-            await _sendReceiptToWhatsApp(
-                files[i],  // ✅ Send the i-th receipt
-                'mois',
-                phoneNumbers: [phone],  // ✅ Send to only this phone number
-                receiptNo: entriesWithDenoms[i]['serial_no']
-            );
+        // Print each receipt
+        for (int i = 0; i < files.length; i++) {
+          await printerService.connectAndPrint(context, files[i]);
+
+          // Send to WhatsApp
+          if (i < entriesWithDenoms.length) {
+            String? phone = entriesWithDenoms[i]['phone'];
+            if (phone != null && phone.isNotEmpty) {
+              await _sendReceiptToWhatsApp(
+                  files[i],
+                  'mois',
+                  phoneNumbers: [phone],
+                  receiptNo: entriesWithDenoms[i]['serial_no']
+              );
+            }
           }
         }
-
-        Navigator.pushNamed(
-          context,
-          '/operator/moi-receipt-preview',
-          arguments: {
-            'receipt_type': 'split',
-            'receipt_files': files,
-          },
-        );
       }else {
         throw Exception('Failed to generate receipts');
       }
@@ -2906,8 +2892,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       );
 
       if (file != null && mounted) {
-        // ✅ FIXED: Send group receipt to all group members' phone numbers
-        print('🎯 Group receipt generated, attempting WhatsApp send...');
+        // ✅ Print to thermal printer
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrint(context, file);
+
+        // Send to all WhatsApp numbers
         List<String> phoneNumbers = [];
         for (var entry in _groupedMois) {
           String? phone = entry['phone'];
@@ -2919,15 +2908,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (phoneNumbers.isNotEmpty) {
           await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers, receiptNo: _currentGroupId);
         }
-
-        Navigator.pushNamed(
-          context,
-          '/operator/moi-receipt-preview',
-          arguments: {
-            'receipt_type': 'group',
-            'receipt_file': file,
-          },
-        );
       } else {
         throw Exception('Failed to generate group receipt');
       }
@@ -3659,14 +3639,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: [phoneNumber], receiptNo: _serialNo);
         }
 
-        Navigator.pushNamed(
-          context,
-          '/operator/moi-receipt-preview',
-          arguments: {
-            'receipt_type': 'single',
-            'receipt_file': file,
-          },
-        );
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrint(context, file);
+
       }else {
         throw Exception('Failed to generate receipt');
       }
@@ -4025,8 +4000,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (file != null && mounted) {
-          // ✅ FIXED: Send group receipt to all members
-          print('🎯 Group receipt generated, attempting WhatsApp send...');
+          // ✅ Print to thermal printer
+          final printerService = ThermalPrinterService();
+          await printerService.connectAndPrint(context, file);
+
+          // Send to all WhatsApp numbers
           List<String> phoneNumbers = [];
           for (var entry in _groupedMois) {
             String? phone = entry['phone'];
@@ -4038,15 +4016,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (phoneNumbers.isNotEmpty) {
             await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers, receiptNo: _currentGroupId);
           }
-
-          Navigator.pushNamed(
-            context,
-            '/operator/moi-receipt-preview',
-            arguments: {
-              'receipt_type': 'group',
-              'receipt_file': file,
-            },
-          );
         }else {
           throw Exception('Failed to generate group receipt');
         }
@@ -4082,29 +4051,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
 
         if (files.isNotEmpty && mounted) {
-          print('🎯 Split receipts generated, attempting WhatsApp send...');
+          final printerService = ThermalPrinterService();
 
-          // Send each receipt to its corresponding phone number
-          for (int i = 0; i < files.length && i < entriesWithDenoms.length; i++) {
-            String? phone = entriesWithDenoms[i]['phone'];
-            if (phone != null && phone.isNotEmpty) {
-              await _sendReceiptToWhatsApp(
-                  files[i],  // ✅ Send the i-th receipt
-                  'mois',
-                  phoneNumbers: [phone],  // ✅ Send to only this phone number
-                  receiptNo: entriesWithDenoms[i]['serial_no']
-              );
+          // Print each receipt
+          for (int i = 0; i < files.length; i++) {
+            await printerService.connectAndPrint(context, files[i]);
+
+            // Send to WhatsApp
+            if (i < entriesWithDenoms.length) {
+              String? phone = entriesWithDenoms[i]['phone'];
+              if (phone != null && phone.isNotEmpty) {
+                await _sendReceiptToWhatsApp(
+                    files[i],
+                    'mois',
+                    phoneNumbers: [phone],
+                    receiptNo: entriesWithDenoms[i]['serial_no']
+                );
+              }
             }
           }
-
-          Navigator.pushNamed(
-            context,
-            '/operator/moi-receipt-preview',
-            arguments: {
-              'receipt_type': 'split',
-              'receipt_files': files,
-            },
-          );
         }
         else {
           throw Exception('Failed to generate receipts');

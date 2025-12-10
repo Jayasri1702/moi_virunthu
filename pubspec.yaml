@@ -14,7 +14,7 @@ dependencies:
   # Backend + utilities
   supabase_flutter: ^2.5.6
   argon2: ^1.0.1
-  intl: ^0.19.0      # FIXED ✔
+  intl: ^0.19.0
   http: ^1.2.2
   shared_preferences: ^2.2.3
   flutter_dotenv: ^5.1.0
@@ -27,32 +27,32 @@ dependencies:
   connectivity_plus: ^6.0.0
   file_picker: ^8.0.0
 
-
-
-
   # PDF-related libs
-  printing: ^5.14.2        # used for printing & convertHtml
-  pdf: ^3.11.3             # only needed for PdfPageFormat (convertHtml)
+  printing: ^5.14.2
+  pdf: ^3.11.3
   syncfusion_flutter_pdf: ^31.2.15
-
 
   # Sharing + files
   share_plus: ^12.0.0
 
-  # Image drawing (used for decoding asset PNG)
+  # Image drawing
   image: any
 
-  # WebView (for HTML preview)
+  # WebView
   flutter_inappwebview: ^6.1.5
 
-  # Permissions for WebView
+  # Permissions
   permission_handler: ^12.0.1
 
-  # PDF Viewer for preview screen
+  # PDF Viewer
   flutter_pdfview: ^1.4.3
 
   # Icons
   cupertino_icons: ^1.0.8
+
+  # ✅ NEW: Thermal Printer Support
+  blue_thermal_printer: ^1.2.1
+  esc_pos_utils_plus: ^2.0.1
 
 dev_dependencies:
   flutter_test:
@@ -78,7 +78,6 @@ flutter:
         - asset: assets/fonts/NotoSerifTamil-Regular.ttf
         - asset: assets/fonts/NotoSerifTamil-Bold.ttf
           weight: 700
-
 
     - family: Altroned
       fonts:
