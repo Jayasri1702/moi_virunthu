@@ -2282,7 +2282,56 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // ✅ Check if group has only one entry
         String? receiptType;
         if (_groupedMois.length == 1) {
-          // Directly generate single receipt for one entry with current form denominations
+          // ✅ CRITICAL FIX: Save the temp entry FIRST before generating receipt
+          var entry = _groupedMois[0];
+
+          // Only save if it's a temp entry (not already in DB)
+          if (entry['is_temp'] == true) {
+            List<Map<String, dynamic>>? personsData;
+            if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
+              personsData = List<Map<String, dynamic>>.from(entry['persons']);
+            }
+
+            final response = await _supabase.rpc('insert_moi_safe', params: {
+              'p_event_id': _eventId,
+              'p_operator_id': _operatorId,
+              'p_amount': entry['amount'],
+              'p_payment_method': _paymentMethod,
+              'p_persons': personsData,
+              'p_village_name': entry['village_name'],
+              'p_living_place': entry['living_place'],
+              'p_phone': entry['phone'],
+              'p_is_uncle': entry['is_uncle'] ?? false,
+              'p_notes': entry['notes'],
+              'p_group_id': null,
+            });
+
+            String newMoiId = response['id'];
+            int actualSerialNo = response['serial_no'];
+            int actualGroupId = response['group_id'];
+
+            // Update the entry with real DB data
+            setState(() {
+              _groupedMois[0] = {
+                ...entry,
+                'id': newMoiId,
+                'serial_no': actualSerialNo,
+                'group_id': actualGroupId,
+                'is_temp': false,
+              };
+              _currentGroupId = actualGroupId;
+            });
+
+            entry = _groupedMois[0]; // Update reference
+            print('✅ Single temp entry saved: $newMoiId with serial: $actualSerialNo');
+          }
+
+          // ✅ Save denominations if CASH and not skipping
+          if (_paymentMethod == 'CASH' && !_skipDenomination) {
+            await _saveDenominationsForGroup(entry['id']);
+          }
+
+          // Now generate receipt
           setState(() => _isLoading = true);
 
           try {
@@ -2329,8 +2378,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               );
             }
 
-            var entry = _groupedMois[0];
-
             // Parse persons data
             String? person1Name;
             String? person1Job;
@@ -2357,10 +2404,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               entryAmount = int.tryParse(amountValue.toString()) ?? 0;
             }
 
-            // ✅ STEP 2: Update _handleSaveAndPrint method
-// Find the section where single entry receipt is generated (around line 1200)
-// Replace this part:
-
             final file = await MoiReceiptGenerator.generateSingleMoiReceipt(
               context: context,
               serialNo: entry['serial_no'],
@@ -2383,7 +2426,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             );
 
             if (file != null && mounted) {
-              // ✅ FIXED: Send to the entry's phone number
               print('🎯 Single receipt generated, attempting WhatsApp send...');
               String? phoneNumber = entry['phone'];
               if (phoneNumber != null && phoneNumber.isNotEmpty) {
