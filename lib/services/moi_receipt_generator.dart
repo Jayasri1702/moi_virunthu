@@ -75,6 +75,399 @@ class MoiReceiptGenerator {
     }
   }
 
+  // Add this method to MoiReceiptGenerator class (after generateSingleMoiReceipt)
+
+  static Future<Map<String, dynamic>?> generateSingleMoiReceiptWithImage({
+    required BuildContext context,
+    required int serialNo,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    String? villageName,
+    String? livingPlace,
+    String? person1Name,
+    String? person1Job,
+    String? person2Details,
+    String? phone,
+    required num amount,
+    required String paymentMethod,
+    Map<int, int>? denominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+    bool isUncle = false,
+  }) async {
+    try {
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
+      // Use different template based on payment method
+      final htmlContent = paymentMethod == 'CASH'
+          ? _generateSingleMoiHtml(
+        serialNo: serialNo,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: villageName,
+        livingPlace: livingPlace,
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: phone,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        denominations: denominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+        isUncle: isUncle,
+      )
+          : _generateSingleMoiHtmlOthers(
+        serialNo: serialNo,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: villageName,
+        livingPlace: livingPlace,
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: phone,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+        isUncle: isUncle,
+      );
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_single_${serialNo}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? generatedFile;
+      Uint8List? screenshotBytes;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              // ✅ Save screenshot bytes for thermal printer
+              screenshotBytes = screenshot;
+
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              generatedFile = file;
+              pdfGenerated = true;
+              print('Single receipt generated: PDF + Image');
+            }
+          } catch (e) {
+            print('Error generating single receipt: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) {
+          final file = File(filePath);
+          if (await file.exists() && await file.length() > 0) {
+            generatedFile = file;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      // ✅ Return both PDF file and screenshot bytes
+      if (generatedFile != null && screenshotBytes != null) {
+        return {
+          'pdf': generatedFile,
+          'imageBytes': screenshotBytes,
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error in generateSingleMoiReceiptWithImage: $e');
+      return null;
+    }
+  }
+
+// ✅ Also add method for split group receipts with images
+  static Future<List<Map<String, dynamic>>> generateSplitGroupReceiptsWithImages({
+    required BuildContext context,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    required List<Map<String, dynamic>> groupEntries,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) async {
+    List<Map<String, dynamic>> generatedReceipts = [];
+
+    for (var entry in groupEntries) {
+      String? person1Name;
+      String? person1Job;
+      String? person2Details;
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          person1Name = personsList[0]['name'];
+          person1Job = personsList[0]['job'];
+        }
+        if (personsList.length > 1) {
+          person2Details = personsList[1]['details'];
+        }
+      }
+
+      Map<int, int>? denominations;
+      if (entry['payment_method'] == 'CASH' && entry['denominations'] != null) {
+        denominations = {
+          500: entry['denominations']['denom_500'] ?? 0,
+          200: entry['denominations']['denom_200'] ?? 0,
+          100: entry['denominations']['denom_100'] ?? 0,
+          50: entry['denominations']['denom_50'] ?? 0,
+          20: entry['denominations']['denom_20'] ?? 0,
+          10: entry['denominations']['denom_10'] ?? 0,
+          5: entry['denominations']['denom_5'] ?? 0,
+          1: entry['denominations']['denom_1'] ?? 0,
+        };
+      }
+
+      final result = await generateSingleMoiReceiptWithImage(
+        context: context,
+        serialNo: entry['serial_no'],
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: entry['village_name'],
+        livingPlace: entry['living_place'],
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: entry['phone'],
+        amount: entry['amount'],
+        paymentMethod: entry['payment_method'],
+        denominations: denominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        isUncle: entry['is_uncle'] ?? false,
+      );
+
+      if (result != null) {
+        generatedReceipts.add(result);
+      }
+    }
+
+    return generatedReceipts;
+  }
+
+  // ✅ NEW: Generate group receipt with image for thermal printing
+  static Future<Map<String, dynamic>?> generateGroupMoiReceiptWithImage({
+    required BuildContext context,
+    required int groupId,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    required List<Map<String, dynamic>> groupEntries,
+    required num totalAmount,
+    Map<int, int>? totalDenominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) async {
+    try {
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
+      bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
+
+      final htmlContent = hasOthersPayment
+          ? _generateGroupMoiHtmlOthers(
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        groupEntries: groupEntries,
+        totalAmount: totalAmount,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+      )
+          : _generateGroupMoiHtml(
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        groupEntries: groupEntries,
+        totalAmount: totalAmount,
+        totalDenominations: totalDenominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+      );
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_group_${groupId}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? generatedFile;
+      Uint8List? screenshotBytes;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              // ✅ Save screenshot bytes for thermal printer
+              screenshotBytes = screenshot;
+
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              generatedFile = file;
+              pdfGenerated = true;
+              print('Group receipt generated: PDF + Image');
+            }
+          } catch (e) {
+            print('Error generating group receipt: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) {
+          final file = File(filePath);
+          if (await file.exists() && await file.length() > 0) {
+            generatedFile = file;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      // ✅ Return both PDF file and screenshot bytes
+      if (generatedFile != null && screenshotBytes != null) {
+        return {
+          'pdf': generatedFile,
+          'imageBytes': screenshotBytes,
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error in generateGroupMoiReceiptWithImage: $e');
+      return null;
+    }
+  }
+
   // Generate single MOI receipt
   static Future<File?> generateSingleMoiReceipt({
     required BuildContext context,

@@ -1,9 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data'; // ✅ ADD THIS IMPORT
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image/image.dart' as img;
 
 class ThermalPrinterService {
   static final ThermalPrinterService _instance = ThermalPrinterService._internal();
@@ -13,7 +14,6 @@ class ThermalPrinterService {
   final BlueThermalPrinter _bluetooth = BlueThermalPrinter.instance;
   BluetoothDevice? _connectedDevice;
 
-  // ✅ Remember last used printer
   static const String _lastPrinterKey = 'last_printer_address';
 
   /// Check if printer is connected
@@ -99,7 +99,145 @@ class ThermalPrinterService {
     }
   }
 
-  /// Print PDF file directly to thermal printer
+  /// ✅ OPTIMIZED: Convert image to ESC/POS bitmap format for ATPOS AT-301
+  List<int> _convertImageToEscPos(Uint8List imageBytes) {
+    try {
+      print('🔄 Starting image conversion...');
+
+      // Decode image
+      img.Image? image = img.decodeImage(imageBytes);
+      if (image == null) {
+        print('❌ Failed to decode image');
+        return [];
+      }
+
+      print('📏 Original size: ${image.width}x${image.height}');
+
+      // ATPOS AT-301 optimal width: 576 pixels (80mm at 203 DPI)
+      int targetWidth = 576;
+      image = img.copyResize(image, width: targetWidth);
+
+      print('📏 Resized to: ${image.width}x${image.height}');
+
+      // Convert to grayscale
+      image = img.grayscale(image);
+
+      print('🎨 Converted to grayscale');
+
+      // Apply contrast enhancement for better print quality
+      image = img.adjustColor(image, contrast: 1.2, brightness: 1.1);
+
+      print('✨ Enhanced contrast and brightness');
+
+      List<int> escPosData = [];
+
+      int width = image.width;
+      int height = image.height;
+
+      print('🖨️ Generating ESC/POS commands...');
+
+      // Initialize printer
+      escPosData.addAll([0x1B, 0x40]); // ESC @ - Initialize printer
+
+      // Set line spacing to 0 for better image quality
+      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 n - Set line spacing to n
+
+      // Print in chunks of 24 pixels height (3 bytes per column)
+      int chunkCount = 0;
+      for (int y = 0; y < height; y += 24) {
+        chunkCount++;
+
+        // ESC * 33 command (24-dot double-density mode - best quality)
+        escPosData.addAll([0x1B, 0x2A, 33]);
+
+        // Width in little-endian format
+        escPosData.add(width & 0xFF);
+        escPosData.add((width >> 8) & 0xFF);
+
+        // Process image data
+        for (int x = 0; x < width; x++) {
+          for (int k = 0; k < 3; k++) {
+            int slice = 0;
+            for (int b = 0; b < 8; b++) {
+              int py = y + (k * 8) + b;
+              if (py < height) {
+                // Get pixel value
+                img.Pixel pixel = image.getPixel(x, py);
+                int gray = pixel.r.toInt();
+
+                // Improved threshold with dithering effect
+                // Darker threshold (140 instead of 128) for better contrast
+                if (gray < 140) {
+                  slice |= (1 << (7 - b));
+                }
+              }
+            }
+            escPosData.add(slice);
+          }
+        }
+
+        // Line feed
+        escPosData.add(0x0A);
+
+        if (chunkCount % 10 == 0) {
+          print('📊 Processed $chunkCount chunks...');
+        }
+      }
+
+      print('✅ Generated ${escPosData.length} bytes in $chunkCount chunks');
+
+      // Reset line spacing to default
+      escPosData.addAll([0x1B, 0x32]); // ESC 2 - Default line spacing
+
+      return escPosData;
+    } catch (e) {
+      print('❌ Error converting image: $e');
+      print('Stack trace: ${StackTrace.current}');
+      return [];
+    }
+  }
+
+  /// ✅ Print image bytes with proper conversion
+  Future<bool> printImageBytes(Uint8List imageBytes) async {
+    try {
+      bool connected = await isConnected();
+      if (!connected) {
+        print('❌ Printer not connected');
+        return false;
+      }
+
+      print('🖨️ Converting image for thermal printer...');
+
+      // Convert image to ESC/POS format
+      List<int> escPosData = _convertImageToEscPos(imageBytes);
+
+      if (escPosData.isEmpty) {
+        print('❌ Failed to convert image');
+        return false;
+      }
+
+      print('🖨️ Sending ${escPosData.length} bytes to printer');
+
+      // Send to printer
+      await _bluetooth.writeBytes(Uint8List.fromList(escPosData));
+
+      // Add spacing
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
+
+      // Cut paper
+      await _bluetooth.paperCut();
+
+      print('✅ Print job sent');
+      return true;
+    } catch (e) {
+      print('❌ Print error: $e');
+      return false;
+    }
+  }
+
+  /// Print PDF file (for WhatsApp - keep this for backward compatibility)
   Future<bool> printPdfFile(File pdfFile) async {
     try {
       bool connected = await isConnected();
@@ -108,16 +246,14 @@ class ThermalPrinterService {
         return false;
       }
 
-      print('🖨️ Printing PDF: ${pdfFile.path}');
+      print('🖨️ Printing PDF (trying image path method)');
 
-      // Read PDF bytes
-      List<int> bytes = await pdfFile.readAsBytes();
+      // Try using printImage with file path
+      await _bluetooth.printImage(pdfFile.path);
 
-      // ✅ FIXED: Convert List<int> to Uint8List
-      Uint8List uint8bytes = Uint8List.fromList(bytes);
-
-      // Send to printer
-      await _bluetooth.writeBytes(uint8bytes);
+      // Add spacing
+      _bluetooth.printNewLine();
+      _bluetooth.printNewLine();
 
       // Cut paper
       _bluetooth.paperCut();
@@ -197,28 +333,31 @@ class ThermalPrinterService {
     return null;
   }
 
-  /// Connect and print in one go
-  Future<bool> connectAndPrint(BuildContext context, File pdfFile) async {
+  /// Connect and print image bytes
+  Future<bool> connectAndPrintImage(BuildContext context, Uint8List imageBytes) async {
     try {
       // Check if already connected
       bool connected = await isConnected();
 
       if (!connected) {
-        // ✅ Try to auto-connect to last used printer
+        // Try to auto-connect to last used printer
         String? lastPrinterAddress = await _getLastPrinterAddress();
         BluetoothDevice? device;
 
         if (lastPrinterAddress != null) {
           List<BluetoothDevice> devices = await getPairedDevices();
-          device = devices.firstWhere(
-                (d) => d.address == lastPrinterAddress,
-            orElse: () => devices.first,
-          );
+          try {
+            device = devices.firstWhere(
+                  (d) => d.address == lastPrinterAddress,
+            );
 
-          // Try auto-connect
-          bool autoConnected = await connect(device);
-          if (!autoConnected) {
-            device = null; // Reset if auto-connect failed
+            // Try auto-connect
+            bool autoConnected = await connect(device);
+            if (!autoConnected) {
+              device = null;
+            }
+          } catch (e) {
+            device = null;
           }
         }
 
@@ -227,7 +366,7 @@ class ThermalPrinterService {
           device = await showPrinterSelectionDialog(context);
 
           if (device == null) {
-            return false; // User cancelled
+            return false;
           }
 
           // Connect to selected printer
@@ -245,7 +384,100 @@ class ThermalPrinterService {
           }
         }
 
-        // ✅ Save last used printer
+        // Save last used printer
+        await _saveLastPrinterAddress(device.address ?? '');
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Connected to ${device.name}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+
+      // Print the image
+      bool printSuccess = await printImageBytes(imageBytes);
+
+      if (printSuccess && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Receipt sent to printer'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      return printSuccess;
+    } catch (e) {
+      print('❌ Error in connectAndPrintImage: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Print failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
+  /// Connect and print PDF (keep for backward compatibility)
+  Future<bool> connectAndPrint(BuildContext context, File pdfFile) async {
+    try {
+      // Check if already connected
+      bool connected = await isConnected();
+
+      if (!connected) {
+        // Try to auto-connect to last used printer
+        String? lastPrinterAddress = await _getLastPrinterAddress();
+        BluetoothDevice? device;
+
+        if (lastPrinterAddress != null) {
+          List<BluetoothDevice> devices = await getPairedDevices();
+          try {
+            device = devices.firstWhere(
+                  (d) => d.address == lastPrinterAddress,
+            );
+
+            // Try auto-connect
+            bool autoConnected = await connect(device);
+            if (!autoConnected) {
+              device = null;
+            }
+          } catch (e) {
+            device = null;
+          }
+        }
+
+        // If no auto-connect, show selection dialog
+        if (device == null) {
+          device = await showPrinterSelectionDialog(context);
+
+          if (device == null) {
+            return false;
+          }
+
+          // Connect to selected printer
+          bool connectSuccess = await connect(device);
+          if (!connectSuccess) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('❌ Failed to connect to ${device.name}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+            return false;
+          }
+        }
+
+        // Save last used printer
         await _saveLastPrinterAddress(device.address ?? '');
 
         if (context.mounted) {
@@ -287,7 +519,7 @@ class ThermalPrinterService {
     }
   }
 
-  // ✅ Save last used printer address
+  /// Save last used printer address
   Future<void> _saveLastPrinterAddress(String address) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -297,7 +529,7 @@ class ThermalPrinterService {
     }
   }
 
-  // ✅ Get last used printer address
+  /// Get last used printer address
   Future<String?> _getLastPrinterAddress() async {
     try {
       final prefs = await SharedPreferences.getInstance();
