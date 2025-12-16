@@ -2160,7 +2160,90 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           }
         }
       }
+      for (var entry in _groupedMois) {
+        // Skip if this is an existing entry being edited
+        if (entry['is_temp'] != true) continue;
 
+        // Build check data for this entry
+        String villageName = entry['village_name'] ?? '';
+        int amount = 0;
+        var amountValue = entry['amount'];
+        if (amountValue is int) {
+          amount = amountValue;
+        } else if (amountValue is double) {
+          amount = amountValue.toInt();
+        } else if (amountValue != null) {
+          amount = int.tryParse(amountValue.toString()) ?? 0;
+        }
+
+        String person1Name = '';
+        String person1Job = '';
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+          if (personsList.isNotEmpty) {
+            person1Name = personsList[0]['name'] ?? '';
+            person1Job = personsList[0]['job'] ?? '';
+          }
+        }
+
+        // Query database for matching entries
+        final response = await _supabase
+            .from('mois')
+            .select('*')
+            .eq('event_id', _eventId!)
+            .eq('is_deleted', false);
+
+        List<Map<String, dynamic>> matchingEntries = [];
+
+        for (var dbEntry in response) {
+          // Check village name (case-insensitive)
+          String entryVillage = dbEntry['village_name'] ?? '';
+          if (entryVillage.toLowerCase() != villageName.toLowerCase()) continue;
+
+          // Check amount
+          int entryAmount = 0;
+          var entryAmountValue = dbEntry['amount'];
+          if (entryAmountValue is int) {
+            entryAmount = entryAmountValue;
+          } else if (entryAmountValue is double) {
+            entryAmount = entryAmountValue.toInt();
+          } else if (entryAmountValue is num) {
+            entryAmount = entryAmountValue.toInt();
+          }
+          if (entryAmount != amount) continue;
+
+          // Check person 1 name and job
+          if (dbEntry['persons'] != null) {
+            List<dynamic> personsList = dbEntry['persons'] as List;
+            if (personsList.isNotEmpty) {
+              var p1 = personsList[0];
+              String entryP1Name = p1['name'] ?? '';
+              String entryP1Job = p1['job'] ?? '';
+
+              if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) continue;
+
+              if (person1Job.isNotEmpty &&
+                  entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
+            }
+          }
+
+          // All fields match
+          matchingEntries.add(dbEntry);
+        }
+
+        // If duplicates found, show warning dialog
+        if (matchingEntries.isNotEmpty) {
+          final shouldProceed = await _showDuplicateWarningDialog(
+            matchingEntries,
+            entry,
+          );
+
+          if (!shouldProceed) {
+            // User chose to cancel - stop the save operation
+            return;
+          }
+        }
+      }
       try {
         List<String> savedMoiIds = [];
         Map<String, int> tempIdToSerialMap = {};
@@ -2652,7 +2735,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return;
       }
     }
+    final existingEntries = await _checkExistingEntry();
 
+    if (existingEntries.isNotEmpty) {
+      final shouldProceed = await _showExistingEntryDialog(existingEntries);
+
+      if (!shouldProceed) {
+        // User chose not to proceed - exit
+        return;
+      }
+    }
     // Save single entry
     try {
       String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
@@ -2868,6 +2960,162 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<bool> _showDuplicateWarningDialog(
+      List<Map<String, dynamic>> existingEntries,
+      Map<String, dynamic> currentEntry) async {
+
+    String serialNumbers = existingEntries.map((e) => 'O${e['serial_no']}').join(', ');
+
+    // Build current entry details
+    String currentEntryDetails = '';
+    currentEntryDetails += '📍 Village: ${currentEntry['village_name'] ?? 'N/A'}\n';
+
+    if (currentEntry['persons'] != null) {
+      List<dynamic> personsList = currentEntry['persons'] as List;
+      if (personsList.isNotEmpty) {
+        currentEntryDetails += '\n👤 Person 1:\n';
+        currentEntryDetails += '  Name: ${personsList[0]['name'] ?? 'N/A'}\n';
+        currentEntryDetails += '  Job: ${personsList[0]['job'] ?? 'N/A'}\n';
+      }
+    }
+
+    currentEntryDetails += '\n💰 Amount: ₹${currentEntry['amount']}\n';
+
+    // Build existing entry details
+    String existingEntryDetails = '';
+    if (existingEntries.isNotEmpty) {
+      var entry = existingEntries[0];
+
+      existingEntryDetails += '📍 Village: ${entry['village_name'] ?? 'N/A'}\n';
+      existingEntryDetails += '🏙️ Living Place: ${entry['living_place'] ?? 'N/A'}\n';
+      existingEntryDetails += '📞 Phone: ${entry['phone'] ?? 'N/A'}\n';
+      existingEntryDetails += '💰 Amount: ₹${entry['amount']}\n';
+      existingEntryDetails += '💳 Payment: ${entry['payment_method'] ?? 'N/A'}\n';
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var p1 = personsList[0];
+          existingEntryDetails += '\n👤 Person 1:\n';
+          existingEntryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
+          existingEntryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
+        }
+      }
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          '⚠️ Duplicate Entry Found!',
+          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                existingEntries.length == 1
+                    ? 'This entry already exists in Serial No: $serialNumbers'
+                    : 'This entry already exists in ${existingEntries.length} records: $serialNumbers',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red[50],
+                  border: Border.all(color: Colors.red, width: 2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Matching Fields:',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: Colors.red),
+                    ),
+                    SizedBox(height: 4),
+                    Text('• Village Name', style: TextStyle(fontSize: 11)),
+                    Text('• Amount', style: TextStyle(fontSize: 11)),
+                    Text('• Person 1 Name', style: TextStyle(fontSize: 11)),
+                    Text('• Person 1 Job', style: TextStyle(fontSize: 11)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Current Entry:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                currentEntryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Existing Entry in Database:',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    decoration: TextDecoration.underline),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                existingEntryDetails,
+                style: const TextStyle(fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Do you want to save this entry anyway?',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.red[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'CANCEL',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.green[100],
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            child: const Text(
+              'SAVE ANYWAY',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return result ?? false;
   }
 
 // ✅ NEW: Generate consolidated group receipt

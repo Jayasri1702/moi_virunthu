@@ -765,9 +765,10 @@ class MoiReceiptGenerator {
     body {
       font-family: 'Noto Sans Tamil', sans-serif;
       width: 302px;
-      padding: 10px;
+      padding: 0;
       text-align: center;
       background: white;
+       font-weight: 700;
     }
     
     .header {
@@ -781,15 +782,17 @@ class MoiReceiptGenerator {
     .outer-box {
   border: 3px solid black;
   padding: 0;
+  box-sizing: border-box;
+  background: white;
 }
 
 .uncle-indicator {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 6px 0 4px 0;
-  text-align: center;
-  color: #000;
-}
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 6px 0 4px 0;
+    text-align: center;
+    color: #000;
+  }
     
 .logo-header {
   display: flex;
@@ -812,32 +815,38 @@ class MoiReceiptGenerator {
 .company-name {
 font-family: 'Altroned', sans-serif;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 700;
   color: #000;
   margin-bottom: 2px;
 }
 
 .tamil-heading {
   font-size: 14px;
+  font-weight: 700;
   color: #000;
   margin-bottom: 3px;
 }
 
 .company-phone {
   font-size: 11px;
+  font-weight: 700;
   color: #000;
 }
     
     .divider {
   border-top: 2px solid black;
   margin: 0;  // Changed from margin: 10px 0;
+  box-sizing: border-box;  // ✅ ADD THIS
+  height: 0;  // ✅ ADD THIS
 }
     
     .date-time-row {
   display: flex;
   justify-content: space-between;
   font-size: 14px;
+  font-weight: 700;
   border-bottom: 2px solid black;
+  box-sizing: border-box;
 }
 
 .left-section {
@@ -845,80 +854,92 @@ font-family: 'Altroned', sans-serif;
   padding: 8px;
   flex: 1;
   border-right: 2px solid black;
+   box-sizing: border-box;
+   font-weight: 700;
 }
 
 .right-section {
   text-align: right;
   padding: 8px;
   flex: 1;
-  font-weight: bold;
+  font-weight: 700;
 }
     
-    .serial-no {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 8px 0;
-      text-align: center;
-    }
+   .serial-no {
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+    text-align: center;
+  }
     
     .person-details {
-      font-size: 16px;
-      margin: 6px 0;
-      white-space: pre-line;
-      line-height: 1.4;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 6px 0;
+    white-space: pre-line;
+    line-height: 1.4;
+  }
     
     .village-info {
-      font-size: 14px;
-      margin: 4px 0;
-    }
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
-    .phone {
-      font-size: 14px;
-      margin: 6px 0;
-    }
+   .phone {
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 6px 0;
+  }
     
-    .amount-label {
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 10px;
-    }
+   .amount-label {
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin-top: 10px;
+  }
     
-    .amount {
-      font-size: 24px;
-      font-weight: bold;
-      margin: 8px 0;
-    }
+  .amount {
+    font-size: 24px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+  }
     
-    .table-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin: 0;  // Changed from margin: 10px 0;
-  padding: 8px 0;  // Added padding instead
-}
+   .table-title {
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 0;
+    padding: 8px 0;
+  }
     
-    table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0;  // Changed from margin: 10px 0;
-}
+   table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    font-weight: 700;  /* ✅ NEW: Make table text bold */
+  }
 
-
+ td {
+    font-weight: 700;  /* ✅ NEW: Make all cells bold */
+  }
     
-    .footer {
-  margin-top: 0;  // Changed from margin-top: 15px;
-  padding-top: 8px;  // Use padding instead
-  font-size: 14px;
-}
+     .footer {
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
-    .thanks {
-      margin: 6px 0;
-    }
+     .thanks {
+    margin: 6px 0;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
     .with-love {
-      font-size: 12px;
-      margin: 4px 0;
-    }
+    font-size: 12px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
+  
   </style>
 </head>
 <body>
@@ -1037,9 +1058,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     body {
       font-family: 'Noto Sans Tamil', sans-serif;
       width: 302px;
-      padding: 10px;
+      padding: 0;
       text-align: center;
       background: white;
+       font-weight: 700;
     }
     
     .header {
@@ -1053,6 +1075,8 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     .outer-box {
   border: 3px solid black;
   padding: 0;
+  box-sizing: border-box;
+  background: white;
 }
     
 .logo-header {
@@ -1076,93 +1100,100 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 .company-name {
 font-family: 'Altroned', sans-serif;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 700;
   color: #000;
   margin-bottom: 2px;
 }
 
 .tamil-heading {
   font-size: 14px;
+  font-weight: 700;
   color: #000;
   margin-bottom: 3px;
 }
 
 .company-phone {
   font-size: 11px;
+  font-weight: 700;
   color: #000;
 }
     
     .divider {
   border-top: 2px solid black;
   margin: 0;  // Changed from margin: 10px 0;
+  box-sizing: border-box;  // ✅ ADD THIS
+  height: 0;  // ✅ ADD THIS
 }
     
     .date-time-row {
   display: flex;
   justify-content: space-between;
   font-size: 14px;
+  font-weight: 700;
   border-bottom: 2px solid black;
+  box-sizing: border-box;
 }
 .uncle-indicator {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 6px 0 4px 0;
-  text-align: center;
-  color: #000;
-}
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 6px 0 4px 0;
+    text-align: center;
+    color: #000;
+  }
 .left-section {
   text-align: left;
   padding: 8px;
   flex: 1;
   border-right: 2px solid black;
+   box-sizing: border-box;
+   font-weight: 700;
 }
 
 .right-section {
   text-align: right;
   padding: 8px;
   flex: 1;
-  font-weight: bold;
+  font-weight: 700;
 }
     
     .serial-no {
-      font-size: 18px;
-      font-weight: bold;
-      margin: 12px 0;
-      text-align: center;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+    text-align: center;
+  }
     
     .person-details {
-      font-size: 16px;
-      margin: 8px 0;
-      white-space: pre-line;
-      line-height: 1.5;
-      font-weight: 500;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 6px 0;
+    white-space: pre-line;
+    line-height: 1.4;
+  }
     
     .village-info {
-      font-size: 15px;
-      margin: 6px 0;
-      font-weight: 500;
-    }
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
-    .phone {
-      font-size: 16px;
-      margin: 8px 0;
-      font-weight: bold;
-    }
+   .phone {
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 6px 0;
+  }
     
     .amount-label {
-      font-size: 16px;
-      font-weight: bold;
-      margin-top: 12px;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin-top: 10px;
+  }
     
     .amount {
-      font-size: 28px;
-      font-weight: bold;
-      margin: 10px 0;
-      color: #000;
-    }
+    font-size: 24px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+  }
     
     .payment-method-box {
   border: 2px solid black;
@@ -1174,25 +1205,27 @@ font-family: 'Altroned', sans-serif;
 }
 
     
-    .footer {
-  margin-top: 0;  // Changed from margin-top: 15px;
-  padding-top: 8px;  // Use padding instead
-  font-size: 14px;
-}
+     .footer {
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
-    .thanks {
-      margin: 8px 0;
-      font-weight: bold;
-    }
+   .thanks {
+    margin: 6px 0;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
-    .with-love {
-      font-size: 14px;
-      margin: 6px 0;
-    }
+   .with-love {
+    font-size: 12px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
     .footer-person {
       font-size: 16px;
-      font-weight: bold;
+      font-weight: 700;
       margin: 6px 0;
     }
   </style>
@@ -1631,9 +1664,10 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     body {
       font-family: 'Noto Sans Tamil', sans-serif;
       width: 302px;
-      padding: 10px;
+      padding: 0;
       text-align: center;
       background: white;
+       font-weight: 700;
     }
     
     .header {
@@ -1647,15 +1681,17 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     .outer-box {
   border: 3px solid black;
   padding: 0;
+  box-sizing: border-box;
+  background: white;
 }
 
 .uncle-indicator {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 6px 0 4px 0;
-  text-align: center;
-  color: #000;
-}
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 6px 0 4px 0;
+    text-align: center;
+    color: #000;
+  }
     
 .logo-header {
   display: flex;
@@ -1678,32 +1714,38 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 .company-name {
 font-family: 'Altroned', sans-serif;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 700;
   color: #000;
   margin-bottom: 2px;
 }
 
 .tamil-heading {
   font-size: 14px;
+  font-weight: 700;
   color: #000;
   margin-bottom: 3px;
 }
 
 .company-phone {
   font-size: 11px;
+  font-weight: 700;
   color: #000;
 }
     
     .divider {
   border-top: 2px solid black;
   margin: 0;  // Changed from margin: 10px 0;
+  box-sizing: border-box;  // ✅ ADD THIS
+  height: 0;  // ✅ ADD THIS
 }
     
     .date-time-row {
   display: flex;
   justify-content: space-between;
   font-size: 14px;
+  font-weight: 700;
   border-bottom: 2px solid black;
+  box-sizing: border-box;
 }
 
 .left-section {
@@ -1711,20 +1753,23 @@ font-family: 'Altroned', sans-serif;
   padding: 8px;
   flex: 1;
   border-right: 2px solid black;
+   box-sizing: border-box;
+   font-weight: 700;
 }
 
 .right-section {
   text-align: right;
   padding: 8px;
   flex: 1;
-  font-weight: bold;
+  font-weight: 700;
 }
     
     .serial-no {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 8px 0;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+    text-align: center;
+  }
     
     .person-name {
       font-size: 16px;
@@ -1733,15 +1778,16 @@ font-family: 'Altroned', sans-serif;
     }
     
     .village-info {
-      font-size: 14px;
-      margin: 4px 0;
-    }
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
     .amount-label {
-      font-size: 14px;
-      font-weight: bold;
-      margin-top: 6px;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin-top: 10px;
+  }
     
     .entry-amount {
       font-size: 20px;
@@ -1768,38 +1814,45 @@ font-family: 'Altroned', sans-serif;
       margin: 8px 0;
     }
     
-    .table-title {
-  font-size: 16px;
-  font-weight: bold;
-  margin: 0;  // Changed from margin: 10px 0;
-  padding: 8px 0;  // Added padding instead
-}
+   .table-title {
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 0;
+    padding: 8px 0;
+  }
     
     table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0;  // Changed from margin: 10px 0;
-}
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    font-weight: 700;  /* ✅ NEW: Make table text bold */
+  }
 
+ td {
+    font-weight: 700;  /* ✅ NEW: Make all cells bold */
+  }
     
     .footer {
-  margin-top: 0;  // Changed from margin-top: 15px;
-  padding-top: 8px;  // Use padding instead
-  font-size: 14px;
-}
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
     .thanks {
-      margin: 6px 0;
-    }
+    margin: 6px 0;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
-    .with-love {
-      font-size: 12px;
-      margin: 4px 0;
-    }
+   .with-love {
+    font-size: 12px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
     .footer-name {
       font-size: 16px;
-      font-weight: bold;
+       font-weight: 700;
       margin: 4px 0;
     }
   </style>
@@ -1947,9 +2000,10 @@ font-family: 'Altroned', sans-serif;
     body {
       font-family: 'Noto Sans Tamil', sans-serif;
       width: 302px;
-      padding: 10px;
+      padding: 0;
       text-align: center;
       background: white;
+       font-weight: 700;
     }
     
     .header {
@@ -1963,6 +2017,8 @@ font-family: 'Altroned', sans-serif;
     .outer-box {
   border: 3px solid black;
   padding: 0;
+  box-sizing: border-box;
+  background: white;
 }
 
 .logo-header {
@@ -1983,42 +2039,48 @@ font-family: 'Altroned', sans-serif;
   text-align: center;
 }
 .uncle-indicator {
-  font-size: 14px;
-  font-weight: bold;
-  margin: 6px 0 4px 0;
-  text-align: center;
-  color: #000;
-}
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 6px 0 4px 0;
+    text-align: center;
+    color: #000;
+  }
 
 .company-name {
 font-family: 'Altroned', sans-serif;
   font-size: 18px;
-  font-weight: bold;
+  font-weight: 700;
   color: #000;
   margin-bottom: 2px;
 }
 
 .tamil-heading {
   font-size: 14px;
+  font-weight: 700;
   color: #000;
   margin-bottom: 3px;
 }
 
 .company-phone {
   font-size: 11px;
+  font-weight: 700;
   color: #000;
 }
     
    .divider {
   border-top: 2px solid black;
   margin: 0;  // Changed from margin: 10px 0;
+  box-sizing: border-box;  // ✅ ADD THIS
+  height: 0;  // ✅ ADD THIS
 }
     
     .date-time-row {
   display: flex;
   justify-content: space-between;
   font-size: 14px;
+  font-weight: 700;
   border-bottom: 2px solid black;
+  box-sizing: border-box;
 }
 
 .left-section {
@@ -2026,13 +2088,15 @@ font-family: 'Altroned', sans-serif;
   padding: 8px;
   flex: 1;
   border-right: 2px solid black;
+   box-sizing: border-box;
+   font-weight: 700;
 }
 
 .right-section {
   text-align: right;
   padding: 8px;
   flex: 1;
-  font-weight: bold;
+  font-weight: 700;
 }
     
     .entry-block {
@@ -2041,10 +2105,11 @@ font-family: 'Altroned', sans-serif;
 }
     
     .serial-no {
-      font-size: 16px;
-      font-weight: bold;
-      margin: 8px 0;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin: 8px 0;
+    text-align: center;
+  }
     
     .person-name {
       font-size: 16px;
@@ -2053,15 +2118,16 @@ font-family: 'Altroned', sans-serif;
     }
     
     .village-info {
-      font-size: 14px;
-      margin: 4px 0;
-    }
+    font-size: 14px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
     .amount-label {
-      font-size: 14px;
-      font-weight: bold;
-      margin-top: 6px;
-    }
+    font-size: 16px;
+    font-weight: 700;  /* ✅ CHANGED: Keep bold */
+    margin-top: 10px;
+  }
     
     .entry-amount {
       font-size: 20px;
@@ -2099,23 +2165,26 @@ font-family: 'Altroned', sans-serif;
 
     
     .footer {
-  margin-top: 0;  // Changed from margin-top: 15px;
-  padding-top: 8px;  // Use padding instead
-  font-size: 14px;
-}
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
     .thanks {
-      margin: 6px 0;
-    }
+    margin: 6px 0;
+    font-weight: 700;  /* ✅ NEW */
+  }
     
     .with-love {
-      font-size: 12px;
-      margin: 4px 0;
-    }
+    font-size: 12px;
+    font-weight: 700;  /* ✅ CHANGED: Make bold */
+    margin: 4px 0;
+  }
     
     .footer-name {
       font-size: 16px;
-      font-weight: bold;
+      font-weight: 700;
       margin: 4px 0;
     }
   </style>
