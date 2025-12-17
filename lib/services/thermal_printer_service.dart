@@ -118,8 +118,19 @@ class ThermalPrinterService {
 
       // ✅ OPTIMIZATION 1: Reduce target width for faster processing
       // 384 pixels = 48mm width (still good quality for 80mm paper)
-      int targetWidth = 384;  // Changed from 576
-      image = img.copyResize(image, width: targetWidth);
+      // ATPOS AT-301 optimal width: 576 pixels (80mm at 203 DPI)
+      int targetWidth = 576;
+
+// ✅ FIX: Maintain aspect ratio when resizing
+      double aspectRatio = image.height / image.width;
+      int targetHeight = (targetWidth * aspectRatio).round();
+
+      image = img.copyResize(
+        image,
+        width: targetWidth,
+        height: targetHeight,  // ✅ ADD THIS
+        interpolation: img.Interpolation.linear,
+      );
 
       print('📏 Resized to: ${image.width}x${image.height}');
 

@@ -1044,7 +1044,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return count;
   }
 
-
   Future<void> _handleGroup() async {
     // Connection check
     if (!await NetworkUtils.checkConnectionBeforeRequest(context,
@@ -1052,7 +1051,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
-    // Validation checks...
+    // Validation checks
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
 
@@ -1079,8 +1078,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     try {
       // ✅ CASE 1: Editing an existing entry in MOI Details
-      if (_isEditMode && _editingMoiId != null && _currentGroupId != null) {
-        // Update logic remains the same...
+      if (_isEditMode && _editingMoiId != null) {
         int index = _groupedMois.indexWhere((moi) => moi['id'] == _editingMoiId);
         if (index != -1) {
           setState(() {
@@ -1105,16 +1103,24 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           await _clearFormForNextEntry();
           _phoneFocusNode.requestFocus();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Entry updated in MOI Details'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 1),
+            ),
+          );
         }
-        return;
+        return;  // ✅ EXIT HERE - Don't continue to CASE 2
       }
 
       // ✅ CASE 2: Adding NEW entry to MOI Details (in memory only - no RPC yet)
-      int? groupId;  // ✅ Changed to nullable
+      int? groupId;
       if (_currentGroupId != null) {
         groupId = _currentGroupId!;
       } else {
-        groupId = null;  // ✅ Let RPC generate it on first save
+        groupId = null;
       }
 
       // Lock payment method after first entry
@@ -1122,7 +1128,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         _lockedPaymentMethod = _paymentMethod;
       }
 
-      // ✅ Create temporary entry (NOT SAVED TO DB)
       // ✅ Create temporary entry (NOT SAVED TO DB)
       final tempEntry = {
         'id': 'temp_${DateTime.now().millisecondsSinceEpoch}',
@@ -5675,33 +5680,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // ✅ FIX: Only show "Generate Single Receipt" if NOT skipping print
-        if (!_skipPrint && _currentGroupId == null && (_isEditMode || _hasFormData())) ...[
-          Container(
-            width: double.infinity,
-            height: 42,
-            decoration: BoxDecoration(
-                color: Colors.teal,
-                border: Border.all(color: Colors.black, width: 2)),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: _handleGenerateSingleReceipt,
-                child: const Center(
-                  child: Text(
-                    'Generate Single Receipt',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-        ],
 
         if (_currentGroupId != null) ...[
           Container(
