@@ -268,7 +268,10 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
 
         await _supabase
             .from('mois')
-            .update({'village_name': newName})
+            .update({
+          'village_name': newName,
+          'skip_history': true  // Tells the trigger to skip history
+        })
             .eq('event_id', widget.eventId)
             .eq('village_name', oldName)
             .eq('is_deleted', false);

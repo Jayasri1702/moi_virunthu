@@ -762,14 +762,18 @@ class MoiReceiptGenerator {
       box-sizing: border-box;
     }
     
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 0;
-      text-align: center;
-      background: white;
-       font-weight: 700;
-    }
+   body {
+  font-family: 'Noto Sans Tamil', sans-serif;
+  width: 302px;
+  padding: 0;
+  text-align: center;
+  background: white;
+  font-weight: 700;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
     
     .header {
       background-color: #1976D2;
@@ -779,11 +783,13 @@ class MoiReceiptGenerator {
       padding: 8px;
       margin-bottom: 10px;
     }
-    .outer-box {
+   .outer-box {
   border: 3px solid black;
   padding: 0;
+  margin: 0;
   box-sizing: border-box;
   background: white;
+  position: relative;
 }
 
 .uncle-indicator {
@@ -835,9 +841,12 @@ font-family: 'Altroned', sans-serif;
     
     .divider {
   border-top: 2px solid black;
-  margin: 0;  // Changed from margin: 10px 0;
-  box-sizing: border-box;  // ✅ ADD THIS
-  height: 0;  // ✅ ADD THIS
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 0;
+  width: 100%;
+  overflow: hidden;
 }
     
     .date-time-row {
@@ -1056,13 +1065,17 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
     }
     
     body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 0;
-      text-align: center;
-      background: white;
-       font-weight: 700;
-    }
+  font-family: 'Noto Sans Tamil', sans-serif;
+  width: 302px;
+  padding: 0;
+  text-align: center;
+  background: white;
+  font-weight: 700;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
     
     .header {
       background-color: #1976D2;
@@ -1072,11 +1085,13 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
       padding: 10px;
       margin-bottom: 10px;
     }
-    .outer-box {
+   .outer-box {
   border: 3px solid black;
   padding: 0;
+  margin: 0;
   box-sizing: border-box;
   background: white;
+  position: relative;
 }
     
 .logo-header {
@@ -1118,11 +1133,14 @@ font-family: 'Altroned', sans-serif;
   color: #000;
 }
     
-    .divider {
+   .divider {
   border-top: 2px solid black;
-  margin: 0;  // Changed from margin: 10px 0;
-  box-sizing: border-box;  // ✅ ADD THIS
-  height: 0;  // ✅ ADD THIS
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 0;
+  width: 100%;
+  overflow: hidden;
 }
     
     .date-time-row {
@@ -1661,14 +1679,18 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
       box-sizing: border-box;
     }
     
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 0;
-      text-align: center;
-      background: white;
-       font-weight: 700;
-    }
+   body {
+  font-family: 'Noto Sans Tamil', sans-serif;
+  width: 302px;
+  padding: 0;
+  text-align: center;
+  background: white;
+  font-weight: 700;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
     
     .header {
       background-color: #1976D2;
@@ -1678,11 +1700,13 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
       padding: 8px;
       margin-bottom: 10px;
     }
-    .outer-box {
+   .outer-box {
   border: 3px solid black;
   padding: 0;
+  margin: 0;
   box-sizing: border-box;
   background: white;
+  position: relative;
 }
 
 .uncle-indicator {
@@ -1732,11 +1756,14 @@ font-family: 'Altroned', sans-serif;
   color: #000;
 }
     
-    .divider {
+   .divider {
   border-top: 2px solid black;
-  margin: 0;  // Changed from margin: 10px 0;
-  box-sizing: border-box;  // ✅ ADD THIS
-  height: 0;  // ✅ ADD THIS
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 0;
+  width: 100%;
+  overflow: hidden;
 }
     
     .date-time-row {
@@ -1997,14 +2024,18 @@ font-family: 'Altroned', sans-serif;
       box-sizing: border-box;
     }
     
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 0;
-      text-align: center;
-      background: white;
-       font-weight: 700;
-    }
+   body {
+  font-family: 'Noto Sans Tamil', sans-serif;
+  width: 302px;
+  padding: 0;
+  text-align: center;
+  background: white;
+  font-weight: 700;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
     
     .header {
       background-color: #1976D2;
@@ -2014,11 +2045,14 @@ font-family: 'Altroned', sans-serif;
       padding: 10px;
       margin-bottom: 10px;
     }
-    .outer-box {
+   
+  .outer-box {
   border: 3px solid black;
   padding: 0;
+  margin: 0;
   box-sizing: border-box;
   background: white;
+  position: relative;
 }
 
 .logo-header {
@@ -2067,11 +2101,14 @@ font-family: 'Altroned', sans-serif;
   color: #000;
 }
     
-   .divider {
+  .divider {
   border-top: 2px solid black;
-  margin: 0;  // Changed from margin: 10px 0;
-  box-sizing: border-box;  // ✅ ADD THIS
-  height: 0;  // ✅ ADD THIS
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 0;
+  width: 100%;
+  overflow: hidden;
 }
     
     .date-time-row {

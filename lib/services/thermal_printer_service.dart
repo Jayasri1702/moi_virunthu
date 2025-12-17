@@ -99,13 +99,12 @@ class ThermalPrinterService {
     }
   }
 
-  // ✅ CHANGES TO thermal_printer_service.dart
-
-// Replace _convertImageToEscPos method with this OPTIMIZED version:
+  // ✅ FIXED _convertImageToEscPos method
+// Replace the existing method in thermal_printer_service.dart with this:
 
   List<int> _convertImageToEscPos(Uint8List imageBytes) {
     try {
-      print('🔄 Starting OPTIMIZED image conversion...');
+      print('🔄 Starting image conversion...');
 
       // Decode image
       img.Image? image = img.decodeImage(imageBytes);
@@ -116,31 +115,32 @@ class ThermalPrinterService {
 
       print('📏 Original size: ${image.width}x${image.height}');
 
-      // ✅ OPTIMIZATION 1: Reduce target width for faster processing
-      // 384 pixels = 48mm width (still good quality for 80mm paper)
-      // ATPOS AT-301 optimal width: 576 pixels (80mm at 203 DPI)
+      // ✅ CRITICAL: Use 576 pixels for correct length
       int targetWidth = 576;
-
-// ✅ FIX: Maintain aspect ratio when resizing
-      double aspectRatio = image.height / image.width;
-      int targetHeight = (targetWidth * aspectRatio).round();
-
-      image = img.copyResize(
-        image,
-        width: targetWidth,
-        height: targetHeight,  // ✅ ADD THIS
-        interpolation: img.Interpolation.linear,
-      );
+      // ✅ FIX 1: Use cubic interpolation for smoother resizing
+      image = img.copyResize(image, width: targetWidth, interpolation: img.Interpolation.cubic);
 
       print('📏 Resized to: ${image.width}x${image.height}');
+
+      // ✅ FIX 2: Trim any extra white space/borders
+      image = img.trim(image, mode: img.TrimMode.transparent);
 
       // Convert to grayscale
       image = img.grayscale(image);
 
-      // ✅ OPTIMIZATION 2: Simpler enhancement (faster processing)
-      image = img.adjustColor(image, contrast: 1.3, brightness: 1.1);
+      print('🎨 Converted to grayscale');
 
-      print('✨ Enhanced contrast');
+      // ✅ FIX 3: Better contrast for clearer text (1.4 instead of 1.2)
+      image = img.adjustColor(image, contrast: 1.4, brightness: 1.05);
+
+      // ✅ FIX 4: Sharpen the image for clearer text
+      image = img.convolution(image, filter: [
+        0, -1, 0,
+        -1, 5, -1,
+        0, -1, 0
+      ]);
+
+      print('✨ Enhanced contrast, brightness, and sharpness');
 
       List<int> escPosData = [];
 
@@ -150,51 +150,61 @@ class ThermalPrinterService {
       print('🖨️ Generating ESC/POS commands...');
 
       // Initialize printer
-      escPosData.addAll([0x1B, 0x40]); // ESC @ - Initialize
+      escPosData.addAll([0x1B, 0x40]); // ESC @ - Initialize printer
 
-      // ✅ OPTIMIZATION 3: Use faster printing mode (single-density)
-      // Mode 0 = 8-dot single density (faster than 24-dot)
-      escPosData.addAll([0x1B, 0x33, 0x00]); // Line spacing = 0
+      // Set line spacing to 0 for better image quality
+      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 n - Set line spacing to n
 
-      // ✅ OPTIMIZATION 4: Process in 8-pixel chunks (3x faster than 24-pixel)
-      for (int y = 0; y < height; y += 8) {
-        // ESC * 0 command (8-dot single-density - FASTEST mode)
-        escPosData.addAll([0x1B, 0x2A, 0]);
+      // ✅ CRITICAL: Print in chunks of 24 pixels height
+      int chunkCount = 0;
+      for (int y = 0; y < height; y += 24) {
+        chunkCount++;
 
-        // Width in little-endian
+        // ESC * 33 command (24-dot double-density mode - best quality)
+        escPosData.addAll([0x1B, 0x2A, 33]);
+
+        // Width in little-endian format
         escPosData.add(width & 0xFF);
         escPosData.add((width >> 8) & 0xFF);
 
-        // Process pixels
+        // Process image data
         for (int x = 0; x < width; x++) {
-          int slice = 0;
-          for (int b = 0; b < 8; b++) {
-            int py = y + b;
-            if (py < height) {
-              img.Pixel pixel = image.getPixel(x, py);
-              int gray = pixel.r.toInt();
+          for (int k = 0; k < 3; k++) {
+            int slice = 0;
+            for (int b = 0; b < 8; b++) {
+              int py = y + (k * 8) + b;
+              if (py < height) {
+                // Get pixel value
+                img.Pixel pixel = image.getPixel(x, py);
+                int gray = pixel.r.toInt();
 
-              // Threshold for black/white (higher = darker print)
-              if (gray < 180) {
-                slice |= (1 << (7 - b));
+                // ✅ FIX 5: Use 128 threshold for balanced printing (not 140)
+                if (gray < 128) {
+                  slice |= (1 << (7 - b));
+                }
               }
             }
+            escPosData.add(slice);
           }
-          escPosData.add(slice);
         }
 
         // Line feed
         escPosData.add(0x0A);
+
+        if (chunkCount % 10 == 0) {
+          print('📊 Processed $chunkCount chunks...');
+        }
       }
 
-      print('✅ Generated ${escPosData.length} bytes (optimized)');
+      print('✅ Generated ${escPosData.length} bytes in $chunkCount chunks');
 
-      // Reset line spacing
-      escPosData.addAll([0x1B, 0x32]);
+      // Reset line spacing to default
+      escPosData.addAll([0x1B, 0x32]); // ESC 2 - Default line spacing
 
       return escPosData;
     } catch (e) {
       print('❌ Error converting image: $e');
+      print('Stack trace: ${StackTrace.current}');
       return [];
     }
   }
@@ -220,8 +230,8 @@ class ThermalPrinterService {
 
       print('🖨️ Sending ${escPosData.length} bytes to printer');
 
-      // ✅ INCREASED: Send 2KB chunks (faster than 1KB)
-      const int chunkSize = 2048;
+      // ✅ ULTRA OPTIMIZED: Send larger chunks WITHOUT delays for maximum speed
+      const int chunkSize = 4096; // 4KB chunks (doubled from 2KB)
       int totalChunks = (escPosData.length / chunkSize).ceil();
 
       print('📦 Sending in $totalChunks chunks of ${chunkSize}B...');
@@ -235,13 +245,11 @@ class ThermalPrinterService {
             Uint8List.fromList(escPosData.sublist(i, end))
         );
 
-        // ✅ REDUCED: Smaller delay (20ms instead of 50ms)
-        if (end < escPosData.length) {
-          await Future.delayed(const Duration(milliseconds: 20));
-        }
+        // ✅ CRITICAL: NO DELAY between chunks for maximum speed
+        // The printer buffer can handle it
 
-        // Progress logging
-        if ((i / chunkSize).floor() % 10 == 0 || end >= escPosData.length) {
+        // Progress logging (less frequent)
+        if ((i / chunkSize).floor() % 20 == 0 || end >= escPosData.length) {
           int currentChunk = (i / chunkSize).floor() + 1;
           print('📤 Sent $currentChunk/$totalChunks');
         }

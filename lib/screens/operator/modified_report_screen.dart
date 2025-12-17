@@ -816,15 +816,24 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
             physics: const NeverScrollableScrollPhysics(),
             padding: const EdgeInsets.all(12),
 
-            // ✅ EXCLUDE LAST CHANGE
-            itemCount: history.length > 1 ? history.length - 1 : 0,
+            // ✅ FIX: Show ALL changes including the most recent one
+            itemCount: history.length,
 
             itemBuilder: (context, index) {
               final oldSnapshot = history[index];
-              final newSnapshot = history[index + 1];
+
+              // ✅ FIX: For the last item, compare with currentValues
+              final newSnapshot = (index < history.length - 1)
+                  ? history[index + 1]
+                  : currentValues;
 
               final changes = _getChangedFields(oldSnapshot, newSnapshot);
               final changeNumber = index + 1;
+
+              // ✅ Skip if no changes detected
+              if (changes.isEmpty) {
+                return const SizedBox.shrink();
+              }
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),

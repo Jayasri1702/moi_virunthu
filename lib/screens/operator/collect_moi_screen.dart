@@ -1675,6 +1675,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       String moiId;
 
       if (forceUpdate && _editingMoiId != null) {
+
+        // ✅ NEW: Fetch current data before updating (for old_data)
+        final currentData = await _supabase
+            .from('mois')
+            .select('*')
+            .eq('id', _editingMoiId!)
+            .single();
+
         // ✅ EDIT MODE: Use traditional UPDATE (no RPC)
         final moiData = {
           'event_id': _eventId,
@@ -1698,7 +1706,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               : _notesController.text.trim(),
           'group_id': groupId,
           'updated_at': DateTime.now().toIso8601String(),
-          'old_data': _originalData,
+          // ✅ FIX: Always preserve old_data on update
+          'old_data': currentData,  // Store the FULL current state
         };
 
         response = await _supabase
@@ -2313,6 +2322,28 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           } else {
             // ✅ EXISTING ENTRY (already in DB)
             if (entry['is_modified'] == true) {
+              final currentData = await _supabase
+                  .from('mois')
+                  .select('*')
+                  .eq('id', entry['id'])
+                  .single();
+
+              // ✅ Store only editable fields in old_data
+              final oldDataToStore = {
+                'village_name': currentData['village_name'],
+                'living_place': currentData['living_place'],
+                'amount': currentData['amount'],
+                'persons': currentData['persons'],
+                'phone': currentData['phone'],
+                'notes': currentData['notes'],
+                'payment_method': currentData['payment_method'],
+                'is_uncle': currentData['is_uncle'],
+                'updated_at': currentData['updated_at'],
+                'old_data': currentData['old_data'],  // Preserve the chain
+              };
+
+
+
               final moiData = {
                 'event_id': _eventId,
                 'operator_id': _operatorId,
@@ -2327,7 +2358,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 'notes': entry['notes'],
                 'group_id': _currentGroupId,
                 'updated_at': DateTime.now().toIso8601String(),
-                'old_data': entry,
+                'old_data': oldDataToStore,
               };
 
               await _supabase
