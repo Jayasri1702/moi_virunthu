@@ -1474,6 +1474,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                   isDense: true,
                                 ),
+                                maxLines: 3,  // Added - allows multiple lines like Event For and Remark
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
                                     return 'Title is required';

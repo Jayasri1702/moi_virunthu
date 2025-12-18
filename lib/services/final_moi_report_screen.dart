@@ -543,6 +543,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           TextAlign align = TextAlign.left,
           FontWeight fontWeight = FontWeight.normal,
           Color color = Colors.black,
+          double maxWidth = 0, // ADD THIS PARAMETER
         }) {
       final textStyle = TextStyle(
         color: color,
@@ -556,9 +557,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         text: textSpan,
         textAlign: align,
         textDirection: TextDirection.ltr,
+        maxLines: null, // CHANGE from no limit to allow wrapping
       );
 
-      textPainter.layout(minWidth: 0, maxWidth: width.toDouble() - 40);
+      // UPDATE this line:
+      final effectiveMaxWidth = maxWidth > 0 ? maxWidth : width.toDouble() - 40;
+      textPainter.layout(minWidth: 0, maxWidth: effectiveMaxWidth);
 
       double xPos = x;
       if (align == TextAlign.center) {
@@ -570,23 +574,13 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       textPainter.paint(canvas, Offset(xPos, y));
     }
 
-    final titleFontSize = (width / 8).clamp(55.0, 110.0);  // Reduced from 65-130 to 55-110
-    final textFontSize = (width / 10).clamp(45.0, 95.0);   // Reduced from 55-110 to 45-95
+    final titleFontSize = (width / 8).clamp(55.0, 110.0);
+    final textFontSize = (width / 10).clamp(45.0, 95.0);
     final lineHeight = (height * 0.10).clamp(90.0, 170.0);
 
-    final eventType = fields['Event Type'] ?? 'MOI EVENT';
-    drawText(
-      eventType,
-      0,
-      height * 0.24,
-      titleFontSize,
-      align: TextAlign.center,
-      fontWeight: FontWeight.bold,
-      color: const Color(0xFF8B0000),
-    );
+    double cursorY = height * 0.24;
 
-    double cursorY = height * 0.32;
-
+// 1. TITLE (FIRST)
     final title = fields['Title'] ?? '';
     if (title.isNotEmpty) {
       drawText(
@@ -597,10 +591,26 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF0B4206),
+        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
       );
       cursorY += lineHeight * 2.7;
     }
 
+// 2. EVENT TYPE (SECOND)
+    final eventType = fields['Event Type'] ?? 'MOI EVENT';
+    drawText(
+      eventType,
+      0,
+      cursorY,
+      titleFontSize,
+      align: TextAlign.center,
+      fontWeight: FontWeight.bold,
+      color: const Color(0xFF8B0000),
+      maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+    );
+    cursorY += lineHeight * 2.7;
+
+// 3. EVENT FOR (THIRD)
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
       drawText(
@@ -611,38 +621,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF000C8C),
+        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
       );
       cursorY += lineHeight * 3.2;
     }
 
-    final remarks = fields['Remarks'] ?? '';
-    if (remarks.isNotEmpty) {
-      drawText(
-        remarks,
-        0,
-        cursorY,
-        textFontSize * 0.9,
-        align: TextAlign.center,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF5C0E04),
-      );
-      cursorY += lineHeight * 1.6;
-    }
-
-    final eventDate = fields['Event Date'] ?? '';
-    if (eventDate.isNotEmpty) {
-      drawText(
-        'நாள் : $eventDate',
-        0,
-        cursorY,
-        textFontSize * 0.9,
-        align: TextAlign.center,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF008000),
-      );
-      cursorY += lineHeight * 1.6;
-    }
-
+// 4. VENUE (FOURTH)
     final venue = fields['Venue'] ?? '';
     final city = fields['City'] ?? '';
 
@@ -659,6 +643,23 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF0000FF),
+        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+      );
+      cursorY += lineHeight * 1.6;
+    }
+
+// 5. EVENT DATE (FIFTH)
+    final eventDate = fields['Event Date'] ?? '';
+    if (eventDate.isNotEmpty) {
+      drawText(
+        'நாள் : $eventDate',
+        0,
+        cursorY,
+        textFontSize * 0.9,
+        align: TextAlign.center,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF008000),
+        maxWidth: width * 0.9,
       );
     }
 
@@ -718,6 +719,18 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      final day = date.day.toString().padLeft(2, '0');
+      final month = date.month.toString().padLeft(2, '0');
+      final year = date.year.toString();
+      return '$day-$month-$year';
+    } catch (e) {
+      return dateStr; // Return original if parsing fails
+    }
+  }
+
   Future<Uint8List?> _createMergedPdfForHtml(String htmlContent) async {
     try {
       final eventData = await _fetchEventDetails(widget.eventId);
@@ -768,7 +781,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         'title': response['title'] ?? '',
         'event_for': response['event_for'] ?? '',
         'remark': response['remark'] ?? '',
-        'event_date': response['event_date'] ?? '',
+        'event_date': response['event_date'] != null
+            ? _formatDate(response['event_date'])
+            : '',
         'venue': response['venue'] ?? '',
         'city': response['city'] ?? '',
       };
