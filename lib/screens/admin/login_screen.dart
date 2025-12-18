@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../utils/network_utils.dart';
 import '../../models/user.dart';
+import '../../services/session_manager.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -56,6 +57,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // ✅ STEP 4: Handle response
       if (result['success'] == true) {
         final user = result['user'] as UserModel;
+
+        await SessionManager.saveSession(user);
 
         // Navigate based on role
         if (user.role == 'admin') {

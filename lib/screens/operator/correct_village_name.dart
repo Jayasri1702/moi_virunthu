@@ -142,41 +142,74 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
   }
 
   List<Map<String, dynamic>> _sortVillages(List<Map<String, dynamic>> villages) {
-    // Separate Tamil and English villages
+    // Separate into Tamil (including mixed) and non-Tamil
     final tamilVillages = <Map<String, dynamic>>[];
-    final englishVillages = <Map<String, dynamic>>[];
+    final pureEnglishVillages = <Map<String, dynamic>>[];
+    final pureNumberVillages = <Map<String, dynamic>>[];
 
     for (var village in villages) {
       final villageName = village['city'] as String;
-      final placeWord = _extractTamilWord(villageName);
 
-      if (_isTamil(placeWord)) {
+      // Check if it has Tamil characters
+      final hasTamil = _isTamil(villageName);
+      final hasEnglish = RegExp(r'[a-zA-Z]').hasMatch(villageName);
+      final hasNumber = RegExp(r'[0-9]').hasMatch(villageName);
+
+      if (hasTamil) {
+        // If it has Tamil, include it in Tamil sorting (pure or mixed)
         tamilVillages.add(village);
+      } else if (hasEnglish && !hasNumber) {
+        // Pure English (no Tamil, no numbers)
+        pureEnglishVillages.add(village);
       } else {
-        englishVillages.add(village);
+        // Pure Number or other
+        pureNumberVillages.add(village);
       }
     }
 
-    // Sort Tamil villages by the Tamil place name (after last dot)
+    // Sort Tamil villages (including mixed) by their Tamil part
     tamilVillages.sort((a, b) {
-      final aWord = _extractTamilWord(a['city'] as String);
-      final bWord = _extractTamilWord(b['city'] as String);
+      final aName = a['city'] as String;
+      final bName = b['city'] as String;
 
-      // Tamil Unicode sorting - this will sort by Tamil character order
-      return _compareTamilStrings(aWord, bWord);
+      // Extract Tamil part from the name
+      final aTamilPart = _extractTamilPart(aName);
+      final bTamilPart = _extractTamilPart(bName);
+
+      return _compareTamilStrings(aTamilPart, bTamilPart);
     });
 
-    // Sort English villages by the English place name (after last dot)
-    englishVillages.sort((a, b) {
-      final aWord = _extractTamilWord(a['city'] as String);
-      final bWord = _extractTamilWord(b['city'] as String);
-
-      // Case-insensitive English sorting
+    // Sort pure English villages - case-insensitive
+    pureEnglishVillages.sort((a, b) {
+      final aWord = a['city'] as String;
+      final bWord = b['city'] as String;
       return aWord.toLowerCase().compareTo(bWord.toLowerCase());
     });
 
-    // Combine: Tamil first, then English
-    return [...tamilVillages, ...englishVillages];
+    // Sort pure number villages
+    pureNumberVillages.sort((a, b) {
+      final aWord = a['city'] as String;
+      final bWord = b['city'] as String;
+      return aWord.compareTo(bWord);
+    });
+
+    // Combine: Tamil (including mixed) → Pure English → Pure Number
+    return [
+      ...tamilVillages,
+      ...pureEnglishVillages,
+      ...pureNumberVillages,
+    ];
+  }
+
+  // Helper to extract Tamil part from names (works for both pure and mixed)
+  String _extractTamilPart(String text) {
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]+');
+    final matches = tamilRegex.allMatches(text);
+    if (matches.isNotEmpty) {
+      // Get the first Tamil word found
+      return matches.first.group(0) ?? '';
+    }
+    return '';
   }
 
 // Helper method for Tamil string comparison

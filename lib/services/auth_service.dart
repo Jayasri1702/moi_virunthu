@@ -4,6 +4,7 @@ import 'package:argon2/argon2.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
 import '../utils/network_utils.dart'; // ✅ ADD THIS IMPORT
+import 'session_manager.dart';
 
 class AuthService {
   final SupabaseClient client = Supabase.instance.client;
@@ -146,11 +147,8 @@ class AuthService {
     }
   }
 
-  /// Logout user and clear any stored session data
   Future<void> logout() async {
-    // Since we're using custom authentication (not Supabase Auth),
-    // we don't need to sign out from Supabase Auth.
-    // Just return successfully - navigation will handle clearing the stack
+    await SessionManager.clearSession();
     print('Logout successful');
   }
 

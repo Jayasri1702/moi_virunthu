@@ -20,6 +20,7 @@ import 'screens/operator/collection_details_screen.dart';
 import 'screens/operator/moi_receipt_preview_screen.dart';
 import 'screens/admin/correct_person_data_screen.dart';
 import 'screens/admin/cover_image_manager.dart';
+import 'screens/admin/splash_screen.dart'; // Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +41,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(primarySwatch: Colors.blue),
       initialRoute: '/',
       routes: {
-        '/': (context) => const LoginScreen(),
+        '/': (context) => const SplashScreen(), // ✅ Changed
+        '/login': (context) => const LoginScreen(), // ✅ Added
         '/admin': (context) => const AdminDashboard(),
         '/admin/create-operator': (context) => const CreateOperatorScreen(),
         '/admin/user-list': (context) => const UserListScreen(),

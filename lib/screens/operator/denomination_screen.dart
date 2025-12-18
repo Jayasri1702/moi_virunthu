@@ -912,7 +912,7 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         ),
                         const Divider(thickness: 2, color: Colors.black),
                         const SizedBox(height: 8),
-                        _buildSummaryRow('Hand Cash', '₹${_formatAmount((_summaryData['handCash'] ?? 0).round())}', Colors.teal),
+                        _buildSummaryRow('Cash in Hand', '₹${_formatAmount((_summaryData['handCash'] ?? 0).round())}', Colors.teal),
                         const SizedBox(height: 8),
                         _buildSummaryRow('Total Cash Collected', '₹${_formatAmount((_summaryData['totalCashCollected'] ?? 0).round())}', Colors.green),
                         const SizedBox(height: 8),
