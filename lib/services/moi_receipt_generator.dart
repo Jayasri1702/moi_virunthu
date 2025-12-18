@@ -269,7 +269,7 @@ class MoiReceiptGenerator {
     required List<Map<String, dynamic>> groupEntries,
     String? customerName,
     String? city,
-    String? notes,
+    //String? notes,
     String? customerPhone,
     String? eventTitle,
     String? eventFor,
@@ -331,6 +331,7 @@ class MoiReceiptGenerator {
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+        notes: entry['notes'],
       );
 
       if (result != null) {
@@ -884,8 +885,8 @@ class MoiReceiptGenerator {
 }
 
 .logo {
-  width: 65px;
-  height: 65px;
+  width: 85px;  /* ✅ CHANGED: Increased from 65px to 85px */
+  height: 85px; /* ✅ CHANGED: Increased from 65px to 85px */
   object-fit: contain;
 }
 
@@ -910,7 +911,7 @@ class MoiReceiptGenerator {
 }
 
 .company-phone {
-  font-size: 13px;
+  font-size: 16px;  /* ✅ CHANGED: Increased from 13px to 16px */
   font-weight: 700;
   color: #000;
 }
@@ -1037,7 +1038,7 @@ class MoiReceiptGenerator {
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296, 9047556443</div>
+        <div class="company-phone">9043606296 9047556443</div>
       </div>
     </div>
   
@@ -1080,8 +1081,6 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
  <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்</div>
-    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
-    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
     ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
     ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
     ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
@@ -1216,8 +1215,8 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .logo {
-  width: 65px;
-  height: 65px;
+  width: 85px;  /* ✅ CHANGED: Increased from 65px to 85px */
+  height: 85px; /* ✅ CHANGED: Increased from 65px to 85px */
   object-fit: contain;
 }
 
@@ -1243,7 +1242,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .company-phone {
-  font-size: 13px;
+  font-size: 16px;  /* ✅ CHANGED: Increased from 13px to 16px */
   font-weight: 700;
   color: #000;
 }
@@ -1375,7 +1374,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296, 9047556443</div>
+        <div class="company-phone">9043606296 9047556443</div>
       </div>
     </div>
   
@@ -1415,8 +1414,6 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
  <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்</div>
-    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
-    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
     ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
     ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
     ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
@@ -1442,7 +1439,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    String? notes,
+   // String? notes,
   }) async {
     List<File> generatedFiles = [];
 
@@ -1501,6 +1498,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+        notes: entry['notes'],
       );
 
       if (file != null) {
@@ -1528,7 +1526,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    String? notes,
+    //String? notes,
   }) async {
     try {
 
@@ -1685,7 +1683,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    String? notes,
+    //String? notes,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1718,6 +1716,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       String villageName = entry['village_name'] ?? '';
       String livingPlace = entry['living_place'] ?? '';
       String phone = entry['phone'] ?? '';
+      String notes = entry['notes'] ?? '';
       bool isUncle = entry['is_uncle'] ?? false;
 
       var amountValue = entry['amount'];
@@ -1908,8 +1907,8 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .logo {
-  width: 65px;
-  height: 65px;
+  width: 85px;  /* ✅ CHANGED: Increased from 65px to 85px */
+  height: 85px; /* ✅ CHANGED: Increased from 65px to 85px */
   object-fit: contain;
 }
 
@@ -1934,7 +1933,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .company-phone {
-  font-size: 13px;
+  font-size: 16px;  /* ✅ CHANGED: Increased from 13px to 16px */
   font-weight: 700;
   color: #000;
 }
@@ -2078,7 +2077,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296, 9047556443</div>
+        <div class="company-phone">9043606296 9047556443</div>
       </div>
     </div>
   
@@ -2110,8 +2109,6 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
  <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்</div>
-    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
-    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
     ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
     ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
     ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
@@ -2140,7 +2137,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    String? notes,
+    //String? notes,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -2173,6 +2170,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       String villageName = entry['village_name'] ?? '';
       String livingPlace = entry['living_place'] ?? '';
       String phone = entry['phone'] ?? '';
+      String notes = entry['notes'] ?? '';
       bool isUncle = entry['is_uncle'] ?? false;
 
       var amountValue = entry['amount'];
@@ -2287,8 +2285,8 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .logo {
-  width: 65px;
-  height: 65px;
+  width: 85px;  /* ✅ CHANGED: Increased from 65px to 85px */
+  height: 85px; /* ✅ CHANGED: Increased from 65px to 85px */
   object-fit: contain;
 }
 
@@ -2320,7 +2318,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .company-phone {
-  font-size: 13px;
+  font-size: 16px;  /* ✅ CHANGED: Increased from 13px to 16px */
   font-weight: 700;
   color: #000;
 }
@@ -2461,7 +2459,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296, 9047556443</div>
+        <div class="company-phone">9043606296 9047556443</div>
       </div>
     </div>
   
@@ -2492,8 +2490,6 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
  <div class="footer">
     <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
     <div class="with-love">அன்புடன்</div>
-    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
-    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
     ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
     ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
     ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}

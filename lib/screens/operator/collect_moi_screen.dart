@@ -2642,6 +2642,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               eventFor: eventFor,
               eventTypeName: eventTypeName,
               venue: venue,
+              notes: entry['notes'],
             );
 
             if (result != null && mounted) {
@@ -3000,7 +3001,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           person1Job: _person1Field2Controller.text.trim(),
           person2Details: _person2Controller.text.trim(),
           phone: _phoneController.text.trim(),
-          notes: _notesController.text.trim(),
+          notes: _notesController.text.trim(),  // ✅ ALREADY CORRECT
           amount: _paymentMethod == 'CASH'
               ? _getTotalAmount()
               : int.tryParse(_amountController.text) ?? 0,
