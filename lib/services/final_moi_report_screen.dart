@@ -224,12 +224,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         setState(() {
           _generatedContent = response.body;
         });
-      } else if (returnType == 'excel' || returnType == 'excel') {
+      } else if (returnType == 'excel' || returnType == 'csv') {
+        // Should be changed to:
         final out = await getTemporaryDirectory();
-        final extension = returnType == 'excel' ? 'csv' : 'xlsx';
-        final fname = 'final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.$extension';
+        final extension = 'csv';  // Since you want CSV for excel button
+        final fname = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.$extension';
+
         final file = File('${out.path}/$fname');
         await file.writeAsBytes(response.bodyBytes);
         setState(() => _generatedFile = file);
@@ -273,12 +273,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       String? savedFileName;
       String? savedFilePath;
 
-      if (_selectedFormat == 'excel' || _selectedFormat == 'excel') {
+      if (_selectedFormat == 'excel' || _selectedFormat == 'csv') {
         if (_generatedFile != null) {
-          final fileName = 'final_moi_report_${DateTime
-              .now()
-              .millisecondsSinceEpoch}.${_selectedFormat}';
-
+          final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.csv';
           if (Platform.isAndroid) {
             final downloadsDir = Directory('/storage/emulated/0/Download');
             if (!await downloadsDir.exists()) {
@@ -439,14 +436,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     try {
       setState(() => _isLoading = true);
 
-      if (_selectedFormat == 'excel' || _selectedFormat == 'excel') {
+      if (_selectedFormat == 'excel' || _selectedFormat == 'csv') {
         if (_generatedFile != null) {
           await Share.shareXFiles(
             [XFile(
               _generatedFile!.path,
-              mimeType: _selectedFormat == 'excel'
-                  ? 'text/csv'
-                  : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              mimeType: 'text/csv',
               name: 'final_moi_report.${_selectedFormat}',
             )
             ],
@@ -1053,7 +1048,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         initialData: InAppWebViewInitialData(data: _generatedContent!),
         initialSettings: InAppWebViewSettings(javaScriptEnabled: true),
       );
-    } else if ((_selectedFormat == 'excel' || _selectedFormat == 'excel') &&
+    } else if ((_selectedFormat == 'excel' || _selectedFormat == 'csv') &&
         _generatedFile != null) {
       return Center(
         child: Column(
