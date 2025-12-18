@@ -315,15 +315,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     });
 
     // Load group entries first
+    // ✅ FIX: Load group entries FIRST, then denominations
     if (_currentGroupId != null) {
       await _loadGroupedMois();
+      print('📦 Loaded ${_groupedMois.length} grouped MOIs');
 
-      // ✅ FIX: Only load denominations if NOT skipping AND payment is CASH
+      // ✅ CRITICAL FIX: Load denominations from FIRST entry in group
       if (_paymentMethod == 'CASH' && !_skipDenomination && _groupedMois.isNotEmpty) {
-        await _loadDenominations(_groupedMois[0]['id']);
+        String firstEntryId = _groupedMois[0]['id'];
+        print('🔍 Loading denominations from FIRST entry: $firstEntryId');
+        await _loadDenominations(firstEntryId);
       }
     } else {
-      // ✅ FIX: Only load denominations if NOT skipping AND payment is CASH
+      // Single entry - use its own ID
       if (_paymentMethod == 'CASH' && !_skipDenomination) {
         await _loadDenominations(moiData['id']);
       }
@@ -488,10 +492,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     });
 
-    // ✅ REMOVED: Success popup
+    // ✅ FIX: Load denominations from FIRST entry in the group (ALWAYS)
+    if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+      if (_paymentMethod == 'CASH' && !_skipDenomination) {
+        String firstEntryId = _groupedMois[0]['id'];
+        print('🔍 Loading denominations from FIRST entry in group: $firstEntryId');
+        await _loadDenominations(firstEntryId);
+        print('✅ Loaded denominations successfully');
+      }
+    }
   }
-
-
 
   Future<List<Map<String, dynamic>>> _checkExistingEntry() async {
     try {
@@ -1044,10 +1054,64 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return count;
   }
 
+  bool _validatePhoneForAmountChange() {
+    // Check if we're editing an existing entry (not temp)
+    bool isEditingExistingEntry = _isEditMode &&
+        _editingMoiId != null &&
+        _originalData != null &&
+        _originalData!['is_temp'] != true;
+
+    if (!isEditingExistingEntry) return true; // Not editing existing, skip check
+
+    // Check if amount changed
+    var originalAmount = _originalData!['amount'];
+    int originalAmountInt = 0;
+    if (originalAmount is int) {
+      originalAmountInt = originalAmount;
+    } else if (originalAmount is double) {
+      originalAmountInt = originalAmount.toInt();
+    }
+
+    int currentAmount = int.tryParse(_amountController.text) ?? 0;
+    bool amountChanged = originalAmountInt != currentAmount;
+
+    if (!amountChanged) return true; // Amount not changed, skip check
+
+    // Amount changed - check if phone number exists
+    String phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Phone number is mandatory when changing amount for existing entry!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+
+    if (phone.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('📞 Phone number must be exactly 10 digits!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false;
+    }
+
+    return true;
+  }
+
+
   Future<void> _handleGroup() async {
     // Connection check
     if (!await NetworkUtils.checkConnectionBeforeRequest(context,
         onRetry: _handleGroup)) {
+      return;
+    }
+    if (!_validatePhoneForAmountChange()) {
       return;
     }
 
@@ -1808,6 +1872,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<void> _handleSaveAndPrint() async {
 
+    // Around line 1100, after the ungrouped data check
+    if (!_validatePhoneForAmountChange()) {
+      return;
+    }
+
     // ✅ STEP 0: Check if input fields have data (ungrouped data)
     bool hasUngroupedData = _person1Field1Controller.text.trim().isNotEmpty ||
         _person1Field2Controller.text.trim().isNotEmpty ||
@@ -2260,7 +2329,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
       try {
         List<String> savedMoiIds = [];
-        Map<String, int> tempIdToSerialMap = {};
+        String? firstSavedMoiId; // ✅ ADD THIS to track first entry
 
         // ✅ Save all temp entries using RPC
         for (int i = 0; i < _groupedMois.length; i++) {
@@ -2302,9 +2371,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             int actualSerialNo = response['serial_no'];
             int actualGroupId = response['group_id'];
 
+// ✅ ADD THIS: Track first saved entry for denominations
+            if (firstSavedMoiId == null) {
+              firstSavedMoiId = newMoiId;
+              print('📌 First saved MOI ID: $firstSavedMoiId');
+            }
+
 // ✅ IMPORTANT: Update _currentGroupId after first save
             if (i == 0) {
-              _currentGroupId = actualGroupId;  // ✅ Set the real group_id
+              _currentGroupId = actualGroupId;
             }
 
             // ✅ Update the entry in _groupedMois with real data
@@ -2366,6 +2441,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   .update(moiData)
                   .eq('id', entry['id']);
 
+
               savedMoiIds.add(entry['id']);
               print('✅ Modified entry updated: ${entry['id']}');
             } else {
@@ -2378,9 +2454,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // ✅ Refresh preview serial after saving
         await _loadPreviewSerialNo();
 
-        // ✅ Only save denominations if CASH payment AND not skipping
-        if (_paymentMethod == 'CASH' && savedMoiIds.isNotEmpty && !_skipDenomination) {
-          await _saveDenominationsForGroup(savedMoiIds[0]);
+// ✅ CRITICAL FIX: Save denominations using firstSavedMoiId (real DB ID)
+        if (_paymentMethod == 'CASH' && !_skipDenomination && firstSavedMoiId != null) {
+          print('💾 Saving denominations for group using first entry: $firstSavedMoiId');
+          await _saveDenominationsForGroup(firstSavedMoiId);
+        } else if (_paymentMethod == 'CASH' && !_skipDenomination && _groupedMois.isNotEmpty) {
+          // Fallback: use first entry's ID from grouped list
+          print('💾 Saving denominations using fallback: ${_groupedMois[0]['id']}');
+          await _saveDenominationsForGroup(_groupedMois[0]['id']);
         }
 
 // ✅ NEW: Check if skip_print is true
@@ -3307,9 +3388,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   bool _hasFormData() {
-    return _person1Field1Controller.text.trim().isNotEmpty ||
+    // ✅ FIX: Check ALL input fields properly
+    return _phoneController.text.trim().isNotEmpty ||
+        _villageController.text.trim().isNotEmpty ||
+        _livingPlaceController.text.trim().isNotEmpty ||
+        _notesController.text.trim().isNotEmpty ||
+        _person1Field1Controller.text.trim().isNotEmpty ||
+        _person1Field2Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty ||
-        _getTotalAmount() > 0;
+        _amountController.text.trim().isNotEmpty;
   }
 
   bool _hasNoChanges() {
@@ -4501,13 +4588,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             return KeyEventResult.handled;
           }
 
-          // Ctrl+G
-          if (event.logicalKey == LogicalKeyboardKey.keyG &&
-              HardwareKeyboard.instance.isControlPressed) {
-            _handleGroup();
-            return KeyEventResult.handled;
-          }
-
           // Ctrl+Delete
           if (event.logicalKey == LogicalKeyboardKey.delete &&
               HardwareKeyboard.instance.isControlPressed) {
@@ -4921,6 +5001,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               focusNode: _amountFocusNode,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')), // Only digits and optional minus at start
+              ],
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               decoration: const InputDecoration(
                 border: InputBorder.none,
@@ -5018,6 +5101,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 focusNode: index == 0 ? _firstDenomFocusNode : null,
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.center,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly, // Only digits (no minus for denomination)
+                ],
                 style:
                 const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 decoration: const InputDecoration(
@@ -5318,6 +5404,22 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                       '${moi['id']}_$index'), // ✅ FIXED: Use compound key with index
                   direction: DismissDirection.horizontal,
                   confirmDismiss: (direction) async {
+
+                    if (moi['is_temp'] != true) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              '❌ Cannot delete saved entries. This entry is already saved in the database.',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                      return false; // Prevent dismissal
+                    }
                     if (_isEditMode) {
                       // If in edit mode, show a SnackBar (toast-like message)
                       if (mounted) {
