@@ -1156,6 +1156,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               'is_uncle': _isUncle,
               'persons': _buildPersonsData(),
               'is_modified': true,
+
             };
           });
 
@@ -1807,6 +1808,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ? null
               : _notesController.text.trim(),
           'p_group_id': groupId,  // ✅ PASS GROUP_ID (can be null or shared)
+
         });
 
         final result = (response as Map<String, dynamic>);
@@ -2537,7 +2539,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           try {
             final operatorName = await _getOperatorName();
-            final eventDetails = await _getEventDetails();
+            final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+            final eventResponse = await _supabase
+                .from('events')
+                .select('title, venue, event_types(name)')
+                .eq('id', _eventId!)
+                .single();
+
+            String? eventTitle = eventResponse['title'];
+            String? venue = eventResponse['venue'];
+            String? eventTypeName = eventResponse['event_types']?['name'];
 
             // ✅ Build denominations from current form (same as group receipt) - only if not skipping
             Map<int, int>? denominations;
@@ -2624,6 +2637,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               city: _city,
               customerPhone: _customerPhone,
               isUncle: entry['is_uncle'] ?? false,
+              eventTitle: eventTitle,
+              eventTypeName: eventTypeName,
+              venue: venue,
             );
 
             if (result != null && mounted) {
@@ -2733,7 +2749,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // ✅ UPDATED: For split group receipts (around line 1460)
         if (receiptType == 'single') {
           final operatorName = await _getOperatorName();
-          final eventDetails = await _getEventDetails();
+          final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+          final eventResponse = await _supabase
+              .from('events')
+              .select('title, venue, event_types(name)')
+              .eq('id', _eventId!)
+              .single();
+
+          String? eventTitle = eventResponse['title'];
+          String? venue = eventResponse['venue'];
+          String? eventTypeName = eventResponse['event_types']?['name'];
 
           List<Map<String, dynamic>> entriesWithDenoms = [];
           for (var entry in _groupedMois) {
@@ -2886,7 +2913,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // ✅ Generate receipt after saving (only if not skipping)
       if (moiId != null && mounted) {
         final operatorName = await _getOperatorName();
-        final eventDetails = await _getEventDetails();
+        final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+        final eventResponse = await _supabase
+            .from('events')
+            .select('title, venue, event_types(name)')
+            .eq('id', _eventId!)
+            .single();
+
+        String? eventTitle = eventResponse['title'];
+        String? venue = eventResponse['venue'];
+        String? eventTypeName = eventResponse['event_types']?['name'];
 
         // ✅ Build denominations from current form (only if not skipping)
         Map<int, int>? denominations;
@@ -2958,6 +2996,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           person1Job: _person1Field2Controller.text.trim(),
           person2Details: _person2Controller.text.trim(),
           phone: _phoneController.text.trim(),
+          notes: _notesController.text.trim(),
           amount: _paymentMethod == 'CASH'
               ? _getTotalAmount()
               : int.tryParse(_amountController.text) ?? 0,
@@ -2967,6 +3006,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           city: _city,
           customerPhone: _customerPhone,
           isUncle: _isUncle,
+          eventTitle: eventTitle,
+          eventTypeName: eventTypeName,
+          venue: venue,
         );
 
         if (result != null && mounted) {
@@ -3009,7 +3051,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     try {
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();
+      final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+      final eventResponse = await _supabase
+          .from('events')
+          .select('title, venue, event_types(name)')
+          .eq('id', _eventId!)
+          .single();
+
+      String? eventTitle = eventResponse['title'];
+      String? venue = eventResponse['venue'];
+      String? eventTypeName = eventResponse['event_types']?['name'];
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3241,7 +3294,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     try {
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();
+      final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+      final eventResponse = await _supabase
+          .from('events')
+          .select('title, venue, event_types(name)')
+          .eq('id', _eventId!)
+          .single();
+
+      String? eventTitle = eventResponse['title'];
+      String? venue = eventResponse['venue'];
+      String? eventTypeName = eventResponse['event_types']?['name'];
 
       double totalAmount = 0.0;
       Map<int, int> totalDenominations = {
@@ -3982,7 +4046,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();
+      final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+      final eventResponse = await _supabase
+          .from('events')
+          .select('title, venue, event_types(name)')
+          .eq('id', _eventId!)
+          .single();
+
+      String? eventTitle = eventResponse['title'];
+      String? venue = eventResponse['venue'];
+      String? eventTypeName = eventResponse['event_types']?['name'];
 
       print('🎯 Before denomination check - Payment method: $_paymentMethod');
 
@@ -4053,6 +4128,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         villageName: _villageController.text.trim(),
         livingPlace: _livingPlaceController.text.trim(),
         person1Name: _person1Field1Controller.text.trim(),
+        notes: _notesController.text.trim(),
         person1Job: _person1Field2Controller.text.trim(),
         person2Details: _person2Controller.text.trim(),
         phone: _phoneController.text.trim(),
@@ -4065,6 +4141,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         city: _city,
         customerPhone: _customerPhone,
         isUncle: _isUncle,
+        eventTitle: eventTitle,
+        eventTypeName: eventTypeName,
+        venue: venue,
       );
 
       if (file != null && mounted) {
@@ -4378,7 +4457,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
     try {
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();
+      final eventDetails = await _getEventDetails();  // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+      final eventResponse = await _supabase
+          .from('events')
+          .select('title, venue, event_types(name)')
+          .eq('id', _eventId!)
+          .single();
+
+      String? eventTitle = eventResponse['title'];
+      String? venue = eventResponse['venue'];
+      String? eventTypeName = eventResponse['event_types']?['name'];
+
 
       if (receiptType == 'consolidated') {
         double totalAmount = 0.0;
@@ -4440,6 +4531,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerName: _customerName,
           city: _city,
           customerPhone: _customerPhone,
+          eventTitle: eventTitle,
+          eventTypeName: eventTypeName,
+          venue: venue,
         );
 
         if (file != null && mounted) {
@@ -4459,6 +4553,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerName: _customerName,
           city: _city,
           customerPhone: _customerPhone,
+            eventTitle: eventTitle,
+            eventTypeName: eventTypeName,
+            venue: venue,
           );
           if (result != null) {
             final printerService = ThermalPrinterService();
