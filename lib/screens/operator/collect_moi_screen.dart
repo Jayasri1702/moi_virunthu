@@ -2550,6 +2550,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
             String? eventTitle = eventResponse['title'];
             String? venue = eventResponse['venue'];
+            String? eventFor = eventResponse['event_for'];
             String? eventTypeName = eventResponse['event_types']?['name'];
 
             // ✅ Build denominations from current form (same as group receipt) - only if not skipping
@@ -2638,6 +2639,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               customerPhone: _customerPhone,
               isUncle: entry['is_uncle'] ?? false,
               eventTitle: eventTitle,
+              eventFor: eventFor,
               eventTypeName: eventTypeName,
               venue: venue,
             );
@@ -2760,6 +2762,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           String? eventTitle = eventResponse['title'];
           String? venue = eventResponse['venue'];
+          String? eventFor = eventResponse['event_for'];
           String? eventTypeName = eventResponse['event_types']?['name'];
 
           List<Map<String, dynamic>> entriesWithDenoms = [];
@@ -2924,6 +2927,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         String? eventTitle = eventResponse['title'];
         String? venue = eventResponse['venue'];
+        String? eventFor = eventResponse['event_for'];
         String? eventTypeName = eventResponse['event_types']?['name'];
 
         // ✅ Build denominations from current form (only if not skipping)
@@ -3007,6 +3011,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerPhone: _customerPhone,
           isUncle: _isUncle,
           eventTitle: eventTitle,
+          eventFor: eventFor,
           eventTypeName: eventTypeName,
           venue: venue,
         );
@@ -3062,6 +3067,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       String? eventTitle = eventResponse['title'];
       String? venue = eventResponse['venue'];
+      String? eventFor = eventResponse['event_for'];
       String? eventTypeName = eventResponse['event_types']?['name'];
 
       if (mounted) {
@@ -3305,6 +3311,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       String? eventTitle = eventResponse['title'];
       String? venue = eventResponse['venue'];
+      String? eventFor = eventResponse['event_for'];
       String? eventTypeName = eventResponse['event_types']?['name'];
 
       double totalAmount = 0.0;
@@ -4057,6 +4064,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       String? eventTitle = eventResponse['title'];
       String? venue = eventResponse['venue'];
+      String? eventFor = eventResponse['event_for'];
       String? eventTypeName = eventResponse['event_types']?['name'];
 
       print('🎯 Before denomination check - Payment method: $_paymentMethod');
@@ -4142,6 +4150,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         customerPhone: _customerPhone,
         isUncle: _isUncle,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -4468,6 +4477,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       String? eventTitle = eventResponse['title'];
       String? venue = eventResponse['venue'];
+      String? eventFor = eventResponse['event_for'];
       String? eventTypeName = eventResponse['event_types']?['name'];
 
 
@@ -4532,6 +4542,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           city: _city,
           customerPhone: _customerPhone,
           eventTitle: eventTitle,
+          eventFor: eventFor,
           eventTypeName: eventTypeName,
           venue: venue,
         );
@@ -4554,6 +4565,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           city: _city,
           customerPhone: _customerPhone,
             eventTitle: eventTitle,
+            eventFor: eventFor,
             eventTypeName: eventTypeName,
             venue: venue,
           );

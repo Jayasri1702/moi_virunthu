@@ -98,6 +98,7 @@ class MoiReceiptGenerator {
     String? customerPhone,
     bool isUncle = false,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
   }) async {
@@ -128,6 +129,7 @@ class MoiReceiptGenerator {
         fontBase64: fontBase64,
         isUncle: isUncle,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       )
@@ -151,6 +153,7 @@ class MoiReceiptGenerator {
         fontBase64: fontBase64,
         isUncle: isUncle,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
 
@@ -269,6 +272,7 @@ class MoiReceiptGenerator {
     String? notes,
     String? customerPhone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
   }) async {
@@ -324,6 +328,7 @@ class MoiReceiptGenerator {
         customerPhone: customerPhone,
         isUncle: entry['is_uncle'] ?? false,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -350,6 +355,7 @@ class MoiReceiptGenerator {
     String? city,
     String? customerPhone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -374,6 +380,7 @@ class MoiReceiptGenerator {
         logoBase64: logoBase64,
         fontBase64: fontBase64,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       )
@@ -391,6 +398,7 @@ class MoiReceiptGenerator {
         logoBase64: logoBase64,
         fontBase64: fontBase64,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -510,6 +518,7 @@ class MoiReceiptGenerator {
     String? person2Details,
     String? phone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -550,6 +559,7 @@ class MoiReceiptGenerator {
         fontBase64: fontBase64,
         isUncle: isUncle,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       )
@@ -573,6 +583,7 @@ class MoiReceiptGenerator {
         fontBase64: fontBase64,
         isUncle: isUncle,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -689,6 +700,7 @@ class MoiReceiptGenerator {
     String? city,
     String? customerPhone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     required String logoBase64,
@@ -794,26 +806,27 @@ class MoiReceiptGenerator {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
-  .notes-section {
-  margin: 8px 0;
-  padding: 8px;
+ .notes-section {
+  margin: 10px 0;
+  padding: 10px;
   background-color: #fff9c4;
-  border: 1px solid #f57f17;
+  border: 2px solid #f57f17;
   border-radius: 4px;
 }
 
 .notes-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #f57f17;
   margin-bottom: 4px;
 }
 
 .notes-text {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
   @font-face {
   font-family: 'Altroned';
@@ -953,10 +966,12 @@ class MoiReceiptGenerator {
   }
     
     .village-info {
-    font-size: 14px;
-    font-weight: 700;  /* ✅ CHANGED: Make bold */
-    margin: 4px 0;
-  }
+  font-size: 14px;
+  font-weight: 700;
+  margin: 4px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
     
    .phone {
     font-size: 14px;
@@ -1050,10 +1065,11 @@ ${(villageName != null && villageName.isNotEmpty) || (livingPlace != null && liv
 ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
 
 ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
 ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
 
-
 <div class="amount-label">தொகை</div>
+
 <div class="amount">₹${_formatAmount(amount)}</div>
   
   ${denomTable.isNotEmpty ? '<div class="table-title">நோட்டு விபரம்</div>' : ''}
@@ -1062,15 +1078,16 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
   <div class="divider"></div>
   
  <div class="footer">
-  <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-  <div class="with-love">அன்புடன்</div>
-  ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
-  ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="person-details">$eventTitle</div>' : ''}
-${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="person-details">$eventTypeName</div>' : ''}
-${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
-  ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
-  ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
-</div>
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்</div>
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
+    ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
+    ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
+    ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
@@ -1095,6 +1112,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     String? customerName,
     String? city,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? customerPhone,
@@ -1128,25 +1146,26 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
   .notes-section {
-  margin: 8px 0;
-  padding: 8px;
+  margin: 10px 0;
+  padding: 10px;
   background-color: #fff9c4;
-  border: 1px solid #f57f17;
+  border: 2px solid #f57f17;
   border-radius: 4px;
 }
 
 .notes-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #f57f17;
   margin-bottom: 4px;
 }
 
 .notes-text {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
   
   @font-face {
@@ -1285,11 +1304,13 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     line-height: 1.4;
   }
     
-    .village-info {
-    font-size: 14px;
-    font-weight: 700;  /* ✅ CHANGED: Make bold */
-    margin: 4px 0;
-  }
+   .village-info {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 4px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
     
    .phone {
     font-size: 14px;
@@ -1337,11 +1358,14 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     margin: 4px 0;
   }
     
-    .footer-person {
-      font-size: 16px;
-      font-weight: 700;
-      margin: 6px 0;
-    }
+  .footer-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 6px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
+
   </style>
 </head>
 <body>  
@@ -1379,23 +1403,26 @@ ${(villageName != null && villageName.isNotEmpty) || (livingPlace != null && liv
 ${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
 
 ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
 ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
 
 <div class="amount-label">தொகை</div>
+
 <div class="amount">₹${_formatAmount(amount)}</div>
   
   <div class="payment-method-box">Cheque / Advance / UPI</div>
   
  <div class="footer">
-  <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-  <div class="with-love">அன்புடன்</div>
-  ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
-  ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="person-details">$eventTitle</div>' : ''}
-${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="person-details">$eventTypeName</div>' : ''}
-${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
-  ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
-  ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
-</div>
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்</div>
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
+    ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
+    ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
+    ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
@@ -1412,6 +1439,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     String? city,
     String? customerPhone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -1470,6 +1498,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
         customerPhone: customerPhone,
         isUncle: entry['is_uncle'] ?? false,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -1496,6 +1525,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     String? city,
     String? customerPhone,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -1521,6 +1551,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
         logoBase64: logoBase64,
         fontBase64: fontBase64,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
 
@@ -1539,6 +1570,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
         logoBase64: logoBase64,
         fontBase64: fontBase64,
         eventTitle: eventTitle,
+        eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
@@ -1650,6 +1682,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     required String logoBase64,
     required String fontBase64,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -1703,11 +1736,15 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
       ${(villageName != null && villageName.isNotEmpty) || (livingPlace != null && livingPlace.isNotEmpty)
           ? '<div class="village-info">${villageName ?? ''}${(villageName != null && villageName.isNotEmpty && livingPlace != null && livingPlace.isNotEmpty) ? ' (இ) ' : ''}${livingPlace ?? ''}</div>'
           : ''}
-      ${personDisplay.isNotEmpty ? '<div class="person-details" style="font-size: 14px; margin: 6px 0; white-space: pre-line;">$personDisplay</div>' : ''}
-      ${isUncle ? '<div class="uncle-indicator" style="font-size: 12px; margin: 4px 0;">தாய்மாமன்</div>' : ''}
-      ${phone.isNotEmpty ? '<div class="phone" style="font-size: 12px; margin: 4px 0;">($phone)</div>' : ''}
-      ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
-      <div class="amount-label">தொகை</div>
+   <div class="person-details">$personDisplay</div>
+
+${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
+
+${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
+${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
+
+<div class="amount-label">தொகை</div>
       <div class="entry-amount">₹${_formatAmount(amount)}</div>
     </div>
     <div class="divider"></div>
@@ -1793,27 +1830,27 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
-  
   .notes-section {
-  margin: 8px 0;
-  padding: 8px;
+  margin: 10px 0;
+  padding: 10px;
   background-color: #fff9c4;
-  border: 1px solid #f57f17;
+  border: 2px solid #f57f17;
   border-radius: 4px;
 }
 
 .notes-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #f57f17;
   margin-bottom: 4px;
 }
 
 .notes-text {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
   @font-face {
   font-family: 'Altroned';
@@ -1951,10 +1988,12 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     }
     
     .village-info {
-    font-size: 14px;
-    font-weight: 700;  /* ✅ CHANGED: Make bold */
-    margin: 4px 0;
-  }
+  font-size: 14px;
+  font-weight: 700;
+  margin: 4px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
     
     .amount-label {
     font-size: 16px;
@@ -2023,11 +2062,13 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     margin: 4px 0;
   }
     
-    .footer-name {
-      font-size: 16px;
-       font-weight: 700;
-      margin: 4px 0;
-    }
+   .footer-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 6px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
   </style>
 </head>
 <body>
@@ -2067,15 +2108,16 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   <div class="divider"></div>
   
  <div class="footer">
-  <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-  <div class="with-love">அன்புடன்</div>
-  ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
-  ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="person-details">$eventTitle</div>' : ''}
-${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="person-details">$eventTypeName</div>' : ''}
-${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
-  ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
-  ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
-</div>
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்</div>
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
+    ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
+    ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
+    ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
@@ -2095,6 +2137,7 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
     required String logoBase64,
     required String fontBase64,
     String? eventTitle,
+    String? eventFor,
     String? eventTypeName,
     String? venue,
     String? notes,
@@ -2148,11 +2191,15 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
      ${(villageName != null && villageName.isNotEmpty) || (livingPlace != null && livingPlace.isNotEmpty)
           ? '<div class="village-info">${villageName ?? ''}${(villageName != null && villageName.isNotEmpty && livingPlace != null && livingPlace.isNotEmpty) ? ' (இ) ' : ''}${livingPlace ?? ''}</div>'
           : ''}
-      ${personDisplay.isNotEmpty ? '<div class="person-details" style="font-size: 14px; margin: 6px 0; white-space: pre-line;">$personDisplay</div>' : ''}
-      ${isUncle ? '<div class="uncle-indicator" style="font-size: 12px; margin: 4px 0;">தாய்மாமன்</div>' : ''}
-      ${phone.isNotEmpty ? '<div class="phone" style="font-size: 12px; margin: 4px 0;">($phone)</div>' : ''}
-      ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
-      <div class="amount-label">தொகை</div>
+     <div class="person-details">$personDisplay</div>
+
+${isUncle ? '<div class="uncle-indicator">தாய்மாமன்</div>' : ''}
+
+${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
+
+${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
+
+<div class="amount-label">தொகை</div>
       <div class="entry-amount">₹${_formatAmount(amount)}</div>
     </div>
     <div class="divider"></div>
@@ -2169,27 +2216,27 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
-  
   .notes-section {
-  margin: 8px 0;
-  padding: 8px;
+  margin: 10px 0;
+  padding: 10px;
   background-color: #fff9c4;
-  border: 1px solid #f57f17;
+  border: 2px solid #f57f17;
   border-radius: 4px;
 }
 
 .notes-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #f57f17;
   margin-bottom: 4px;
 }
 
 .notes-text {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
   @font-face {
   font-family: 'Altroned';
@@ -2331,11 +2378,13 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
       margin: 6px 0;
     }
     
-    .village-info {
-    font-size: 14px;
-    font-weight: 700;  /* ✅ CHANGED: Make bold */
-    margin: 4px 0;
-  }
+  .village-info {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 4px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
     
     .amount-label {
     font-size: 16px;
@@ -2397,10 +2446,12 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   }
     
     .footer-name {
-      font-size: 16px;
-      font-weight: 700;
-      margin: 4px 0;
-    }
+  font-size: 15px;
+  font-weight: 700;
+  margin: 6px 0;
+  word-wrap: break-word;
+  line-height: 1.3;
+}
   </style>
 </head>
 <body>
@@ -2439,15 +2490,16 @@ ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' :
   <div class="divider"></div>
   
  <div class="footer">
-  <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-  <div class="with-love">அன்புடன்</div>
-  ${customerName != null && customerName.isNotEmpty ? '<div class="person-details">$customerName</div>' : ''}
- ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="person-details">$eventTitle</div>' : ''}
-${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="person-details">$eventTypeName</div>' : ''}
-${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
-  ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
-  ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
-</div>
+    <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+    <div class="with-love">அன்புடன்</div>
+    ${customerName != null && customerName.isNotEmpty ? '<div class="footer-name">$customerName</div>' : ''}
+    ${eventFor != null && eventFor.isNotEmpty ? '<div class="footer-name">$eventFor</div>' : ''}
+    ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
+    ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
+    ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
+    ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+    ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
+  </div>
   </div>
 </body>
 </html>
