@@ -593,6 +593,7 @@ class _ExchangeDenominationScreenState
         exchangeTime: TimeOfDay.now(),
         receivedDenominations: receivedDenominations,
         returnedDenominations: returnedDenominations,
+        showDialog: false, // ⭐ ADD THIS PARAMETER
       );
       if (receiptFile != null) {
         print('Exchange receipt generated: ${receiptFile.path}');

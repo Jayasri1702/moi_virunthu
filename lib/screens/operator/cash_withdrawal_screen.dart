@@ -5,6 +5,7 @@ import '../../services/withdrawal_receipt_generator.dart';
 import '../../utils/network_utils.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import '../../services/thermal_printer_service.dart';
 
 class CashWithdrawalScreen extends StatefulWidget {
   const CashWithdrawalScreen({super.key});
@@ -16,6 +17,14 @@ class CashWithdrawalScreen extends StatefulWidget {
 class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
   final _formKey = GlobalKey<FormState>();
   final _supabase = Supabase.instance.client;
+  // Event details for receipt footer
+  String? _customerName;
+  String? _city;
+  String? _customerPhone;
+  String? _eventTitle;
+  String? _eventFor;
+  String? _eventTypeName;
+  String? _venue;
 
   // Controllers
   final _requestedByController = TextEditingController();
@@ -58,6 +67,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       print('Event data received: ${eventData?['id']}');
       print('Operator ID received: ${eventData?['operator_id']}');
       _loadAvailableBalance();
+      _loadEventDetails();  // ✅ ADD THIS LINE
     }
   }
 
@@ -198,6 +208,42 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           e,
           onRetry: _loadAvailableBalance,
           customMessage: 'Error loading denomination balance',
+        );
+      }
+    }
+  }
+
+  Future<void> _loadEventDetails() async {
+    if (eventData?['id'] == null) return;
+
+    try {
+      final eventId = eventData!['id'];
+
+      final response = await _supabase
+          .from('events')
+          .select('customer_name, city, customer_phone, title, venue, event_for, event_types(name)')
+          .eq('id', eventId)
+          .single();
+
+      setState(() {
+        _customerName = response['customer_name'];
+        _city = response['city'];
+        _customerPhone = response['customer_phone'];
+        _eventTitle = response['title'];
+        _venue = response['venue'];
+        _eventFor = response['event_for'];
+        _eventTypeName = response['event_types']?['name'];
+      });
+
+      print('✅ Event details loaded for withdrawal receipt');
+    } catch (e) {
+      print('Error loading event details: $e');
+      if (mounted) {
+        NetworkUtils.handleError(
+          context,
+          e,
+          onRetry: _loadEventDetails,
+          customMessage: 'Error loading event details',
         );
       }
     }
@@ -551,9 +597,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         'denom_1': denominations[1],
       });
 
-      // Generate withdrawal receipt
-      // Generate withdrawal receipt
-      final receiptFile = await WithdrawalReceiptGenerator.generateWithdrawalReceipt(
+      // ✅ Generate withdrawal receipt WITH IMAGE (for thermal printer)
+      final result = await WithdrawalReceiptGenerator.generateWithdrawalReceiptWithImage(
         context: context,
         operatorName: operatorName,
         withdrawalDate: DateTime.now(),
@@ -562,12 +607,23 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         amount: _totalAmount,
         denominations: denominations,
         reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
+        eventTitle: _eventTitle,
+        eventFor: _eventFor,
+        eventTypeName: _eventTypeName,
+        venue: _venue,
+        customerName: _customerName,
+        city: _city,
+        customerPhone: _customerPhone,
       );
 
-      if (receiptFile != null) {
-        print('Withdrawal receipt generated: ${receiptFile.path}');
+      if (result != null) {
+        print('Withdrawal receipt generated: ${result['pdf'].path}');
 
-        // ✅ NEW: Check skip_whatsapp setting and submit to backend
+        // ✅ Print using thermal printer
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
+
+        // ✅ Check skip_whatsapp setting and submit to backend
         try {
           final eventData = await _supabase
               .from('events')
@@ -576,24 +632,23 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
               .single();
 
           final skipWhatsapp = eventData['skip_whatsapp'] ?? false;
-          final toWhatsapp = !skipWhatsapp; // Invert: if skip is false, send to whatsapp
+          final toWhatsapp = !skipWhatsapp;
 
           print('📱 skip_whatsapp from DB: $skipWhatsapp');
           print('📱 to_whatsapp being sent: $toWhatsapp');
 
           // Submit receipt to backend
           await _submitReceiptToBackend(
-            pdfFile: receiptFile,
+            pdfFile: result['pdf'],
             eventId: eventId.toString(),
             phoneNumber: _phoneController.text.trim(),
             toWhatsapp: toWhatsapp,
-            receiptNo: withdrawalId, // Use the withdrawal ID as receipt number
+            receiptNo: withdrawalId,
           );
 
           print('✅ Receipt submitted to backend successfully');
         } catch (e) {
           print('❌ Error checking WhatsApp setting or submitting receipt: $e');
-          // Don't show error to user - this is a background operation
         }
       }
 
@@ -606,7 +661,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(0)} saved successfully! You can now send the receipt.'),
+            content: Text('Withdrawal of ₹${_totalAmount.toStringAsFixed(0)} saved successfully! Receipt printed.'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),

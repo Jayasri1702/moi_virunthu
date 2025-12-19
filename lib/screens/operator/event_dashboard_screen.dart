@@ -26,6 +26,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
+import '../../services/thermal_printer_service.dart';
 
 
 class EventDashboardScreen extends StatefulWidget {
@@ -1090,7 +1091,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         ),
       );
 
-      final file = await ReceiptGenerator.generateReceiptPDF(
+      final result = await ReceiptGenerator.generateReceiptPDFWithImage(
         context: context,
         customerName: customerName,
         venue: venue,
@@ -1103,91 +1104,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
       if (mounted) Navigator.pop(context);
 
-      if (file != null && mounted) {
-        final pdfBytes = await file.readAsBytes();
+      if (result != null && mounted) {
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
 
-        showDialog(
-          context: context,
-          builder: (context) => Dialog(
-            child: Container(
-              width: 400,
-              constraints: const BoxConstraints(maxHeight: 700),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        bottom: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Sample Receipt',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: PdfPreview(
-                        build: (format) => pdfBytes,
-                        allowPrinting: false,
-                        allowSharing: false,
-                        canChangePageFormat: false,
-                        canChangeOrientation: false,
-                        canDebug: false,
-                        pdfFileName: 'receipt_$customerName.pdf',
-                        actions: const [],
-                      ),
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border(
-                        top: BorderSide(color: Colors.grey[300]!),
-                      ),
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await Printing.layoutPdf(
-                          onLayout: (format) => pdfBytes,
-                        );
-                      },
-                      icon: const Icon(Icons.print, size: 24),
-                      label: const Text(
-                        'Print Receipt',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFB846D7),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Receipt sent to printer'),
+            backgroundColor: Colors.green,
           ),
         );
       } else {

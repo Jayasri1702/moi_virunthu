@@ -61,6 +61,14 @@ class WithdrawalReceiptGenerator {
     required num amount,
     required Map<int, int> denominations,
     String? reason,
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+
     bool showDialog = true,
   }) async {
     try {
@@ -74,6 +82,13 @@ class WithdrawalReceiptGenerator {
         amount: amount,
         denominations: denominations,
         reason: reason,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
 logoBase64: logoBase64,  // ADD THIS
 fontBase64: fontBase64,  // ADD THIS
       );
@@ -182,6 +197,148 @@ fontBase64: fontBase64,  // ADD THIS
     }
   }
 
+  // Add this complete method after generateWithdrawalReceipt
+  static Future<Map<String, dynamic>?> generateWithdrawalReceiptWithImage({
+    required BuildContext context,
+    required String operatorName,
+    required DateTime withdrawalDate,
+    required TimeOfDay withdrawalTime,
+    required String requestedBy,
+    required num amount,
+    required Map<int, int> denominations,
+    String? reason,
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+  }) async {
+    try {
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
+      final htmlContent = _generateWithdrawalHtml(
+        operatorName: operatorName,
+        withdrawalDate: withdrawalDate,
+        withdrawalTime: withdrawalTime,
+        requestedBy: requestedBy,
+        amount: amount,
+        denominations: denominations,
+        reason: reason,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+      );
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'withdrawal_receipt_with_image_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? generatedFile;
+      Uint8List? screenshotBytes;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              // ✅ Save screenshot bytes for thermal printer
+              screenshotBytes = screenshot;
+
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              generatedFile = file;
+              pdfGenerated = true;
+              print('Withdrawal receipt generated: PDF + Image');
+            }
+          } catch (e) {
+            print('Error generating withdrawal receipt: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) {
+          final file = File(filePath);
+          if (await file.exists() && await file.length() > 0) {
+            generatedFile = file;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      // ✅ Return both PDF file and screenshot bytes
+      if (generatedFile != null && screenshotBytes != null) {
+        return {
+          'pdf': generatedFile,
+          'imageBytes': screenshotBytes,
+        };
+      }
+
+      return null;
+    } catch (e) {
+      print('Error in generateWithdrawalReceiptWithImage: $e');
+      return null;
+    }
+  }
+
   // Send withdrawal receipt to WhatsApp using MethodChannel
   static Future<void> sendToWhatsApp({
     required BuildContext context,
@@ -193,6 +350,14 @@ fontBase64: fontBase64,  // ADD THIS
     required num amount,
     required Map<int, int> denominations,
     String? reason,
+    // ✅ ADD THESE NEW PARAMETERS:
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) async {
     try {
       // Show loading indicator
@@ -216,6 +381,13 @@ fontBase64: fontBase64,  // ADD THIS
         denominations: denominations,
         reason: reason,
         showDialog: false,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
       );
 
       // Close loading indicator
@@ -347,6 +519,7 @@ fontBase64: fontBase64,  // ADD THIS
   }
 
   // HTML template for withdrawal receipt
+  // HTML template for withdrawal receipt
   static String _generateWithdrawalHtml({
     required String operatorName,
     required DateTime withdrawalDate,
@@ -355,21 +528,24 @@ fontBase64: fontBase64,  // ADD THIS
     required num amount,
     required Map<int, int> denominations,
     String? reason,
-required String logoBase64,  // ADD THIS
-required String fontBase64,  // ADD THIS
+    required String logoBase64,
+    required String fontBase64,
+    // ✅ ADD THESE PARAMETERS:
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+    String? customerName,
+    String? city,
+    String? customerPhone,
   }) {
-    final dateStr = DateFormat('dd-MM-yyyy').format(withdrawalDate);
+    // ✅ Use current date/time
+    final now = DateTime.now();
+    final dateStr = DateFormat('dd-MM-yyyy').format(now);
+    final timeStr = DateFormat('hh.mm a').format(now);
 
-    // Convert to 12-hour format with space before AM/PM
-    int hour = withdrawalTime.hour;
-    int minute = withdrawalTime.minute;
-    String period = hour >= 12 ? 'pm' : 'am';
-    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-    final timeStr = '${displayHour.toString().padLeft(2, '0')}.${minute.toString().padLeft(2, '0')} $period';
-
-    // Use proper operator name, fallback to "Operator" if empty or null
-    final displayOperatorName = (operatorName.isEmpty ||
-        operatorName == 'Unknown')
+    // Use proper operator name
+    final displayOperatorName = (operatorName.isEmpty || operatorName == 'Unknown')
         ? 'Operator'
         : operatorName;
 
@@ -383,10 +559,10 @@ required String fontBase64,  // ADD THIS
         int total = denom * count;
         denomTable += '''
         <tr>
-          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$denom</td>
-          <td style="border: 2px solid black; padding: 6px; text-align: center; font-size: 16px; font-weight: bold;">x</td>
-          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$count</td>
-          <td style="border: 2px solid black; padding: 6px; text-align: center; font-weight: bold; font-size: 16px;">$total</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$denom</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center;">x</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$count</td>
+          <td style="border: 2px solid black; padding: 4px; text-align: center; font-weight: bold;">$total</td>
         </tr>
       ''';
       }
@@ -400,226 +576,247 @@ required String fontBase64,  // ADD THIS
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
   <style>
-
   @font-face {
-  font-family: 'Altroned';
-  src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
-}
+    font-family: 'Altroned';
+    src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+  }
 
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Noto Sans Tamil', sans-serif;
-      width: 302px;
-      padding: 10px;
-      text-align: center;
-      background: white;
-    }
-    
-    .header {
-      background-color: #1976D2;
-      color: white;
-      font-size: 18px;
-      font-weight: bold;
-      padding: 10px;
-      margin-bottom: 15px;
-    }
-    
-    .outer-box {
-      border: 3px solid black;
-      padding: 0;
-    }
-    
-    .company-name {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: #000;
-      padding: 10px 10px 5px 10px;
-    }
-    
-    .company-phone {
-      font-size: 14px;
-      margin-bottom: 10px;
-      color: #000;
-      padding: 0 10px 10px 10px;
-    }
-    
-    .divider {
-      border-top: 2px solid black;
-      margin: 0;
-    }
-    
-    .date-time-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-      border-bottom: 2px solid black;
-    }
-    
-    .left-section {
-      text-align: left;
-      padding: 8px;
-      flex: 1;
-      border-right: 2px solid black;
-    }
-    
-    .right-section {
-      text-align: right;
-      padding: 8px;
-      flex: 1;
-      font-weight: bold;
-    }
-    
-    .info-box {
-      border-bottom: 2px solid black;
-      padding: 12px;
-      text-align: center;
-    }
-    
-    .info-label {
-      font-size: 14px;
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-    
-    .info-value {
-      font-size: 16px;
-      margin-bottom: 8px;
-    }
-    
-    .amount-box {
-      background-color: #f5f5f5;
-      border-bottom: 2px solid black;
-      padding: 12px;
-    }
-    
-    .amount-label {
-      font-size: 16px;
-      font-weight: bold;
-    }
-    
-    .amount {
-      font-size: 28px;
-      font-weight: bold;
-      color: #d32f2f;
-      margin: 8px 0;
-    }
-    
-    .section-title {
-      font-size: 18px;
-      font-weight: bold;
-      padding: 8px;
-      background-color: #f5f5f5;
-      border-bottom: 2px solid black;
-      text-align: center;
-    }
-    .logo-header {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  gap: 10px;
-}
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Noto Sans Tamil', sans-serif;
+    width: 302px;
+    padding: 0;
+    text-align: center;
+    background: white;
+    font-weight: 700;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  .outer-box {
+    border: 3px solid black;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    background: white;
+    position: relative;
+  }
+  
+  .logo-header {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    gap: 10px;
+  }
 
-.logo {
-  width: 50px;
-  height: 50px;
-  object-fit: contain;
-}
+  .logo {
+    width: 85px;
+    height: 85px;
+    object-fit: contain;
+  }
 
-.company-info {
-  width: 100%;
-  text-align: center;
-}
+  .company-info {
+    width: 100%;
+    text-align: center;
+  }
 
-.company-name {
-  font-family: 'Altroned', sans-serif;
-  font-size: 18px;
-  font-weight: bold;
-  color: #000;
-  margin-bottom: 2px;
-}
+  .company-name {
+    font-family: 'Altroned', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 3px;
+  }
 
-.tamil-heading {
-  font-size: 14px;
-  color: #000;
-  margin-bottom: 3px;
-}
+  .tamil-heading {
+    font-size: 17px;
+    font-weight: 700;
+    color: #000;
+    margin-bottom: 4px;
+  }
 
-.company-phone {
-  font-size: 11px;
-  color: #000;
-}
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      border-bottom: 2px solid black;
-    }
-    
-    .reason-box {
-      border-bottom: 2px solid black;
-      padding: 10px;
-      text-align: left;
-      min-height: 60px;
-    }
-    
-    .reason-title {
-      font-weight: bold;
-      font-size: 14px;
-      margin-bottom: 5px;
-    }
-    
-    .reason-text {
-      font-size: 13px;
-      line-height: 1.4;
-    }
-    
-    .footer {
-      padding: 10px;
-      font-size: 14px;
-    }
-    
-    .footer-text {
-      margin: 6px 0;
-      font-weight: bold;
-    }
-    
-    .footer-signature {
-      display: flex;
-      justify-content: space-between;
-      padding-top: 10px;
-    }
-    
-    .footer-left {
-      text-align: left;
-      flex: 1;
-    }
-    
-    .footer-right {
-      text-align: right;
-      flex: 1;
-      border-left: 2px solid black;
-      padding-left: 10px;
-    }
+  .company-phone {
+    font-size: 16px;
+    font-weight: 700;
+    color: #000;
+  }
+  
+  .divider {
+    border-top: 2px solid black;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    height: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+  
+  .date-time-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    font-weight: 700;
+    border-bottom: 2px solid black;
+    box-sizing: border-box;
+  }
+
+  .left-section {
+    text-align: left;
+    padding: 8px;
+    flex: 1;
+    border-right: 2px solid black;
+    box-sizing: border-box;
+    font-weight: 700;
+  }
+
+  .right-section {
+    text-align: right;
+    padding: 8px;
+    flex: 1;
+    font-weight: 700;
+  }
+  
+  .withdrawal-title {
+    font-size: 18px;
+    font-weight: 700;
+    padding: 10px;
+    background-color: #ffebee;
+    border-bottom: 2px solid black;
+    color: #c62828;
+  }
+  
+  .info-box {
+    border-bottom: 2px solid black;
+    padding: 12px;
+    text-align: center;
+  }
+  
+  .info-label {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  
+  .info-value {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  
+  .amount-box {
+    background-color: #ffebee;
+    border-bottom: 2px solid black;
+    padding: 12px;
+  }
+  
+  .amount-label {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  
+  .amount {
+    font-size: 28px;
+    font-weight: 700;
+    color: #d32f2f;
+    margin: 8px 0;
+  }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 8px 0;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    font-weight: 700;
+  }
+
+  td {
+    font-weight: 700;
+  }
+  
+  .reason-box {
+    border-bottom: 2px solid black;
+    padding: 10px;
+    text-align: left;
+    min-height: 60px;
+  }
+  
+  .reason-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 5px;
+  }
+  
+  .reason-text {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  
+  .footer {
+    margin-top: 0;
+    padding-top: 8px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  
+  .thanks {
+    margin: 6px 0;
+    font-weight: 700;
+  }
+  
+  .with-love {
+    font-size: 12px;
+    font-weight: 700;
+    margin: 4px 0;
+  }
+  
+  .footer-name {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 6px 0;
+    word-wrap: break-word;
+    line-height: 1.3;
+  }
+  
+  .village-info {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 4px 0;
+    word-wrap: break-word;
+    line-height: 1.3;
+  }
+  
+  .phone {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 6px 0;
+  }
   </style>
 </head>
 <body>
   <div class="outer-box">
-  <div class="logo-header">
-    <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
-    <div class="company-info">
-      <div class="company-name">Hi Tech Moi</div>
-      <div class="tamil-heading">ஹை-டெக் மொய்</div>
-      <div class="company-phone">9043606296, 9047556443</div>
+    <div class="logo-header">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo" class="logo">
+      <div class="company-info">
+        <div class="company-name">Hi Tech Moi</div>
+        <div class="tamil-heading">ஹை-டெக் மொய்</div>
+        <div class="company-phone">9043606296,9047556443</div>
+      </div>
     </div>
-  </div>
 
-  <div class="divider"></div>
+    <div class="divider"></div>
 
     <div class="date-time-row">
       <div class="left-section">
@@ -632,9 +829,16 @@ required String fontBase64,  // ADD THIS
       </div>
     </div>
     
+    <div class="withdrawal-title">CASH WITHDRAWAL</div>
+    
     <div class="info-box">
-      <div class="info-label">Requested by: $requestedBy</div>
-      <div class="info-label">Requested Amt: ₹${amount.round()}</div>
+      <div class="info-label">Requested by</div>
+      <div class="info-value">$requestedBy</div>
+    </div>
+    
+    <div class="amount-box">
+      <div class="amount-label">Withdrawal Amount</div>
+      <div class="amount">₹${amount.round()}</div>
     </div>
     
     <div class="section-title">நோட்டு விபரம்</div>
@@ -647,18 +851,16 @@ required String fontBase64,  // ADD THIS
       <div class="reason-title">Reason:</div>
       <div class="reason-text">$reason</div>
     </div>
-    ''' : ''}
+    ''' : '<div class="divider"></div>'}
     
     <div class="footer">
-      <div class="footer-signature">
-        <div class="footer-left">
-          <div class="info-label">Hi Tech Moi</div>
-        </div>
-        <div class="footer-right">
-          <div class="info-label">Amt Received by</div>
-          <div class="info-value">$requestedBy</div>
-        </div>
-      </div>
+      <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
+      <div class="with-love">அன்புடன்</div>
+      ${eventTitle != null && eventTitle.isNotEmpty ? '<div class="footer-name">$eventTitle</div>' : ''}
+      ${eventTypeName != null && eventTypeName.isNotEmpty ? '<div class="footer-name">$eventTypeName</div>' : ''}
+      ${venue != null && venue.isNotEmpty ? '<div class="village-info">$venue</div>' : ''}
+      ${city != null && city.isNotEmpty ? '<div class="village-info">$city</div>' : ''}
+      ${customerPhone != null && customerPhone.isNotEmpty ? '<div class="phone">$customerPhone</div>' : ''}
     </div>
   </div>
 </body>

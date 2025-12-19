@@ -1044,7 +1044,7 @@ class MoiReceiptGenerator {
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296 9047556443</div>
+        <div class="company-phone">9043606296,9047556443</div>
       </div>
     </div>
   
@@ -1380,7 +1380,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296 9047556443</div>
+        <div class="company-phone">9043606296,9047556443</div>
       </div>
     </div>
   
@@ -2084,7 +2084,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296 9047556443</div>
+        <div class="company-phone">9043606296,9047556443</div>
       </div>
     </div>
   
@@ -2466,7 +2466,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
       <div class="company-info">
         <div class="company-name">Hi Tech Moi</div>
         <div class="tamil-heading">ஹை-டெக் மொய்</div>
-        <div class="company-phone">9043606296 9047556443</div>
+        <div class="company-phone">9043606296,9047556443</div>
       </div>
     </div>
   

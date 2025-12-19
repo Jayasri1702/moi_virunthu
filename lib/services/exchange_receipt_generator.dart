@@ -57,6 +57,7 @@ class ExchangeReceiptGenerator {
     required TimeOfDay exchangeTime,
     required Map<int, int> receivedDenominations,
     required Map<int, int> returnedDenominations,
+    bool showDialog = false, // ⭐ ADD THIS PARAMETER with default false
   }) async {
     try {
       final logoBase64 = await _getLogoBase64();
@@ -159,9 +160,9 @@ class ExchangeReceiptGenerator {
         attempts++;
       }
 
-      // Show share dialog if PDF was generated successfully
+      // ⭐ ONLY show share dialog if showDialog parameter is true
       final finalFile = generatedFile;
-      if (finalFile != null && context.mounted) {
+      if (finalFile != null && context.mounted && showDialog) {
         _showShareDialog(context, finalFile);
       }
 

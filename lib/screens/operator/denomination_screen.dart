@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/denomination_receipt_generator.dart';
 import '../../utils/network_utils.dart';
+import '../../services/thermal_printer_service.dart';
 
 class DenominationScreen extends StatefulWidget {
   final String eventId;
@@ -944,15 +945,15 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         final eventData = await _auth.client
                             .from('events')
                             .select('''
-                    customer_name,
-                    customer_phone,
-                    venue,
-                    city,
-                    event_date,
-                    event_types!events_event_type_fkey (
-                      name
-                    )
-                  ''')
+      customer_name,
+      customer_phone,
+      venue,
+      city,
+      event_date,
+      event_types!events_event_type_fkey (
+        name
+      )
+    ''')
                             .eq('id', widget.eventId)
                             .single();
 
@@ -967,13 +968,9 @@ class _DenominationScreenState extends State<DenominationScreen> {
                         final contactNumber = eventData['customer_phone'] ?? 'N/A';
                         final eventDate = DateTime.parse(eventData['event_date']);
 
-                        // Calculate totals
                         final totals = _calculateTotals();
-
-                        // Calculate verupaadu (difference between hand cash and grand total)
                         final verupaadu = (_summaryData['totalEventAmount'] ?? 0) - (_summaryData['handCash'] ?? 0);
 
-                        // Show loading
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -984,11 +981,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           );
                         }
 
-                        // In denomination_screen.dart, find the Print button's onPressed handler
-// and update the generateDenominationReceipt call:
-
-// Generate receipt
-                        final file = await DenominationReceiptGenerator.generateDenominationReceipt(
+                        // ✅ Generate receipt with image
+                        final result = await DenominationReceiptGenerator.generateDenominationReceiptWithImage(
                           context: context,
                           customerName: customerName,
                           eventTypeName: eventTypeName,
@@ -1005,23 +999,24 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           verupaadu: (verupaadu as num).toDouble(),
                           peopleCount: _summaryData['peopleCount'] ?? 0,
                           totalOthersAmount: ((_summaryData['totalOthers'] ?? 0) as num).toDouble(),
-                          // ADD THESE TWO NEW PARAMETERS:
                           totalWithdrawalCounts: totalWithdrawals,
                           totalExchangeCounts: totalExchanges,
                         );
 
-                        if (file == null) {
-                          throw Exception('Failed to generate receipt');
-                        }
+                        if (result != null && mounted) {
+                          // ✅ Print using thermal printer
+                          final printerService = ThermalPrinterService();
+                          await printerService.connectAndPrintImage(context, result['imageBytes']);
 
-                        if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Receipt generated successfully!'),
+                              content: Text('✅ Receipt printed successfully!'),
                               backgroundColor: Colors.green,
                               duration: Duration(seconds: 2),
                             ),
                           );
+                        } else {
+                          throw Exception('Failed to generate receipt');
                         }
                       } catch (e) {
                         print('Error generating receipt: $e');
