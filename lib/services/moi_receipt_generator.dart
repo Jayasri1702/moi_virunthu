@@ -113,6 +113,7 @@ class MoiReceiptGenerator {
         operatorName: operatorName,
         eventDate: eventDate,
         eventTime: eventTime,
+        notes: notes,
         villageName: villageName,
         livingPlace: livingPlace,
         person1Name: person1Name,
@@ -137,6 +138,7 @@ class MoiReceiptGenerator {
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
+        notes: notes,
         eventTime: eventTime,
         villageName: villageName,
         livingPlace: livingPlace,
@@ -384,6 +386,7 @@ class MoiReceiptGenerator {
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+        notes: notes,
       )
           : _generateGroupMoiHtml(
         groupId: groupId,
@@ -402,6 +405,7 @@ class MoiReceiptGenerator {
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+        notes: notes,
       );
 
       final output = await getTemporaryDirectory();
@@ -563,6 +567,7 @@ class MoiReceiptGenerator {
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+          notes: notes,
       )
           : _generateSingleMoiHtmlOthers(
         serialNo: serialNo,
@@ -573,6 +578,7 @@ class MoiReceiptGenerator {
         livingPlace: livingPlace,
         person1Name: person1Name,
         person1Job: person1Job,
+        notes: notes,
         person2Details: person2Details,
         phone: phone,
         amount: amount,
@@ -816,9 +822,9 @@ class MoiReceiptGenerator {
 }
 
 .notes-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #f57f17;
+  color: #000;
   margin-bottom: 4px;
 }
 
@@ -1153,9 +1159,9 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .notes-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #f57f17;
+  color: #000;
   margin-bottom: 4px;
 }
 
@@ -1439,7 +1445,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-   // String? notes,
+    String? notes,
   }) async {
     List<File> generatedFiles = [];
 
@@ -1526,7 +1532,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    //String? notes,
+    String? notes,
   }) async {
     try {
 
@@ -1552,7 +1558,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
-
+        notes: notes,
       )
           : _generateGroupMoiHtml(
         groupId: groupId,
@@ -1571,6 +1577,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
+        notes: notes,
       );
 
       final output = await getTemporaryDirectory();
@@ -1683,7 +1690,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    //String? notes,
+    String? notes,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -1838,9 +1845,9 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .notes-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #f57f17;
+  color: #000;
   margin-bottom: 4px;
 }
 
@@ -2137,7 +2144,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     String? eventFor,
     String? eventTypeName,
     String? venue,
-    //String? notes,
+    String? notes,
   }) {
     final now = DateTime.now();
     final dateStr = DateFormat('dd-MM-yyyy').format(now);
@@ -2223,9 +2230,9 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 }
 
 .notes-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
-  color: #f57f17;
+  color: #000;
   margin-bottom: 4px;
 }
 

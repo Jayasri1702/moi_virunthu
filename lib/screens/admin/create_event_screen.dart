@@ -32,6 +32,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _discountAmount = TextEditingController();
   final _referenceBy = TextEditingController();
   final _remark = TextEditingController();
+  final _notes = TextEditingController(); // ✅ ADD THIS
 
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _selectedTime;
@@ -172,6 +173,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _discountAmount.text = _editingEvent!['discount_amount']?.toString() ?? '0.00';
     _referenceBy.text = _editingEvent!['referral_by'] ?? '';
     _remark.text = _editingEvent!['remark'] ?? '';
+    _notes.text = _editingEvent!['notes'] ?? ''; // ✅ ADD THIS
 
     if (_editingEvent!['event_date'] != null) {
       _selectedDate = DateTime.parse(_editingEvent!['event_date']);
@@ -264,6 +266,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'discount_amount': double.tryParse(_discountAmount.text) ?? 0,
         'referral_by': _referenceBy.text.trim().isEmpty ? null : _referenceBy.text.trim(),
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
+        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(), // ✅ ADD THIS
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
@@ -900,6 +903,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'discount_amount': double.tryParse(_discountAmount.text) ?? 0,
         'referral_by': _referenceBy.text.trim().isEmpty ? null : _referenceBy.text.trim(),
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
+        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(), // ✅ ADD THIS
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
@@ -1254,6 +1258,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _discountAmount.clear();
     _referenceBy.clear();
     _remark.clear();
+    _notes.clear();
     setState(() {
       _selectedDate = DateTime.now();
       _selectedTime = null;
@@ -1282,6 +1287,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _discountAmount.dispose();
     _referenceBy.dispose();
     _remark.dispose();
+    _notes.dispose();
     super.dispose();
   }
 
@@ -1833,6 +1839,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 maxLines: 3,
                               ),
                             ),
+
+                            const SizedBox(height: 16),
+
+                            _buildFormRow(
+                              label: 'Notes',
+                              required: false,
+                              isSmallScreen: isSmallScreen,
+                              child: TextFormField(
+                                controller: _notes,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  isDense: true,
+                                ),
+                                maxLines: 3,
+                              ),
+                            ),
+
                             const SizedBox(height: 16),
 
                             _buildFormRow(
