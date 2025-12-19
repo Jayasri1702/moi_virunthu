@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../utils/network_utils.dart';
+import '../../services/moi_receipt_generator.dart';
+import '../../services/thermal_printer_service.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 
 class CollectionDetailsScreen extends StatefulWidget {
   const CollectionDetailsScreen({super.key});
@@ -255,6 +259,360 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
     ).then((_) {
       _loadCollectionDetails();
     });
+  }
+
+  // Get operator name
+  Future<String> _getOperatorName() async {
+    try {
+      final response = await _supabase
+          .from('users')
+          .select('full_name')
+          .eq('id', _operatorId!)
+          .single();
+      return response['full_name'] ?? 'Operator';
+    } catch (e) {
+      return 'Operator';
+    }
+  }
+
+// Get event details
+  Future<Map<String, dynamic>> _getEventDetails() async {
+    try {
+      final response = await _supabase
+          .from('events')
+          .select('event_date, event_time, customer_name, city, customer_phone, title, venue, event_for, skip_print, event_types(name)')
+          .eq('id', _eventId!)
+          .single();
+
+      DateTime eventDate = DateTime.parse(response['event_date']);
+      TimeOfDay eventTime = TimeOfDay.now();
+      if (response['event_time'] != null) {
+        final timeParts = response['event_time'].split(':');
+        eventTime = TimeOfDay(
+          hour: int.parse(timeParts[0]),
+          minute: int.parse(timeParts[1]),
+        );
+      }
+
+      return {
+        'event_date': eventDate,
+        'event_time': eventTime,
+        'customer_name': response['customer_name'],
+        'city': response['city'],
+        'customer_phone': response['customer_phone'],
+        'event_title': response['title'],
+        'venue': response['venue'],
+        'event_for': response['event_for'],
+        'event_type_name': response['event_types']?['name'],
+        'skip_print': response['skip_print'] ?? false,
+      };
+    } catch (e) {
+      return {
+        'event_date': DateTime.now(),
+        'event_time': TimeOfDay.now(),
+      };
+    }
+  }
+
+// Get denominations
+  Future<Map<int, int>?> _getDenominations(String moiId) async {
+    try {
+      final response = await _supabase
+          .from('moi_denominations')
+          .select('*')
+          .eq('moi_id', moiId)
+          .maybeSingle();
+
+      if (response != null) {
+        return {
+          500: response['denom_500'] ?? 0,
+          200: response['denom_200'] ?? 0,
+          100: response['denom_100'] ?? 0,
+          50: response['denom_50'] ?? 0,
+          20: response['denom_20'] ?? 0,
+          10: response['denom_10'] ?? 0,
+          5: response['denom_5'] ?? 0,
+          1: response['denom_1'] ?? 0,
+        };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+// Print handler
+  Future<void> _handlePrint(Map<String, dynamic> moi) async {
+    final eventDetails = await _getEventDetails();
+
+    // Check if skip_print is enabled
+    if (eventDetails['skip_print'] == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('⏭️ Printing is disabled for this event'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // ✅ NEW: Check if it's a group MOI by counting actual group members
+    if (moi['group_id'] != null) {
+      // Get all MOIs in this group
+      final groupMois = await _supabase
+          .from('mois')
+          .select('id')
+          .eq('event_id', _eventId!)
+          .eq('group_id', moi['group_id'])
+          .eq('is_deleted', false);
+
+      // ✅ If only ONE entry in the group, treat as single receipt
+      if (groupMois.length == 1) {
+        await _printSingleReceipt(moi);
+        return;
+      }
+
+      // ✅ Multiple entries in group - show dialog
+      final receiptType = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: const BorderSide(color: Colors.black, width: 2),
+          ),
+          title: const Text(
+            'Generate Receipt',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Text(
+            'This entry is part of a group with ${groupMois.length} entries. How would you like to generate the receipt?',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'single'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.blue[50],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Single Receipt',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'group'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.green[50],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Group Receipt',
+                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.grey[200],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      if (receiptType == null) return;
+
+      if (receiptType == 'group') {
+        await _printGroupReceipt(moi['group_id']);
+      } else {
+        await _printSingleReceipt(moi);
+      }
+    } else {
+      // ✅ Single MOI (no group_id) - print directly
+      await _printSingleReceipt(moi);
+    }
+  }
+
+// Print single receipt
+  Future<void> _printSingleReceipt(Map<String, dynamic> moi) async {
+    setState(() => _isLoading = true);
+
+    try {
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      // Get denominations if CASH
+      Map<int, int>? denominations;
+      if (moi['payment_method'] == 'CASH') {
+        denominations = await _getDenominations(moi['id']);
+      }
+
+      // Parse persons data
+      String? person1Name;
+      String? person1Job;
+      String? person2Details;
+      if (moi['persons'] != null) {
+        List<dynamic> personsList = moi['persons'] as List;
+        if (personsList.isNotEmpty) {
+          person1Name = personsList[0]['name'];
+          person1Job = personsList[0]['job'];
+        }
+        if (personsList.length > 1) {
+          person2Details = personsList[1]['details'];
+        }
+      }
+
+      final result = await MoiReceiptGenerator.generateSingleMoiReceiptWithImage(
+        context: context,
+        serialNo: moi['serial_no'],
+        operatorName: operatorName,
+        eventDate: eventDetails['event_date'],
+        eventTime: eventDetails['event_time'],
+        villageName: moi['village_name'],
+        livingPlace: moi['living_place'],
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: moi['phone'],
+        amount: (moi['amount'] is int) ? moi['amount'] : (moi['amount'] as double).toInt(),
+        paymentMethod: moi['payment_method'],
+        denominations: denominations,
+        customerName: eventDetails['customer_name'],
+        city: eventDetails['city'],
+        customerPhone: eventDetails['customer_phone'],
+        isUncle: moi['is_uncle'] ?? false,
+        eventTitle: eventDetails['event_title'],
+        eventFor: eventDetails['event_for'],
+        eventTypeName: eventDetails['event_type_name'],
+        venue: eventDetails['venue'],
+        notes: moi['notes'],
+      );
+
+      if (result != null && mounted) {
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Receipt printed successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error printing receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+// Print group receipt
+  Future<void> _printGroupReceipt(int groupId) async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Get all MOIs in this group
+      final groupMois = await _supabase
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('group_id', groupId)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: true);
+
+      if (groupMois.isEmpty) {
+        throw Exception('No entries found for this group');
+      }
+
+      final operatorName = await _getOperatorName();
+      final eventDetails = await _getEventDetails();
+
+      // Calculate totals
+      double totalAmount = 0.0;
+      Map<int, int> totalDenominations = {
+        500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+      };
+
+      for (var entry in groupMois) {
+        var amountValue = entry['amount'];
+        if (amountValue is int) {
+          totalAmount += amountValue.toDouble();
+        } else if (amountValue is double) {
+          totalAmount += amountValue;
+        }
+
+        if (entry['payment_method'] == 'CASH') {
+          final denoms = await _getDenominations(entry['id']);
+          if (denoms != null) {
+            denoms.forEach((denom, count) {
+              totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+            });
+          }
+        }
+      }
+
+      final result = await MoiReceiptGenerator.generateGroupMoiReceiptWithImage(
+        context: context,
+        groupId: groupId,
+        operatorName: operatorName,
+        eventDate: eventDetails['event_date'],
+        eventTime: eventDetails['event_time'],
+        groupEntries: List<Map<String, dynamic>>.from(groupMois),
+        totalAmount: totalAmount,
+        totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+        customerName: eventDetails['customer_name'],
+        city: eventDetails['city'],
+        customerPhone: eventDetails['customer_phone'],
+        eventTitle: eventDetails['event_title'],
+        eventFor: eventDetails['event_for'],
+        eventTypeName: eventDetails['event_type_name'],
+        venue: eventDetails['venue'],
+      );
+
+      if (result != null && mounted) {
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Group receipt printed successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error printing group receipt: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Widget _buildDetailRow(String label, String value) {
@@ -604,45 +962,55 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Container(
-                                height: 34,
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Material(
-                                  color: Colors.white,
-                                  child: InkWell(
-                                    onTap: () => _editMoi(moi),
-                                    child: const Padding(
-                                      padding: EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 6,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Pencil icon button (Edit)
+                                  Container(
+                                    height: 34,
+                                    width: 34,
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.black,
+                                        width: 2,
                                       ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.edit,
-                                            size: 16,
-                                            color: Colors.black,
-                                          ),
-                                          SizedBox(width: 5),
-                                          Text(
-                                            'Edit',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black,
-                                            ),
-                                          ),
-                                        ],
+                                    ),
+                                    child: Material(
+                                      color: Colors.white,
+                                      child: InkWell(
+                                        onTap: () => _editMoi(moi),
+                                        child: const Icon(
+                                          Icons.edit,
+                                          size: 18,
+                                          color: Colors.black,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: 6),
+                                  // Printer icon button
+                                  Container(
+                                    height: 34,
+                                    width: 34,
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.black,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: Material(
+                                      color: Colors.white,
+                                      child: InkWell(
+                                        onTap: () => _handlePrint(moi),
+                                        child: const Icon(
+                                          Icons.print,
+                                          size: 18,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
