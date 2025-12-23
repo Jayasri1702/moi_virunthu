@@ -135,7 +135,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       }
 
       // Create composite key with normalized names (without initials)
-      final compositeKey = '$villageName|$person1NameNormalized|$person1Job|$person2NameNormalized';
+      final compositeKey = '$villageName|$person1NameNormalized|$person1Job';
 
       if (!groupedEntries.containsKey(compositeKey)) {
         groupedEntries[compositeKey] = [];
@@ -176,18 +176,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
             final p1Job = persons[0]['job']?.toString().trim().toLowerCase() ?? '';
             if (p1Job.isNotEmpty) {
               matchGroups[entryId]!.add('p1_job:$p1Job');
-            }
-
-            // Mark person 2 name as matching (normalized without initial)
-            if (persons.length > 1) {
-              final p2Details = persons[1]['details']?.toString() ?? '';
-              if (p2Details.isNotEmpty) {
-                final p2NameRaw = _extractPerson2NameFull(p2Details);
-                final p2NameNormalized = _extractNameWithoutInitial(p2NameRaw).trim().toLowerCase();
-                if (p2NameNormalized.isNotEmpty) {
-                  matchGroups[entryId]!.add('p2_name:$p2NameNormalized');
-                }
-              }
             }
           }
 

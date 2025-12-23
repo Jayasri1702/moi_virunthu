@@ -266,7 +266,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'discount_amount': double.tryParse(_discountAmount.text) ?? 0,
         'referral_by': _referenceBy.text.trim().isEmpty ? null : _referenceBy.text.trim(),
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
-        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(), // ✅ ADD THIS
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
@@ -274,6 +273,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       };
 
       String eventId;
+
+      if(_notes.text.isNotEmpty){
+        eventData['notes'] = _notes.text;
+      }
 
       if (_isEditMode && _editingEvent != null) {
         eventData['updated_at'] = DateTime.now().toIso8601String();
@@ -903,7 +906,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'discount_amount': double.tryParse(_discountAmount.text) ?? 0,
         'referral_by': _referenceBy.text.trim().isEmpty ? null : _referenceBy.text.trim(),
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
-        'notes': _notes.text.trim().isEmpty ? null : _notes.text.trim(), // ✅ ADD THIS
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
         'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
@@ -912,6 +914,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       };
 
       String eventId;
+
+      if(_notes.text.isNotEmpty){
+        eventData['notes'] = _notes.text;
+      }
 
       if (_isEditMode && _editingEvent != null) {
         eventData['updated_at'] = DateTime.now().toIso8601String();

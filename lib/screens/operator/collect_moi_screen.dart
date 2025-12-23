@@ -1362,6 +1362,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+
 // ✅ Dialog for MOI Details duplicate (shows simpler message)
   Future<bool> _showDuplicateInMoiDetailsDialog() async {
     // Build current entry details
@@ -2127,6 +2128,227 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       return;
     }
 
+    // ✅ NEW: Check for similar entries in grouped list BEFORE saving
+    for (var entry in _groupedMois) {
+      // Skip if this is an existing entry (already in DB)
+      if (entry['is_temp'] != true) continue;
+
+      // Get entry details
+      String villageName = (entry['village_name'] ?? '').trim();
+      String person1Name = '';
+      String person1Job = '';
+
+      if (entry['persons'] != null) {
+        List<dynamic> personsList = entry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          person1Name = (personsList[0]['name'] ?? '').trim();
+          person1Job = (personsList[0]['job'] ?? '').trim();
+        }
+      }
+
+      if (villageName.isEmpty || person1Name.isEmpty) {
+        continue; // Skip check if essential fields are empty
+      }
+
+      // Query database for similar entries
+      try {
+        final response = await _supabase
+            .from('mois')
+            .select('*')
+            .eq('event_id', _eventId!)
+            .eq('is_deleted', false);
+
+        Map<String, dynamic>? matchingEntry;
+
+        for (var dbEntry in response) {
+          // Check village name (case-insensitive)
+          String entryVillage = (dbEntry['village_name'] ?? '').trim().toLowerCase();
+          if (entryVillage != villageName.toLowerCase()) continue;
+
+          // Check person 1
+          if (dbEntry['persons'] != null) {
+            List<dynamic> personsList = dbEntry['persons'] as List;
+            if (personsList.isNotEmpty) {
+              String entryP1Name = (personsList[0]['name'] ?? '').trim().toLowerCase();
+              String entryP1Job = (personsList[0]['job'] ?? '').trim().toLowerCase();
+
+              if (entryP1Name == person1Name.toLowerCase() &&
+                  entryP1Job == person1Job.toLowerCase()) {
+                matchingEntry = dbEntry;
+                break;
+              }
+            }
+          }
+        }
+
+        if (matchingEntry != null) {
+          // Show dialog with 3 options: Overwrite, New Entry, Cancel
+          final result = await showDialog<String>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              title: const Text(
+                '⚠️ Similar Entry Found!',
+                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'An entry with the same Village, Name, and Job already exists:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange[50],
+                        border: Border.all(color: Colors.orange, width: 2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '📍 Village: ${matchingEntry?['village_name'] ?? 'N/A'}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '👤 Serial No: O${matchingEntry?['serial_no'] ?? '0'}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          if (matchingEntry != null && matchingEntry['persons'] != null) ...[
+                            Text(
+                              '📝 Name: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['name'] ?? 'N/A' : 'N/A'}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            Text(
+                              '💼 Job: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['job'] ?? 'N/A' : 'N/A'}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'What would you like to do?',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'cancel'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.grey[300],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  child: const Text(
+                    'CANCEL',
+                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'new'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.blue[100],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  child: const Text(
+                    'NEW ENTRY',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'overwrite:${matchingEntry!['id']}'),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.orange[100],
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  child: const Text(
+                    'OVERWRITE',
+                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          // Handle user choice
+          if (result == 'cancel') {
+            return; // Stop save operation
+          } else if (result == 'new') {
+            // Remove this entry from grouped list and reload it into form
+            setState(() {
+              _groupedMois.remove(entry);
+
+              // Load entry data back into form
+              _phoneController.text = entry['phone'] ?? '';
+              _villageController.text = entry['village_name'] ?? '';
+              _livingPlaceController.text = entry['living_place'] ?? '';
+              _notesController.text = entry['notes'] ?? '';
+
+              var amountValue = entry['amount'];
+              if (amountValue is int) {
+                _amountController.text = amountValue.toString();
+              } else if (amountValue is double) {
+                _amountController.text = amountValue.toInt().toString();
+              }
+
+              _isUncle = entry['is_uncle'] ?? false;
+
+              if (entry['persons'] != null) {
+                List<dynamic> personsList = entry['persons'] as List;
+                if (personsList.isNotEmpty) {
+                  _person1Field1Controller.text = personsList[0]['name'] ?? '';
+                  _person1Field2Controller.text = personsList[0]['job'] ?? '';
+                }
+                if (personsList.length > 1) {
+                  _person2Controller.text = personsList[1]['details'] ?? '';
+                }
+              }
+
+              // Clear group if empty
+              if (_groupedMois.isEmpty) {
+                _currentGroupId = null;
+                _lockedPaymentMethod = null;
+              }
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✏️ Entry loaded back to form. Please modify it to make it different.'),
+                backgroundColor: Colors.blue,
+                duration: Duration(seconds: 3),
+              ),
+            );
+
+            _phoneFocusNode.requestFocus();
+            return; // Stop save operation
+          } else if (result != null && result.startsWith('overwrite:')) {
+            // Get the MOI ID to overwrite
+            final moiIdToOverwrite = result.split(':')[1];
+
+            // Mark this temp entry to overwrite the existing one
+            entry['overwrite_id'] = moiIdToOverwrite;
+          }
+        }
+      } catch (e) {
+        print('Error checking similar entry: $e');
+      }
+    }
+
 
     bool isFinalSave = _groupedMois.isNotEmpty;
 
@@ -2145,8 +2367,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return;
       }
 
-      // ✅ ✅ ✅ NOW CHECK FOR GLOBAL UPDATE (after all validations pass)
-      // Get phone number from the first grouped entry (form might be cleared)
       String phoneNumber = '';
       if (_groupedMois.isNotEmpty) {
         phoneNumber = _groupedMois[0]['phone'] ?? '';
@@ -2338,64 +2558,111 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           var entry = _groupedMois[i];
 
           if (entry['is_temp'] == true) {
-            // ✅ NEW TEMP ENTRY: Use RPC with SAME group_id for all
-            print('🔒 Saving temp entry ${i + 1}/${_groupedMois.length} with group_id: $_currentGroupId');
+            // ✅ CHECK: Should we overwrite an existing entry?
+            if (entry.containsKey('overwrite_id')) {
+              // OVERWRITE MODE: Update existing entry instead of creating new
+              final moiIdToOverwrite = entry['overwrite_id'];
 
-            List<Map<String, dynamic>>? personsData;
-            if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
-              personsData = List<Map<String, dynamic>>.from(entry['persons']);
-            }
+              print('🔄 Overwriting existing entry: $moiIdToOverwrite');
 
-            int? groupIdToPass;
-            if (i == 0 && entry['is_temp'] == true) {
-              // First temp entry - let RPC generate
-              groupIdToPass = null;
-            } else {
-              // Use the group_id from previous entry or current group
-              groupIdToPass = _currentGroupId;
-            }
+              List<Map<String, dynamic>>? personsData;
+              if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
+                personsData = List<Map<String, dynamic>>.from(entry['persons']);
+              }
 
-            final response = await _supabase.rpc('insert_moi_safe', params: {
-              'p_event_id': _eventId,
-              'p_operator_id': _operatorId,
-              'p_amount': entry['amount'],
-              'p_payment_method': _paymentMethod,
-              'p_persons': personsData,
-              'p_village_name': entry['village_name'],
-              'p_living_place': entry['living_place'],
-              'p_phone': entry['phone'],
-              'p_is_uncle': entry['is_uncle'] ?? false,
-              'p_notes': entry['notes'],
-              'p_group_id': groupIdToPass,  // ✅ null for first, actual for rest
-            });
+              // Fetch current data for old_data
+              final currentData = await _supabase
+                  .from('mois')
+                  .select('*')
+                  .eq('id', moiIdToOverwrite)
+                  .single();
 
-            String newMoiId = response['id'];
-            int actualSerialNo = response['serial_no'];
-            int actualGroupId = response['group_id'];
-
-// ✅ ADD THIS: Track first saved entry for denominations
-            if (firstSavedMoiId == null) {
-              firstSavedMoiId = newMoiId;
-              print('📌 First saved MOI ID: $firstSavedMoiId');
-            }
-
-// ✅ IMPORTANT: Update _currentGroupId after first save
-            if (i == 0) {
-              _currentGroupId = actualGroupId;
-            }
-
-            // ✅ Update the entry in _groupedMois with real data
-            setState(() {
-              _groupedMois[i] = {
-                ...entry,
-                'id': newMoiId,
-                'serial_no': actualSerialNo,
-                'group_id': actualGroupId,
-                'is_temp': false,
+              // Update the existing entry
+              final moiData = {
+                'amount': entry['amount'],
+                'payment_method': _paymentMethod,
+                'persons': personsData,
+                'village_name': entry['village_name'],
+                'living_place': entry['living_place'],
+                'phone': entry['phone'],
+                'is_uncle': entry['is_uncle'] ?? false,
+                'notes': entry['notes'],
+                'updated_at': DateTime.now().toIso8601String(),
+                'old_data': currentData,
               };
-            });
 
-            print('✅ Temp entry saved: $newMoiId with serial: $actualSerialNo, group: $actualGroupId');
+              await _supabase
+                  .from('mois')
+                  .update(moiData)
+                  .eq('id', moiIdToOverwrite);
+
+              // Update local list with overwritten data
+              setState(() {
+                _groupedMois[i] = {
+                  ...entry,
+                  'id': moiIdToOverwrite,
+                  'serial_no': currentData['serial_no'],
+                  'is_temp': false,
+                };
+              });
+
+              print('✅ Overwritten entry: $moiIdToOverwrite');
+
+            } else {
+              // NORMAL NEW ENTRY MODE: Use RPC
+              print('🔒 Saving temp entry ${i + 1}/${_groupedMois.length} with group_id: $_currentGroupId');
+
+              List<Map<String, dynamic>>? personsData;
+              if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
+                personsData = List<Map<String, dynamic>>.from(entry['persons']);
+              }
+
+              int? groupIdToPass;
+              if (i == 0 && entry['is_temp'] == true) {
+                groupIdToPass = null;
+              } else {
+                groupIdToPass = _currentGroupId;
+              }
+
+              final response = await _supabase.rpc('insert_moi_safe', params: {
+                'p_event_id': _eventId,
+                'p_operator_id': _operatorId,
+                'p_amount': entry['amount'],
+                'p_payment_method': _paymentMethod,
+                'p_persons': personsData,
+                'p_village_name': entry['village_name'],
+                'p_living_place': entry['living_place'],
+                'p_phone': entry['phone'],
+                'p_is_uncle': entry['is_uncle'] ?? false,
+                'p_notes': entry['notes'],
+                'p_group_id': groupIdToPass,
+              });
+
+              String newMoiId = response['id'];
+              int actualSerialNo = response['serial_no'];
+              int actualGroupId = response['group_id'];
+
+              if (firstSavedMoiId == null) {
+                firstSavedMoiId = newMoiId;
+                print('📌 First saved MOI ID: $firstSavedMoiId');
+              }
+
+              if (i == 0) {
+                _currentGroupId = actualGroupId;
+              }
+
+              setState(() {
+                _groupedMois[i] = {
+                  ...entry,
+                  'id': newMoiId,
+                  'serial_no': actualSerialNo,
+                  'group_id': actualGroupId,
+                  'is_temp': false,
+                };
+              });
+
+              print('✅ Temp entry saved: $newMoiId with serial: $actualSerialNo, group: $actualGroupId');
+            }
           } else {
             // ✅ EXISTING ENTRY (already in DB)
             if (entry['is_modified'] == true) {
@@ -2893,6 +3160,39 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return;
       }
     }
+
+
+
+    final similarCheckResult = await _checkSimilarEntryBeforeSave();
+
+    if (similarCheckResult == 'cancel') {
+      // User cancelled - do nothing
+      return;
+    } else if (similarCheckResult == 'new') {
+      // User wants to create new entry - just return to form
+      // Form already has data, they can modify it
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please modify the entry to make it different from the existing one'),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    } else if (similarCheckResult != null && similarCheckResult.startsWith('overwrite:')) {
+      // Extract the MOI ID to overwrite
+      final moiIdToOverwrite = similarCheckResult.split(':')[1];
+
+      // Set edit mode to overwrite
+      setState(() {
+        _isEditMode = true;
+        _editingMoiId = moiIdToOverwrite;
+      });
+
+      // Continue with save (will update the existing entry)
+    }
+
+
     // Save single entry
     try {
       String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
@@ -3293,6 +3593,172 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
 
     return result ?? false;
+  }
+
+  // Add this NEW method anywhere in the class (e.g., after _showDuplicateWarningDialog)
+  Future<String?> _checkSimilarEntryBeforeSave() async {
+    try {
+      // Get current form values
+      String villageName = _villageController.text.trim();
+      String person1Name = _person1Field1Controller.text.trim();
+      String person1Job = _person1Field2Controller.text.trim();
+
+      if (villageName.isEmpty || person1Name.isEmpty) {
+        return null; // Skip check if essential fields are empty
+      }
+
+      // Query database for similar entries in THIS event
+      final response = await _supabase
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false);
+
+      // Find matching entry
+      Map<String, dynamic>? matchingEntry;
+
+      for (var entry in response) {
+        // Skip if this is the entry we're currently editing
+        if (_isEditMode && _editingMoiId != null && entry['id'] == _editingMoiId) {
+          continue;
+        }
+
+        // Check village name (case-insensitive)
+        String entryVillage = (entry['village_name'] ?? '').trim().toLowerCase();
+        if (entryVillage != villageName.toLowerCase()) continue;
+
+        // Check person 1
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+          if (personsList.isNotEmpty) {
+            String entryP1Name = (personsList[0]['name'] ?? '').trim().toLowerCase();
+            String entryP1Job = (personsList[0]['job'] ?? '').trim().toLowerCase();
+
+            // Compare names and jobs
+            if (entryP1Name == person1Name.toLowerCase() &&
+                entryP1Job == person1Job.toLowerCase()) {
+              matchingEntry = entry;
+              break; // Found a match
+            }
+          }
+        }
+      }
+
+      if (matchingEntry == null) {
+        return null; // No similar entry found
+      }
+
+      // Show dialog with 3 options
+      final result = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text(
+            '⚠️ Similar Entry Found!',
+            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'An entry with the same Village, Name, and Job already exists:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    border: Border.all(color: Colors.orange, width: 2),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '📍 Village: ${matchingEntry?['village_name'] ?? 'N/A'}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '👤 Serial No: O${matchingEntry?['serial_no'] ?? '0'}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      const SizedBox(height: 4),
+                      if (matchingEntry != null && matchingEntry['persons'] != null) ...[
+                        Text(
+                          '📝 Name: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['name'] ?? 'N/A' : 'N/A'}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        Text(
+                          '💼 Job: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['job'] ?? 'N/A' : 'N/A'}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Text(
+                        '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'What would you like to do?',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            // Cancel button
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'cancel'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.grey[300],
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              child: const Text(
+                'CANCEL',
+                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+            // New Entry button
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'new'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.blue[100],
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              child: const Text(
+                'NEW ENTRY',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+            // Overwrite button
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'overwrite:${matchingEntry!['id']}'),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.orange[100],
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              child: const Text(
+                'OVERWRITE',
+                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      return result; // Returns: 'cancel', 'new', or 'overwrite:ID'
+    } catch (e) {
+      print('Error checking similar entry: $e');
+      return null;
+    }
   }
 
 // ✅ NEW: Generate consolidated group receipt
