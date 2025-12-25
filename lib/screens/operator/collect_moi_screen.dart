@@ -2916,6 +2916,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               // Print using image bytes
               final printerService = ThermalPrinterService();
               await printerService.connectAndPrintImage(context, result['imageBytes']);
+              await printerService.connectAndPrintImage(context, result['imageBytes']);
 
               // Send PDF to WhatsApp
               String? phoneNumber = entry['phone'];
@@ -3061,6 +3062,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               final receipt = receiptsWithImages[i];
 
               // Print using image bytes
+              await printerService.connectAndPrintImage(context, receipt['imageBytes']);
               await printerService.connectAndPrintImage(context, receipt['imageBytes']);
 
               // Send PDF to WhatsApp
@@ -3322,6 +3324,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           final printerService = ThermalPrinterService();
           await printerService.connectAndPrintImage(
               context, result['imageBytes']);
+          await printerService.connectAndPrintImage(
+              context, result['imageBytes']);
 
           // Send PDF to WhatsApp
           String? phoneNumber = _phoneController.text.trim();
@@ -3406,6 +3410,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
         // Print each receipt
         for (int i = 0; i < files.length; i++) {
+          await printerService.connectAndPrint(context, files[i]);
           await printerService.connectAndPrint(context, files[i]);
 
           // Send to WhatsApp
@@ -3862,6 +3867,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         );
         if (result != null) {
           final printerService = ThermalPrinterService();
+          await printerService.connectAndPrintImage(context, result['imageBytes']);
           await printerService.connectAndPrintImage(context, result['imageBytes']);
         }
 
@@ -4628,6 +4634,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         // ✅ Print using thermal printer
         final printerService = ThermalPrinterService();
         await printerService.connectAndPrint(context, file);
+        await printerService.connectAndPrint(context, file);
 
         // ✅ Send to WhatsApp
         String? phoneNumber = _phoneController.text.trim();
@@ -5039,6 +5046,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (result != null) {
             final printerService = ThermalPrinterService();
             await printerService.connectAndPrintImage(context, result['imageBytes']);
+            await printerService.connectAndPrintImage(context, result['imageBytes']);
           }
 
           // Send to all WhatsApp numbers
@@ -5092,6 +5100,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           // Print each receipt
           for (int i = 0; i < files.length; i++) {
+            await printerService.connectAndPrint(context, files[i]);
             await printerService.connectAndPrint(context, files[i]);
 
             // Send to WhatsApp

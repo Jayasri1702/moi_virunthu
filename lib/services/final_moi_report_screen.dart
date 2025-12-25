@@ -251,6 +251,129 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
+  Future<void> _downloadCoverPageOnly() async {
+    if (!await _requestStoragePermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Storage permission is required to download files'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      setState(() {
+        _isDownloading = true;
+        _downloadProgress = 0.0;
+      });
+
+      await _showProgressNotification('Generating cover page...', 0.3);
+
+      final eventData = await _fetchEventDetails(widget.eventId);
+      final fields = <String, String>{
+        'Event Type': eventData['event_type'] ?? '',
+        'Title': eventData['title'] ?? '',
+        'Event For': eventData['event_for'] ?? '',
+        'Remarks': eventData['remark'] ?? '',
+        'Event Date': eventData['event_date'] ?? '',
+        'Venue': eventData['venue'] ?? '',
+        'City': eventData['city'] ?? '',
+      };
+
+      final pngBytes = await _createReceiptPngBytes(fields);
+
+      await _showProgressNotification('Creating PDF...', 0.6);
+
+      // Create a single-page PDF with just the cover image
+// Decode the image to get its dimensions
+      final codec = await ui.instantiateImageCodec(pngBytes);
+      final frame = await codec.getNextFrame();
+      final ui.Image image = frame.image;
+      final imageWidth = image.width.toDouble();
+      final imageHeight = image.height.toDouble();
+
+// Create document with custom page size matching image dimensions
+      final PdfDocument coverDocument = PdfDocument();
+      final PdfSection section = coverDocument.sections!.add();
+      section.pageSettings.size = Size(imageWidth, imageHeight);
+      section.pageSettings.margins.all = 0; // Remove all margins
+
+      final PdfPage coverPage = section.pages.add();
+      final PdfGraphics g = coverPage.graphics;
+      final PdfBitmap bitmap = PdfBitmap(pngBytes);
+
+// Draw image at exact size with no margins
+      g.drawImage(bitmap, Rect.fromLTWH(0, 0, imageWidth, imageHeight));
+
+      final List<int> pdfBytes = coverDocument.saveSync();
+      coverDocument.dispose();
+
+      await _showProgressNotification('Saving PDF...', 0.9);
+
+      final fileName = 'cover_page_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      String? savedFilePath;
+
+      if (Platform.isAndroid) {
+        final downloadsDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadsDir.exists()) {
+          await downloadsDir.create(recursive: true);
+        }
+        final outFile = File('${downloadsDir.path}/$fileName');
+        await outFile.writeAsBytes(pdfBytes);
+        savedFilePath = outFile.path;
+      } else if (Platform.isIOS) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final outFile = File('${appDir.path}/$fileName');
+        await outFile.writeAsBytes(pdfBytes);
+        savedFilePath = outFile.path;
+      }
+
+      await _notificationsPlugin.cancel(0);
+
+      if (savedFilePath != null) {
+        await _showDownloadNotification(fileName, savedFilePath);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Cover page downloaded: $fileName\nTap notification to open'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Open',
+                textColor: Colors.white,
+                onPressed: () async {
+                  await OpenFile.open(savedFilePath);
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      await _notificationsPlugin.cancel(0);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Download error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadProgress = 0.0;
+        });
+      }
+    }
+  }
+
   Future<void> _downloadReport() async {
     if (!await _requestStoragePermission()) {
       if (mounted) {
@@ -653,7 +776,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         textFontSize * 0.9,
         align: TextAlign.center,
         fontWeight: FontWeight.w600,
-        color: const Color(0xFF008000),
+        color: const Color(0xFF0B4206),
         maxWidth: width * 0.9,
       );
     }
@@ -743,7 +866,12 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       Uint8List? htmlPdfBytes;
       try {
         htmlPdfBytes = await Printing.convertHtml(
-          format: pdf_pkg.PdfPageFormat.a4,
+          format: pdf_pkg.PdfPageFormat.a4.copyWith(
+            marginTop: 0,
+            marginBottom: 0,
+            marginLeft: 0,
+            marginRight: 0,
+          ),
           html: htmlContent,
         );
       } catch (e) {
@@ -912,6 +1040,28 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
                       const SizedBox(height: 16),
                       _buildFormatButton('Text', 'txt', Icons.text_fields,
                           const Color(0xFF1976D2)),
+                      const SizedBox(height: 24),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: (_isLoading || _isDownloading) ? null : _downloadCoverPageOnly,
+                          icon: const Icon(Icons.image, size: 28),
+                          label: const Text(
+                            'Download Cover Page Only',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6A1B9A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
