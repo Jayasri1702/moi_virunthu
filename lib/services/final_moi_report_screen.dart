@@ -374,6 +374,8 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     }
   }
 
+  // Fixed _downloadReport() method - Complete replacement
+
   Future<void> _downloadReport() async {
     if (!await _requestStoragePermission()) {
       if (mounted) {
@@ -421,17 +423,10 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           }
         }
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
-        await _showProgressNotification('Generating PDF...', 0.3);
-
-        final serverPdfBytes = base64Decode(_generatedContent!);
-        final mergedPdfBytes = await _createMergedPdfWithImageFirst(
-            serverPdfBytes);
-
         await _showProgressNotification('Saving PDF...', 0.7);
 
-        final fileName = 'final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.pdf';
+        final serverPdfBytes = base64Decode(_generatedContent!);
+        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');
@@ -439,34 +434,20 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
             await downloadsDir.create(recursive: true);
           }
           final outFile = File('${downloadsDir.path}/$fileName');
-
-          if (mergedPdfBytes != null) {
-            await outFile.writeAsBytes(mergedPdfBytes);
-          } else {
-            await outFile.writeAsBytes(serverPdfBytes);
-          }
+          await outFile.writeAsBytes(serverPdfBytes);
 
           savedFileName = fileName;
           savedFilePath = outFile.path;
         } else if (Platform.isIOS) {
           final appDir = await getApplicationDocumentsDirectory();
           final outFile = File('${appDir.path}/$fileName');
-
-          if (mergedPdfBytes != null) {
-            await outFile.writeAsBytes(mergedPdfBytes);
-          } else {
-            await outFile.writeAsBytes(serverPdfBytes);
-          }
+          await outFile.writeAsBytes(serverPdfBytes);
 
           savedFileName = fileName;
           savedFilePath = outFile.path;
         }
       } else if (_selectedFormat == 'html' && _generatedContent != null) {
-        final mergedHtml = await _createMergedHtmlWithImageFirst(
-            _generatedContent!);
-        final fileName = 'final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.html';
+        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.html';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');
@@ -474,22 +455,20 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
             await downloadsDir.create(recursive: true);
           }
           final file = File('${downloadsDir.path}/$fileName');
-          await file.writeAsString(mergedHtml, flush: true);
+          await file.writeAsString(_generatedContent!, flush: true);
 
           savedFileName = fileName;
           savedFilePath = file.path;
         } else if (Platform.isIOS) {
           final appDir = await getApplicationDocumentsDirectory();
           final file = File('${appDir.path}/$fileName');
-          await file.writeAsString(mergedHtml, flush: true);
+          await file.writeAsString(_generatedContent!, flush: true);
 
           savedFileName = fileName;
           savedFilePath = file.path;
         }
       } else if (_selectedFormat == 'txt' && _generatedContent != null) {
-        final fileName = 'final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.txt';
+        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.txt';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');
@@ -573,45 +552,26 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         }
       } else if (_selectedFormat == 'pdf' && _generatedContent != null) {
         final serverPdfBytes = base64Decode(_generatedContent!);
-        final mergedPdfBytes = await _createMergedPdfWithImageFirst(
-            serverPdfBytes);
         final output = await getTemporaryDirectory();
-        final outPath = '${output.path}/final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.pdf';
+        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
         final outFile = File(outPath);
-
-        if (mergedPdfBytes != null) {
-          await outFile.writeAsBytes(mergedPdfBytes);
-        } else {
-          await outFile.writeAsBytes(serverPdfBytes);
-        }
+        await outFile.writeAsBytes(serverPdfBytes);
 
         await Share.shareXFiles(
-          [
-            XFile(outFile.path, mimeType: 'application/pdf',
-                name: 'final_moi_report.pdf')
-          ],
+          [XFile(outFile.path, mimeType: 'application/pdf', name: 'final_moi_report.pdf')],
           text: 'Final Moi Report',
         );
       } else if (_selectedFormat == 'html' && _generatedContent != null) {
-        final html = _generatedContent!;
-        final mergedHtml = await _createMergedHtmlWithImageFirst(html);
         final output = await getTemporaryDirectory();
-        final outPath = '${output.path}/final_moi_report_${DateTime
-            .now()
-            .millisecondsSinceEpoch}.html';
+        final outPath = '${output.path}/final_moi_report_${DateTime.now().millisecondsSinceEpoch}.html';
         final file = File(outPath);
-        await file.writeAsString(mergedHtml, flush: true);
+        await file.writeAsString(_generatedContent!, flush: true);
 
         await Share.shareXFiles(
-          [
-            XFile(
-                file.path, mimeType: 'text/html', name: 'final_moi_report.html')
-          ],
+          [XFile(file.path, mimeType: 'text/html', name: 'final_moi_report.html')],
           text: 'Final Moi Report',
         );
-      } else if (_selectedFormat == 'txt' && _generatedContent != null) {
+      }else if (_selectedFormat == 'txt' && _generatedContent != null) {
         final output = await getTemporaryDirectory();
         final outPath = '${output.path}/final_moi_report_${DateTime
             .now()

@@ -67,6 +67,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String? _city;
   String? _customerPhone;
 
+  bool _isClearPressed = false;
+  double _clearPressProgress = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -5968,225 +5971,211 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               itemCount: _groupedMois.length,
               separatorBuilder: (context, index) => const Divider(
                   color: Colors.black, thickness: 1, height: 12),
-              itemBuilder: (context, index) {
-                final moi = _groupedMois[index];
-                final isCurrentlyEditing = _editingMoiId == moi['id'];
+                itemBuilder: (context, index) {
+                  final moi = _groupedMois[index];
+                  final isCurrentlyEditing = _editingMoiId == moi['id'];
 
-                // ✅ Format amount as integer
-                var amountValue = moi['amount'];
-                int displayAmount = 0;
-                if (amountValue is int) {
-                  displayAmount = amountValue;
-                } else if (amountValue is double) {
-                  displayAmount = amountValue.toInt();
-                } else if (amountValue != null) {
-                  displayAmount =
-                      int.tryParse(amountValue.toString()) ?? 0;
-                }
+                  var amountValue = moi['amount'];
+                  int displayAmount = 0;
+                  if (amountValue is int) {
+                    displayAmount = amountValue;
+                  } else if (amountValue is double) {
+                    displayAmount = amountValue.toInt();
+                  } else if (amountValue != null) {
+                    displayAmount = int.tryParse(amountValue.toString()) ?? 0;
+                  }
 
-                return Dismissible(
-                  key: Key(
-                      '${moi['id']}_$index'), // ✅ FIXED: Use compound key with index
-                  direction: DismissDirection.horizontal,
-                  confirmDismiss: (direction) async {
-
-                    if (moi['is_temp'] != true) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              '❌ Cannot delete saved entries. This entry is already saved in the database.',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            backgroundColor: Colors.red,
-                            duration: Duration(seconds: 3),
-                          ),
-                        );
-                      }
-                      return false; // Prevent dismissal
-                    }
-                    if (_isEditMode) {
-                      // If in edit mode, show a SnackBar (toast-like message)
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              '❌ Cannot delete entry while in edit mode.',
-                              style:
-                              TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            backgroundColor: Colors.red,
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                      return false; // Prevent dismissal
-                    } else {
-                      return await showDialog<bool>(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => AlertDialog(
-                          title: const Text(
-                            '🗑️ Delete Entry',
-                            style: TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Do you want to delete this entry from the group?',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold),
+                  return Dismissible(
+                    key: Key('${moi['id']}_$index'),
+                    direction: DismissDirection.horizontal,
+                    confirmDismiss: (direction) async {
+                      if (moi['is_temp'] != true) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '❌ Cannot delete saved entries. This entry is already saved in the database.',
+                                style: TextStyle(fontWeight: FontWeight.bold),
                               ),
-                              const SizedBox(height: 12),
-                              Text('Serial No: O${moi['serial_no']}'),
-                              Text(
-                                  'Name: ${_getPersonsDisplay(moi['persons'])}'),
-                              if (moi['village_name'] != null)
-                                Text('Village: ${moi['village_name']}'),
-                              Text('Amount: ₹$displayAmount'),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                        return false;
+                      }
+                      if (_isEditMode) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                '❌ Cannot delete entry while in edit mode.',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              backgroundColor: Colors.red,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                        return false;
+                      } else {
+                        return await showDialog<bool>(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (context) => AlertDialog(
+                            title: const Text(
+                              '🗑️ Delete Entry',
+                              style: TextStyle(
+                                  color: Colors.red, fontWeight: FontWeight.bold),
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Do you want to delete this entry from the group?',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                Text('Serial No: O${moi['serial_no']}'),
+                                Text('Name: ${_getPersonsDisplay(moi['persons'])}'),
+                                if (moi['village_name'] != null)
+                                  Text('Village: ${moi['village_name']}'),
+                                Text('Amount: ₹$displayAmount'),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.grey[200],
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 10),
+                                ),
+                                child: const Text(
+                                  'CANCEL',
+                                  style: TextStyle(
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.red[100],
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 10),
+                                ),
+                                child: const Text(
+                                  'DELETE',
+                                  style: TextStyle(
+                                      color: Colors.red, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                             ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(context, false),
-                              style: TextButton.styleFrom(
-                                backgroundColor: Colors.grey[200],
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 10),
-                              ),
-                              child: const Text(
-                                'CANCEL',
-                                style: TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold),
+                        );
+                      }
+                    },
+                    onDismissed: (direction) async {
+                      final moiToDelete = Map<String, dynamic>.from(moi);
+                      await _handleDeleteFromGroup(moiToDelete);
+                    },
+                    background: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 20),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                    ),
+                    secondaryBackground: Container(
+                      color: Colors.red,
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                    ),
+                    // ✅ CHANGED: Replace InkWell with GestureDetector for long press
+                    child: GestureDetector(
+                      onLongPress: () {
+                        // Only load on long press (3 seconds)
+                        _loadGroupedEntryForEdit(moi);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: isCurrentlyEditing
+                              ? Colors.blue.shade50
+                              : (moi['is_temp'] == true
+                              ? Colors.yellow[50]
+                              : Colors.transparent),
+                          border: isCurrentlyEditing
+                              ? Border.all(color: Colors.blue, width: 2)
+                              : (moi['is_temp'] == true
+                              ? Border.all(color: Colors.orange, width: 1)
+                              : null),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _getPersonsDisplay(moi['persons']),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: isCurrentlyEditing
+                                          ? Colors.blue
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                  if (moi['village_name'] != null)
+                                    Text(
+                                      moi['village_name'],
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: isCurrentlyEditing
+                                            ? Colors.blue.shade700
+                                            : Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                            TextButton(
-                              onPressed: () =>
-                                  Navigator.pop(context, true),
-                              style: TextButton.styleFrom(
-                                backgroundColor: Colors.red[100],
+                            if (isCurrentlyEditing)
+                              Container(
+                                margin: const EdgeInsets.only(right: 6),
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 20, vertical: 10),
+                                    horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'EDITING',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold),
+                                ),
                               ),
-                              child: const Text(
-                                'DELETE',
-                                style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold),
+                            Text(
+                              '₹$displayAmount',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: isCurrentlyEditing
+                                    ? Colors.blue
+                                    : Colors.green,
                               ),
                             ),
                           ],
                         ),
-                      );
-                    }
-                  },
-                  onDismissed: (direction) async {
-                    // ✅ Create a local copy before async operation
-                    final moiToDelete = Map<String, dynamic>.from(moi);
-                    await _handleDeleteFromGroup(moiToDelete);
-                  },
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerLeft,
-                    padding: const EdgeInsets.only(left: 20),
-                    child: const Icon(Icons.delete,
-                        color: Colors.white, size: 30),
-                  ),
-                  secondaryBackground: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete,
-                        color: Colors.white, size: 30),
-                  ),
-                  child: InkWell(
-                    onTap: () => _loadGroupedEntryForEdit(moi),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: isCurrentlyEditing
-                            ? Colors.blue.shade50
-                            : (moi['is_temp'] == true
-                            ? Colors.yellow[50]
-                            : Colors.transparent),
-                        border: isCurrentlyEditing
-                            ? Border.all(color: Colors.blue, width: 2)
-                            : (moi['is_temp'] == true
-                            ? Border.all(
-                            color: Colors.orange, width: 1)
-                            : null),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _getPersonsDisplay(moi['persons']),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                    color: isCurrentlyEditing
-                                        ? Colors.blue
-                                        : Colors.black,
-                                  ),
-                                ),
-                                if (moi['village_name'] != null)
-                                  Text(
-                                    moi['village_name'],
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: isCurrentlyEditing
-                                          ? Colors.blue.shade700
-                                          : Colors.grey[600],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (isCurrentlyEditing)
-                            Container(
-                              margin: const EdgeInsets.only(right: 6),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'EDITING',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          Text(
-                            '₹$displayAmount',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: isCurrentlyEditing
-                                  ? Colors.blue
-                                  : Colors.green,
-                            ),
-                          ),
-                        ],
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                }
             ),
           ),
 
@@ -6341,7 +6330,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-  // ✅ FIX 4: Update _buildActionButtons to hide receipt buttons when skip_print is true
+  // Replace the _buildActionButtons method (around line 3800)
   Widget _buildActionButtons() {
     return Column(
       children: [
@@ -6359,7 +6348,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     onTap: _handleSaveAndPrint,
                     child: Center(
                       child: Text(
-                        // ✅ FIX: Change button text when skip_print is true
                         _skipPrint ? 'Save' : 'Save & Print',
                         style: const TextStyle(
                             color: Colors.white,
@@ -6425,30 +6413,85 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 8),
         ],
 
-        Container(
-          width: double.infinity,
-          height: 42,
-          decoration: BoxDecoration(
-              color: Colors.orange,
-              border: Border.all(color: Colors.black, width: 2)),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _handleClear,
-              child: const Center(
-                child: Text(
-                  'Clear',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold),
+        // ✅ UPDATED: Clear button with long press (3 seconds)
+        GestureDetector(
+          onLongPressStart: (_) {
+            setState(() {
+              _isClearPressed = true;
+              _clearPressProgress = 0.0;
+            });
+            _startClearProgress();
+          },
+          onLongPressEnd: (_) {
+            setState(() {
+              _isClearPressed = false;
+              _clearPressProgress = 0.0;
+            });
+          },
+          child: Container(
+            width: double.infinity,
+            height: 42,
+            decoration: BoxDecoration(
+                color: Colors.orange,
+                border: Border.all(color: Colors.black, width: 2)),
+            child: Stack(
+              children: [
+                // Progress indicator
+                if (_isClearPressed)
+                  Positioned.fill(
+                    child: LinearProgressIndicator(
+                      value: _clearPressProgress,
+                      backgroundColor: Colors.transparent,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.orange[300]!),
+                    ),
+                  ),
+                // Text
+                Center(
+                  child: Text(
+                    _isClearPressed
+                        ? 'Hold to Clear (${(3 - (_clearPressProgress * 3)).toInt()}s)'
+                        : 'Clear',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  // Add this new method to handle clear progress
+  void _startClearProgress() async {
+    const totalDuration = Duration(seconds: 3);
+    const updateInterval = Duration(milliseconds: 50);
+    final steps = totalDuration.inMilliseconds ~/ updateInterval.inMilliseconds;
+
+    for (int i = 0; i <= steps; i++) {
+      if (!_isClearPressed) break;
+
+      await Future.delayed(updateInterval);
+
+      if (!mounted) break;
+
+      setState(() {
+        _clearPressProgress = i / steps;
+      });
+
+      // If reached 100%, execute clear
+      if (_clearPressProgress >= 1.0 && _isClearPressed) {
+        _handleClear();
+        setState(() {
+          _isClearPressed = false;
+          _clearPressProgress = 0.0;
+        });
+        break;
+      }
+    }
   }
 
   @override
