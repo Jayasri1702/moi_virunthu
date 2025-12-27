@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image/image.dart' as img;
@@ -12,23 +11,10 @@ class ThermalPrinterService {
   factory ThermalPrinterService() => _instance;
   ThermalPrinterService._internal();
 
-  final BlueThermalPrinter _bluetooth = BlueThermalPrinter.instance;
-  BluetoothDevice? _connectedDevice;
-  // ✅ ADD THESE NEW LINES
   UsbPort? _usbPort;
   UsbDevice? _connectedUsbDevice;
 
-  static const String _lastPrinterKey = 'last_printer_address';
-
-  // Check if printer is connected
-  Future<bool> isConnected() async {
-    try {
-      return await _bluetooth.isConnected ?? false;
-    } catch (e) {
-      print('❌ Error checking connection: $e');
-      return false;
-    }
-  }
+  static const String _lastPrinterKey = 'last_usb_printer';
 
   /// Check if USB printer is connected
   Future<bool> isUsbConnected() async {
@@ -45,51 +31,16 @@ class ThermalPrinterService {
     }
   }
 
-  /// Request Bluetooth permissions
-  Future<bool> requestPermissions() async {
-    try {
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.bluetooth,
-        Permission.bluetoothScan,
-        Permission.bluetoothConnect,
-        Permission.location,
-      ].request();
-
-      bool allGranted = statuses.values.every((status) => status.isGranted);
-
-      if (!allGranted) {
-        print('⚠️ Some permissions not granted');
-      }
-
-      return allGranted;
-    } catch (e) {
-      print('❌ Error requesting permissions: $e');
-      return false;
-    }
-  }
-
-  /// Get list of paired Bluetooth devices
-  Future<List<BluetoothDevice>> getPairedDevices() async {
-    try {
-      bool permissionsGranted = await requestPermissions();
-      if (!permissionsGranted) {
-        return [];
-      }
-
-      List<BluetoothDevice> devices = await _bluetooth.getBondedDevices();
-      print('📱 Found ${devices.length} paired devices');
-      return devices;
-    } catch (e) {
-      print('❌ Error getting paired devices: $e');
-      return [];
-    }
-  }
-
   /// Get list of USB devices
   Future<List<UsbDevice>> getUsbDevices() async {
     try {
       List<UsbDevice> devices = await UsbSerial.listDevices();
       print('🔌 Found ${devices.length} USB devices');
+
+      for (var device in devices) {
+        print('📱 Device: ${device.productName} - VID: ${device.vid}, PID: ${device.pid}');
+      }
+
       return devices;
     } catch (e) {
       print('❌ Error getting USB devices: $e');
@@ -97,29 +48,7 @@ class ThermalPrinterService {
     }
   }
 
-  /// Connect to printer
-  Future<bool> connect(BluetoothDevice device) async {
-    try {
-      print('🔌 Connecting to ${device.name}...');
-
-      bool? isConnected = await _bluetooth.isConnected;
-      if (isConnected == true) {
-        await _bluetooth.disconnect();
-        await Future.delayed(const Duration(seconds: 1));
-      }
-
-      await _bluetooth.connect(device);
-      _connectedDevice = device;
-
-      print('✅ Connected to ${device.name}');
-      return true;
-    } catch (e) {
-      print('❌ Connection error: $e');
-      return false;
-    }
-  }
-
-  /// Connect to USB printer
+  /// Connect to USB printer (ATPOS AT-301)
   Future<bool> connectUsb(UsbDevice device) async {
     try {
       print('🔌 Connecting to USB printer: ${device.productName}...');
@@ -145,18 +74,29 @@ class ThermalPrinterService {
         return false;
       }
 
-      // Configure port
+      // Configure port for thermal printer
       await _usbPort!.setDTR(true);
       await _usbPort!.setRTS(true);
+
+      // Standard baud rate for ESC/POS printers
       await _usbPort!.setPortParameters(
-        9600, // baudRate
+        9600, // baudRate - try 115200 if 9600 doesn't work
         UsbPort.DATABITS_8,
         UsbPort.STOPBITS_1,
         UsbPort.PARITY_NONE,
       );
 
       _connectedUsbDevice = device;
+
+      // Save last used printer
+      await _saveLastPrinterInfo(device.vid.toString(), device.pid.toString());
+
       print('✅ Connected to USB printer');
+
+      // Test connection with initialize command
+      await _usbPort!.write(Uint8List.fromList([0x1B, 0x40])); // ESC @ - Initialize
+      await Future.delayed(Duration(milliseconds: 100));
+
       return true;
     } catch (e) {
       print('❌ USB connection error: $e');
@@ -165,29 +105,21 @@ class ThermalPrinterService {
     }
   }
 
-  /// Disconnect from printer
+  /// Disconnect from USB printer
   Future<void> disconnect() async {
     try {
-      // ✅ Disconnect USB if connected
       if (_usbPort != null) {
         await _usbPort!.close();
         _usbPort = null;
         _connectedUsbDevice = null;
         print('✅ USB Disconnected');
       }
-
-      // Disconnect Bluetooth if connected
-      await _bluetooth.disconnect();
-      _connectedDevice = null;
-      print('✅ Bluetooth Disconnected');
     } catch (e) {
       print('❌ Error disconnecting: $e');
     }
   }
 
-  // ✅ FIXED _convertImageToEscPos method
-// Replace the existing method in thermal_printer_service.dart with this:
-
+  /// Convert image to ESC/POS format
   List<int> _convertImageToEscPos(Uint8List imageBytes) {
     try {
       print('🔄 Starting image conversion...');
@@ -201,14 +133,13 @@ class ThermalPrinterService {
 
       print('📏 Original size: ${image.width}x${image.height}');
 
-      // ✅ CRITICAL: Use 576 pixels for correct length
+      // Resize to 576 pixels width (standard for 80mm thermal printer)
       int targetWidth = 576;
-      // ✅ FIX 1: Use cubic interpolation for smoother resizing
       image = img.copyResize(image, width: targetWidth, interpolation: img.Interpolation.cubic);
 
       print('📏 Resized to: ${image.width}x${image.height}');
 
-      // ✅ FIX 2: Trim any extra white space/borders
+      // Trim white space
       image = img.trim(image, mode: img.TrimMode.transparent);
 
       // Convert to grayscale
@@ -216,17 +147,17 @@ class ThermalPrinterService {
 
       print('🎨 Converted to grayscale');
 
-      // ✅ FIX 3: Better contrast for clearer text (1.4 instead of 1.2)
+      // Enhance contrast and brightness
       image = img.adjustColor(image, contrast: 1.4, brightness: 1.05);
 
-      // ✅ FIX 4: Sharpen the image for clearer text
+      // Sharpen for clearer text
       image = img.convolution(image, filter: [
         0, -1, 0,
         -1, 5, -1,
         0, -1, 0
       ]);
 
-      print('✨ Enhanced contrast, brightness, and sharpness');
+      print('✨ Enhanced image quality');
 
       List<int> escPosData = [];
 
@@ -238,18 +169,18 @@ class ThermalPrinterService {
       // Initialize printer
       escPosData.addAll([0x1B, 0x40]); // ESC @ - Initialize printer
 
-      // Set line spacing to 0 for better image quality
-      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 n - Set line spacing to n
+      // Set line spacing to 0
+      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 n - Set line spacing
 
-      // ✅ CRITICAL: Print in chunks of 24 pixels height
+      // Print in 24-pixel chunks
       int chunkCount = 0;
       for (int y = 0; y < height; y += 24) {
         chunkCount++;
 
-        // ESC * 33 command (24-dot double-density mode - best quality)
+        // ESC * 33 command (24-dot double-density)
         escPosData.addAll([0x1B, 0x2A, 33]);
 
-        // Width in little-endian format
+        // Width in little-endian
         escPosData.add(width & 0xFF);
         escPosData.add((width >> 8) & 0xFF);
 
@@ -260,11 +191,10 @@ class ThermalPrinterService {
             for (int b = 0; b < 8; b++) {
               int py = y + (k * 8) + b;
               if (py < height) {
-                // Get pixel value
                 img.Pixel pixel = image.getPixel(x, py);
                 int gray = pixel.r.toInt();
 
-                // ✅ FIX 5: Use 128 threshold for balanced printing (not 140)
+                // Threshold at 128 for balanced printing
                 if (gray < 128) {
                   slice |= (1 << (7 - b));
                 }
@@ -284,78 +214,13 @@ class ThermalPrinterService {
 
       print('✅ Generated ${escPosData.length} bytes in $chunkCount chunks');
 
-      // Reset line spacing to default
-      escPosData.addAll([0x1B, 0x32]); // ESC 2 - Default line spacing
+      // Reset line spacing
+      escPosData.addAll([0x1B, 0x32]); // ESC 2
 
       return escPosData;
     } catch (e) {
       print('❌ Error converting image: $e');
-      print('Stack trace: ${StackTrace.current}');
       return [];
-    }
-  }
-
-// ✅ OPTIMIZATION 5: Increase chunk size for faster data transfer
-  Future<bool> printImageBytes(Uint8List imageBytes) async {
-    try {
-      bool connected = await isConnected();
-      if (!connected) {
-        print('❌ Printer not connected');
-        return false;
-      }
-
-      print('🖨️ Converting image for thermal printer...');
-
-      // Convert image to ESC/POS format
-      List<int> escPosData = _convertImageToEscPos(imageBytes);
-
-      if (escPosData.isEmpty) {
-        print('❌ Failed to convert image');
-        return false;
-      }
-
-      print('🖨️ Sending ${escPosData.length} bytes to printer');
-
-      // ✅ ULTRA OPTIMIZED: Send larger chunks WITHOUT delays for maximum speed
-      const int chunkSize = 4096; // 4KB chunks (doubled from 2KB)
-      int totalChunks = (escPosData.length / chunkSize).ceil();
-
-      print('📦 Sending in $totalChunks chunks of ${chunkSize}B...');
-
-      for (int i = 0; i < escPosData.length; i += chunkSize) {
-        int end = (i + chunkSize < escPosData.length)
-            ? i + chunkSize
-            : escPosData.length;
-
-        await _bluetooth.writeBytes(
-            Uint8List.fromList(escPosData.sublist(i, end))
-        );
-
-        // ✅ CRITICAL: NO DELAY between chunks for maximum speed
-        // The printer buffer can handle it
-
-        // Progress logging (less frequent)
-        if ((i / chunkSize).floor() % 20 == 0 || end >= escPosData.length) {
-          int currentChunk = (i / chunkSize).floor() + 1;
-          print('📤 Sent $currentChunk/$totalChunks');
-        }
-      }
-
-      print('✅ All data sent');
-
-      // Add spacing
-      await _bluetooth.printNewLine();
-      await _bluetooth.printNewLine();
-      await _bluetooth.printNewLine();
-
-      // Cut paper
-      await _bluetooth.paperCut();
-
-      print('✅ Print completed');
-      return true;
-    } catch (e) {
-      print('❌ Print error: $e');
-      return false;
     }
   }
 
@@ -379,8 +244,8 @@ class ThermalPrinterService {
 
       print('🖨️ Sending ${escPosData.length} bytes to USB printer');
 
-      // Send data in chunks
-      const int chunkSize = 4096;
+      // Send data in chunks with small delays
+      const int chunkSize = 1024; // Smaller chunks for USB stability
       int totalChunks = (escPosData.length / chunkSize).ceil();
 
       print('📦 Sending in $totalChunks chunks of ${chunkSize}B...');
@@ -390,9 +255,14 @@ class ThermalPrinterService {
             ? i + chunkSize
             : escPosData.length;
 
-        await _usbPort!.write(Uint8List.fromList(escPosData.sublist(i, end)));
+        Uint8List chunk = Uint8List.fromList(escPosData.sublist(i, end));
 
-        if ((i / chunkSize).floor() % 20 == 0 || end >= escPosData.length) {
+        await _usbPort!.write(chunk);
+
+        // Small delay for printer buffer (important for USB)
+        await Future.delayed(Duration(milliseconds: 50));
+
+        if ((i / chunkSize).floor() % 10 == 0 || end >= escPosData.length) {
           int currentChunk = (i / chunkSize).floor() + 1;
           print('📤 Sent $currentChunk/$totalChunks');
         }
@@ -400,69 +270,34 @@ class ThermalPrinterService {
 
       print('✅ All data sent via USB');
 
-      // Add spacing and cut paper
-      await _usbPort!.write(Uint8List.fromList([0x0A, 0x0A, 0x0A])); // Line feeds
-      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00])); // Paper cut
+      // Wait for data to be processed
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Add spacing
+      await _usbPort!.write(Uint8List.fromList([0x0A, 0x0A, 0x0A]));
+      await Future.delayed(Duration(milliseconds: 200));
+
+      // Cut paper (ESC i - Full cut)
+      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00]));
 
       print('✅ USB Print completed');
       return true;
     } catch (e) {
       print('❌ USB Print error: $e');
+      print('Stack trace: ${StackTrace.current}');
       return false;
     }
   }
 
-  // Print PDF file (for WhatsApp - keep this for backward compatibility)
-  Future<bool> printPdfFile(File pdfFile) async {
-    try {
-      bool connected = await isConnected();
-      if (!connected) {
-        print('❌ Printer not connected');
-        return false;
-      }
-
-      print('🖨️ Printing PDF (trying image path method)');
-
-      // Try using printImage with file path
-      await _bluetooth.printImage(pdfFile.path);
-
-      // Add spacing
-      _bluetooth.printNewLine();
-      _bluetooth.printNewLine();
-
-      // Cut paper
-      _bluetooth.paperCut();
-
-      print('✅ Print job sent');
-      return true;
-    } catch (e) {
-      print('❌ Print error: $e');
-      return false;
-    }
-  }
-
-  /// Show printer selection dialog
-  Future<BluetoothDevice?> showPrinterSelectionDialog(BuildContext context) async {
-    bool permissionsGranted = await requestPermissions();
-    if (!permissionsGranted) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Bluetooth permissions required'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return null;
-    }
-
-    List<BluetoothDevice> devices = await getPairedDevices();
+  /// Show USB printer selection dialog
+  Future<UsbDevice?> showUsbPrinterSelectionDialog(BuildContext context) async {
+    List<UsbDevice> devices = await getUsbDevices();
 
     if (devices.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('⚠️ No paired Bluetooth devices found. Please pair your printer first.'),
+            content: Text('⚠️ No USB printers found. Please connect your printer.'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -472,11 +307,11 @@ class ThermalPrinterService {
     }
 
     if (context.mounted) {
-      return await showDialog<BluetoothDevice>(
+      return await showDialog<UsbDevice>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text(
-            'Select Printer',
+            'Select USB Printer',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
@@ -488,8 +323,8 @@ class ThermalPrinterService {
                 final device = devices[index];
                 return ListTile(
                   leading: const Icon(Icons.print, color: Colors.blue),
-                  title: Text(device.name ?? 'Unknown Device'),
-                  subtitle: Text(device.address ?? ''),
+                  title: Text(device.productName ?? 'USB Printer'),
+                  subtitle: Text('VID: ${device.vid}, PID: ${device.pid}'),
                   onTap: () => Navigator.pop(context, device),
                 );
               },
@@ -508,110 +343,101 @@ class ThermalPrinterService {
     return null;
   }
 
-  /// Connect and print image bytes (USB FIRST, then Bluetooth)
+  /// Connect and print image via USB
   Future<bool> connectAndPrintImage(BuildContext context, Uint8List imageBytes) async {
     try {
-      // ✅ STEP 1: Check if USB printer is connected FIRST
+      print('🔌 Checking for USB printer...');
+
+      // Check if already connected
+      if (_usbPort != null) {
+        print('✅ Already connected to USB printer');
+
+        bool printSuccess = await printImageBytesUsb(imageBytes);
+
+        if (printSuccess && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Receipt sent to USB printer'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        return printSuccess;
+      }
+
+      // Get USB devices
       List<UsbDevice> usbDevices = await getUsbDevices();
 
-      if (usbDevices.isNotEmpty) {
-        print('🔌 USB printer detected - using USB connection');
+      if (usbDevices.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('❌ No USB printer found. Please connect your printer.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return false;
+      }
 
-        // Check if already connected to USB
-        if (_usbPort == null) {
-          // Connect to first USB device
-          bool usbConnected = await connectUsb(usbDevices[0]);
+      // Try to auto-connect to last used printer
+      String? lastVid = await _getLastPrinterVid();
+      String? lastPid = await _getLastPrinterPid();
 
-          if (!usbConnected) {
-            print('⚠️ USB connection failed, falling back to Bluetooth');
+      UsbDevice? device;
+
+      if (lastVid != null && lastPid != null) {
+        try {
+          device = usbDevices.firstWhere(
+                (d) => d.vid.toString() == lastVid && d.pid.toString() == lastPid,
+          );
+
+          bool autoConnected = await connectUsb(device);
+          if (!autoConnected) {
+            device = null;
           } else {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Connected to USB Printer'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            }
-
-            // Print via USB
-            bool printSuccess = await printImageBytesUsb(imageBytes);
-
-            if (printSuccess && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('✅ Receipt sent to USB printer'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
-
-            return printSuccess;
+            print('✅ Auto-connected to last used printer');
           }
-        } else {
-          // Already connected to USB, just print
-          print('✅ Already connected to USB printer');
-
-          bool printSuccess = await printImageBytesUsb(imageBytes);
-
-          if (printSuccess && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Receipt sent to USB printer'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
-
-          return printSuccess;
+        } catch (e) {
+          device = null;
         }
       }
 
-      // ✅ STEP 2: No USB printer found, use BLUETOOTH
-      print('📱 No USB printer found, using Bluetooth');
+      // If no auto-connect, show selection dialog or connect to first device
+      if (device == null) {
+        if (usbDevices.length == 1) {
+          // Only one device, connect automatically
+          device = usbDevices[0];
+          bool connectSuccess = await connectUsb(device);
 
-      bool connected = await isConnected();
-
-      if (!connected) {
-        // Try to auto-connect to last used printer
-        String? lastPrinterAddress = await _getLastPrinterAddress();
-        BluetoothDevice? device;
-
-        if (lastPrinterAddress != null) {
-          List<BluetoothDevice> devices = await getPairedDevices();
-          try {
-            device = devices.firstWhere(
-                  (d) => d.address == lastPrinterAddress,
-            );
-
-            // Try auto-connect
-            bool autoConnected = await connect(device);
-            if (!autoConnected) {
-              device = null;
+          if (!connectSuccess) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('❌ Failed to connect to USB printer'),
+                  backgroundColor: Colors.red,
+                ),
+              );
             }
-          } catch (e) {
-            device = null;
+            return false;
           }
-        }
-
-        // If no auto-connect, show selection dialog
-        if (device == null) {
-          device = await showPrinterSelectionDialog(context);
+        } else {
+          // Multiple devices, show selection
+          device = await showUsbPrinterSelectionDialog(context);
 
           if (device == null) {
             return false;
           }
 
-          // Connect to selected printer
-          bool connectSuccess = await connect(device);
+          bool connectSuccess = await connectUsb(device);
           if (!connectSuccess) {
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('❌ Failed to connect to ${device.name}'),
+                  content: Text('❌ Failed to connect to ${device.productName}'),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -620,13 +446,10 @@ class ThermalPrinterService {
           }
         }
 
-        // Save last used printer
-        await _saveLastPrinterAddress(device.address ?? '');
-
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Connected to ${device.name}'),
+              content: Text('✅ Connected to ${device.productName ?? "USB Printer"}'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 1),
             ),
@@ -634,13 +457,13 @@ class ThermalPrinterService {
         }
       }
 
-      // Print via Bluetooth
-      bool printSuccess = await printImageBytes(imageBytes);
+      // Print via USB
+      bool printSuccess = await printImageBytesUsb(imageBytes);
 
       if (printSuccess && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Receipt sent to Bluetooth printer'),
+            content: Text('✅ Receipt sent to USB printer'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -662,117 +485,58 @@ class ThermalPrinterService {
     }
   }
 
-  // Connect and print PDF (keep for backward compatibility)
-  Future<bool> connectAndPrint(BuildContext context, File pdfFile) async {
-    try {
-      // Check if already connected
-      bool connected = await isConnected();
-
-      if (!connected) {
-        // Try to auto-connect to last used printer
-        String? lastPrinterAddress = await _getLastPrinterAddress();
-        BluetoothDevice? device;
-
-        if (lastPrinterAddress != null) {
-          List<BluetoothDevice> devices = await getPairedDevices();
-          try {
-            device = devices.firstWhere(
-                  (d) => d.address == lastPrinterAddress,
-            );
-
-            // Try auto-connect
-            bool autoConnected = await connect(device);
-            if (!autoConnected) {
-              device = null;
-            }
-          } catch (e) {
-            device = null;
-          }
-        }
-
-        // If no auto-connect, show selection dialog
-        if (device == null) {
-          device = await showPrinterSelectionDialog(context);
-
-          if (device == null) {
-            return false;
-          }
-
-          // Connect to selected printer
-          bool connectSuccess = await connect(device);
-          if (!connectSuccess) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('❌ Failed to connect to ${device.name}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-            return false;
-          }
-        }
-
-        // Save last used printer
-        await _saveLastPrinterAddress(device.address ?? '');
-
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Connected to ${device.name}'),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 1),
-            ),
-          );
-        }
-      }
-
-      // Print the PDF
-      bool printSuccess = await printPdfFile(pdfFile);
-
-      if (printSuccess && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Receipt sent to printer'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      return printSuccess;
-    } catch (e) {
-      print('❌ Error in connectAndPrint: $e');
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Print failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return false;
-    }
-  }
-
-  /// Save last used printer address
-  Future<void> _saveLastPrinterAddress(String address) async {
+  /// Save last used printer info
+  Future<void> _saveLastPrinterInfo(String vid, String pid) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_lastPrinterKey, address);
+      await prefs.setString('${_lastPrinterKey}_vid', vid);
+      await prefs.setString('${_lastPrinterKey}_pid', pid);
     } catch (e) {
       print('Error saving last printer: $e');
     }
   }
 
-  /// Get last used printer address
-  Future<String?> _getLastPrinterAddress() async {
+  /// Get last used printer VID
+  Future<String?> _getLastPrinterVid() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_lastPrinterKey);
+      return prefs.getString('${_lastPrinterKey}_vid');
     } catch (e) {
-      print('Error getting last printer: $e');
+      print('Error getting last printer VID: $e');
       return null;
+    }
+  }
+
+  /// Get last used printer PID
+  Future<String?> _getLastPrinterPid() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('${_lastPrinterKey}_pid');
+    } catch (e) {
+      print('Error getting last printer PID: $e');
+      return null;
+    }
+  }
+
+  /// Connect and print file (accepts File directly)
+  Future<bool> connectAndPrint(BuildContext context, File file) async {
+    try {
+      // Read file as bytes
+      Uint8List imageBytes = await file.readAsBytes();
+
+      // Use the existing connectAndPrintImage method
+      return await connectAndPrintImage(context, imageBytes);
+    } catch (e) {
+      print('❌ Error in connectAndPrint: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to read file: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
     }
   }
 }

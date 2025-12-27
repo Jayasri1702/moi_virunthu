@@ -1129,6 +1129,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           backgroundColor: Colors.red,
         ),
       );
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -1877,754 +1878,1001 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Future<void> _handleSaveAndPrint() async {
-
-    // Around line 1100, after the ungrouped data check
-    if (!_validatePhoneForAmountChange()) {
-      return;
+    if (mounted) {
+      setState(() => _isLoading = true);
     }
 
-    // ✅ STEP 0: Check if input fields have data (ungrouped data)
-    bool hasUngroupedData = _person1Field1Controller.text.trim().isNotEmpty ||
-        _person1Field2Controller.text.trim().isNotEmpty ||
-        _person2Controller.text.trim().isNotEmpty ||
-        _villageController.text.trim().isNotEmpty ||
-        _livingPlaceController.text.trim().isNotEmpty ||
-        _amountController.text.trim().isNotEmpty;
-
-    if (hasUngroupedData && !_isEditMode) {
-      final shouldProceed = await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            '⚠️ Ungrouped Data Detected!',
-            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'You have data in the input fields that has not been added to MOI Details.',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  border: Border.all(color: Colors.orange, width: 2),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '⚠️ Input fields must be empty before saving!',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.orange,
-                          fontSize: 13),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Please choose one of the following:',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 4),
-                    Text('1. Click "Group" to add this data to MOI Details',
-                        style: TextStyle(fontSize: 11)),
-                    Text('2. Click "Clear" to discard this data',
-                        style: TextStyle(fontSize: 11)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'What would you like to do?',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'clear'),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.red[100],
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: const Text(
-                'CLEAR DATA',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'group'),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.blue[100],
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-              child: const Text(
-                'GROUP FIRST',
-                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      );
-
-      if (shouldProceed == 'clear') {
-        await _clearFormForNextEntry();
-        _phoneFocusNode.requestFocus();
-        return;
-      } else if (shouldProceed == 'group') {
-        // Don't proceed with save, let user click Group button
-        return;
-      } else {
-        // User closed dialog without choosing
+    try {
+      // Around line 1100, after the ungrouped data check
+      if (!_validatePhoneForAmountChange()) {
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
-    }
 
-    // ✅ STEP 1: Check if editing a single entry with no changes
-    if (
-    _isEditMode &&
-        _editingMoiId != null &&
-        _currentGroupId == null &&
-        _hasNoChanges()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ No changes detected. Nothing to save.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
+      // ✅ STEP 0: Check if input fields have data (ungrouped data)
+      bool hasUngroupedData = _person1Field1Controller.text
+          .trim()
+          .isNotEmpty ||
+          _person1Field2Controller.text
+              .trim()
+              .isNotEmpty ||
+          _person2Controller.text
+              .trim()
+              .isNotEmpty ||
+          _villageController.text
+              .trim()
+              .isNotEmpty ||
+          _livingPlaceController.text
+              .trim()
+              .isNotEmpty ||
+          _amountController.text
+              .trim()
+              .isNotEmpty;
 
-    // ✅ STEP 2: Check if editing grouped entry with unsaved changes
-    if (_isEditMode && _editingMoiId != null && _currentGroupId != null && !_hasNoChanges()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              '⚠️ You have unsaved changes! Please press "Group" (Ctrl+Enter) to confirm your edits before saving.'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    // ✅ STEP 3: Check for ungrouped data in form (handles BOTH empty and non-empty _groupedMois)
-    if (_hasFormData()) {
-      // Check if this form data is already in MOI Details
-      bool isAlreadyGrouped = _groupedMois.any((entry) {
-        // Compare by serial number (most reliable unique identifier)
-        return entry['serial_no'] == _serialNo;
-      });
-
-      if (!isAlreadyGrouped) {
-        // Form has data but it's NOT in MOI Details - show warning popup
-        final shouldDiscard = await showDialog<bool>(
+      if (hasUngroupedData && !_isEditMode) {
+        final shouldProceed = await showDialog<String>(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text(
-              '⚠️ Entry Not Grouped!',
-              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _groupedMois.isEmpty
-                      ? 'You have entered data in the form but have not added it to MOI Details yet.'
-                      : 'You filled a new entry but did NOT click "Group" to add it to MOI Details.',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          builder: (context) =>
+              AlertDialog(
+                title: const Text(
+                  '⚠️ Ungrouped Data Detected!',
+                  style: TextStyle(
+                      color: Colors.orange, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    border: Border.all(color: Colors.orange, width: 2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '⚠️ This entry will NOT be saved!',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange,
-                            fontSize: 13),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'To save this entry, please:',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 4),
-                      Text('1. Click "Group" button (or press Ctrl+Enter)',
-                          style: TextStyle(fontSize: 11)),
-                      Text('2. Then click "Save & Print"',
-                          style: TextStyle(fontSize: 11)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Do you want to discard this entry and continue?',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.grey[200],
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-                child: const Text(
-                  'CANCEL',
-                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-                ),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.red[100],
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-                child: const Text(
-                  'DISCARD & CONTINUE',
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        );
-
-        if (shouldDiscard != true) {
-          return; // User cancelled
-        }
-        // User chose to discard
-        await _clearFormCompletely();
-        _phoneFocusNode.requestFocus();
-        return;
-      }
-    }
-
-    // ✅ STEP 4: Check if MOI Details is completely empty
-    if (_groupedMois.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              '⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    // ✅ NEW: Check for similar entries in grouped list BEFORE saving
-    for (var entry in _groupedMois) {
-      // Skip if this is an existing entry (already in DB)
-      if (entry['is_temp'] != true) continue;
-
-      // Get entry details
-      String villageName = (entry['village_name'] ?? '').trim();
-      String person1Name = '';
-      String person1Job = '';
-
-      if (entry['persons'] != null) {
-        List<dynamic> personsList = entry['persons'] as List;
-        if (personsList.isNotEmpty) {
-          person1Name = (personsList[0]['name'] ?? '').trim();
-          person1Job = (personsList[0]['job'] ?? '').trim();
-        }
-      }
-
-      if (villageName.isEmpty || person1Name.isEmpty) {
-        continue; // Skip check if essential fields are empty
-      }
-
-      // Query database for similar entries
-      try {
-        final response = await _supabase
-            .from('mois')
-            .select('*')
-            .eq('event_id', _eventId!)
-            .eq('is_deleted', false);
-
-        Map<String, dynamic>? matchingEntry;
-
-        for (var dbEntry in response) {
-          // Check village name (case-insensitive)
-          String entryVillage = (dbEntry['village_name'] ?? '').trim().toLowerCase();
-          if (entryVillage != villageName.toLowerCase()) continue;
-
-          // Check person 1
-          if (dbEntry['persons'] != null) {
-            List<dynamic> personsList = dbEntry['persons'] as List;
-            if (personsList.isNotEmpty) {
-              String entryP1Name = (personsList[0]['name'] ?? '').trim().toLowerCase();
-              String entryP1Job = (personsList[0]['job'] ?? '').trim().toLowerCase();
-
-              if (entryP1Name == person1Name.toLowerCase() &&
-                  entryP1Job == person1Job.toLowerCase()) {
-                matchingEntry = dbEntry;
-                break;
-              }
-            }
-          }
-        }
-
-        if (matchingEntry != null) {
-          // Show dialog with 3 options: Overwrite, New Entry, Cancel
-          final result = await showDialog<String>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              title: const Text(
-                '⚠️ Similar Entry Found!',
-                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
+                content: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'An entry with the same Village, Name, and Job already exists:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      'You have data in the input fields that has not been added to MOI Details.',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                     ),
                     const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         color: Colors.orange[50],
                         border: Border.all(color: Colors.orange, width: 2),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Column(
+                      child: const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '📍 Village: ${matchingEntry?['village_name'] ?? 'N/A'}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            '⚠️ Input fields must be empty before saving!',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange,
+                                fontSize: 13),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: 8),
                           Text(
-                            '👤 Serial No: O${matchingEntry?['serial_no'] ?? '0'}',
-                            style: const TextStyle(fontSize: 13),
+                            'Please choose one of the following:',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.bold),
                           ),
-                          const SizedBox(height: 4),
-                          if (matchingEntry != null && matchingEntry['persons'] != null) ...[
-                            Text(
-                              '📝 Name: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['name'] ?? 'N/A' : 'N/A'}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            Text(
-                              '💼 Job: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['job'] ?? 'N/A' : 'N/A'}',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ],
-                          const SizedBox(height: 4),
+                          SizedBox(height: 4),
                           Text(
-                            '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
+                              '1. Click "Group" to add this data to MOI Details',
+                              style: TextStyle(fontSize: 11)),
+                          Text('2. Click "Clear" to discard this data',
+                              style: TextStyle(fontSize: 11)),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
                     const Text(
                       'What would you like to do?',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'clear'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.red[100],
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                    ),
+                    child: const Text(
+                      'CLEAR DATA',
+                      style: TextStyle(
+                          color: Colors.red, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'group'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.blue[100],
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                    ),
+                    child: const Text(
+                      'GROUP FIRST',
+                      style: TextStyle(
+                          color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'cancel'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  child: const Text(
-                    'CANCEL',
-                    style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'new'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.blue[100],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  child: const Text(
-                    'NEW ENTRY',
-                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'overwrite:${matchingEntry!['id']}'),
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.orange[100],
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                  child: const Text(
-                    'OVERWRITE',
-                    style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 11),
-                  ),
-                ),
-              ],
+        );
+
+        if (shouldProceed == 'clear') {
+          await _clearFormForNextEntry();
+          _phoneFocusNode.requestFocus();
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        } else if (shouldProceed == 'group') {
+          // Don't proceed with save, let user click Group button
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        } else {
+          // User closed dialog without choosing
+          if (mounted) setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      // ✅ STEP 1: Check if editing a single entry with no changes
+      if (
+      _isEditMode &&
+          _editingMoiId != null &&
+          _currentGroupId == null &&
+          _hasNoChanges()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ No changes detected. Nothing to save.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
             ),
           );
-
-          // Handle user choice
-          if (result == 'cancel') {
-            return; // Stop save operation
-          } else if (result == 'new') {
-            // Remove this entry from grouped list and reload it into form
-            setState(() {
-              _groupedMois.remove(entry);
-
-              // Load entry data back into form
-              _phoneController.text = entry['phone'] ?? '';
-              _villageController.text = entry['village_name'] ?? '';
-              _livingPlaceController.text = entry['living_place'] ?? '';
-              _notesController.text = entry['notes'] ?? '';
-
-              var amountValue = entry['amount'];
-              if (amountValue is int) {
-                _amountController.text = amountValue.toString();
-              } else if (amountValue is double) {
-                _amountController.text = amountValue.toInt().toString();
-              }
-
-              _isUncle = entry['is_uncle'] ?? false;
-
-              if (entry['persons'] != null) {
-                List<dynamic> personsList = entry['persons'] as List;
-                if (personsList.isNotEmpty) {
-                  _person1Field1Controller.text = personsList[0]['name'] ?? '';
-                  _person1Field2Controller.text = personsList[0]['job'] ?? '';
-                }
-                if (personsList.length > 1) {
-                  _person2Controller.text = personsList[1]['details'] ?? '';
-                }
-              }
-
-              // Clear group if empty
-              if (_groupedMois.isEmpty) {
-                _currentGroupId = null;
-                _lockedPaymentMethod = null;
-              }
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✏️ Entry loaded back to form. Please modify it to make it different.'),
-                backgroundColor: Colors.blue,
-                duration: Duration(seconds: 3),
-              ),
-            );
-
-            _phoneFocusNode.requestFocus();
-            return; // Stop save operation
-          } else if (result != null && result.startsWith('overwrite:')) {
-            // Get the MOI ID to overwrite
-            final moiIdToOverwrite = result.split(':')[1];
-
-            // Mark this temp entry to overwrite the existing one
-            entry['overwrite_id'] = moiIdToOverwrite;
-          }
+          setState(() => _isLoading = false);
         }
-      } catch (e) {
-        print('Error checking similar entry: $e');
+        return;
       }
-    }
 
+      // ✅ STEP 2: Check if editing grouped entry with unsaved changes
+      if (_isEditMode && _editingMoiId != null && _currentGroupId != null &&
+          !_hasNoChanges()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  '⚠️ You have unsaved changes! Please press "Group" (Ctrl+Enter) to confirm your edits before saving.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
 
-    bool isFinalSave = _groupedMois.isNotEmpty;
+      // ✅ STEP 3: Check for ungrouped data in form (handles BOTH empty and non-empty _groupedMois)
+      if (_hasFormData()) {
+        // Check if this form data is already in MOI Details
+        bool isAlreadyGrouped = _groupedMois.any((entry) {
+          // Compare by serial number (most reliable unique identifier)
+          return entry['serial_no'] == _serialNo;
+        });
 
-    if (isFinalSave) {
-      // ✅ GROUPED ENTRIES SAVE MODE
+        if (!isAlreadyGrouped) {
+          // Form has data but it's NOT in MOI Details - show warning popup
+          final shouldDiscard = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) =>
+                AlertDialog(
+                  title: const Text(
+                    '⚠️ Entry Not Grouped!',
+                    style: TextStyle(
+                        color: Colors.orange, fontWeight: FontWeight.bold),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _groupedMois.isEmpty
+                            ? 'You have entered data in the form but have not added it to MOI Details yet.'
+                            : 'You filled a new entry but did NOT click "Group" to add it to MOI Details.',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          border: Border.all(color: Colors.orange, width: 2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '⚠️ This entry will NOT be saved!',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange,
+                                  fontSize: 13),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'To save this entry, please:',
+                              style: TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                                '1. Click "Group" button (or press Ctrl+Enter)',
+                                style: TextStyle(fontSize: 11)),
+                            Text('2. Then click "Save & Print"',
+                                style: TextStyle(fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Do you want to discard this entry and continue?',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                      ),
+                      child: const Text(
+                        'CANCEL',
+                        style: TextStyle(
+                            color: Colors.black, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.red[100],
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                      ),
+                      child: const Text(
+                        'DISCARD & CONTINUE',
+                        style: TextStyle(
+                            color: Colors.red, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+          );
 
-      // Final save validation
+          if (shouldDiscard != true) {
+            return; // User cancelled
+          }
+          // User chose to discard
+          await _clearFormCompletely();
+          _phoneFocusNode.requestFocus();
+          setState(() => _isLoading = false);
+          return;
+        }
+      }
+
+      // ✅ STEP 4: Check if MOI Details is completely empty
       if (_groupedMois.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-                'Please add at least one entry to MOI Details before saving!'),
-            backgroundColor: Colors.red,
+                '⚠️ Please add entry to MOI Details first using "Group" button (Ctrl+Enter)'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
           ),
         );
         return;
       }
 
-      String phoneNumber = '';
-      if (_groupedMois.isNotEmpty) {
-        phoneNumber = _groupedMois[0]['phone'] ?? '';
-      }
+      // ✅ NEW: Check for similar entries in grouped list BEFORE saving
+      for (var entry in _groupedMois) {
+        // Skip if this is an existing entry (already in DB)
+        if (entry['is_temp'] != true) continue;
 
-      print('📞 Phone number for global update check: $phoneNumber');
-      print('📊 Auto-filled data: $_autoFilledData');
-      print('🔄 Has auto-filled data changed: ${_hasAutoFilledDataChanged()}');
+        // Get entry details
+        String villageName = (entry['village_name'] ?? '').trim();
+        String person1Name = '';
+        String person1Job = '';
 
-      if (phoneNumber.isNotEmpty &&
-          phoneNumber.length == 10 &&
-          _hasAutoFilledDataChanged()) {
-        print('🔔 Auto-filled data has changed! Showing global update dialog...');
-        final shouldUpdateAll = await _showGlobalUpdateConfirmation(phoneNumber);
-        if (shouldUpdateAll) {
-          print('✅ User chose to update all entries');
-          await _updateAllEntriesWithPhoneNumber(phoneNumber);
-          print('✅ Global update completed');
-        } else {
-          print('❌ User chose to update only this entry');
-        }
-        // Reset auto-filled data after handling
-        _autoFilledData = null;
-      } else {
-        print('⏭️ Skipping global update check - conditions not met');
-      }
-
-      // ✅ NEW: Check if single entry with OTHERS payment method
-      bool isSingleEntryWithOthers = _groupedMois.length == 1 &&
-          _groupedMois[0]['payment_method'] == 'OTHERS';
-
-      // ✅ CHANGE: Only validate denomination if payment method is CASH AND not single OTHERS entry AND not skipping denomination
-      if (_paymentMethod == 'CASH' && !isSingleEntryWithOthers && !_skipDenomination) {
-        int denomTotal = _getTotalAmount();
-
-        // Calculate total from MOI Details
-        int totalGroupAmount = 0;
-        for (var entry in _groupedMois) {
-          var amount = entry['amount'];
-          if (amount is int) {
-            totalGroupAmount += amount;
-          } else if (amount is double) {
-            totalGroupAmount += amount.toInt();
-          } else if (amount != null) {
-            totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+          if (personsList.isNotEmpty) {
+            person1Name = (personsList[0]['name'] ?? '').trim();
+            person1Job = (personsList[0]['job'] ?? '').trim();
           }
         }
 
-        await _loadPreviewSerialNo();
-
-        // Denomination is MANDATORY for CASH (when not skipping)
-        if (denomTotal == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enter denomination details before saving!'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
+        if (villageName.isEmpty || person1Name.isEmpty) {
+          continue; // Skip check if essential fields are empty
         }
 
-        if (totalGroupAmount != denomTotal) {
-          int difference = totalGroupAmount - denomTotal;
-          String message = difference > 0
-              ? 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
-              : 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
+        // Query database for similar entries
+        try {
+          final response = await _supabase
+              .from('mois')
+              .select('*')
+              .eq('event_id', _eventId!)
+              .eq('is_deleted', false);
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-          return;
-        }
+          Map<String, dynamic>? matchingEntry;
 
-        for (var row in _denomRows) {
-          int count = int.tryParse(row['countController'].text) ?? 0;
-          int? denom = row['selectedDenom'];
+          for (var dbEntry in response) {
+            // Check village name (case-insensitive)
+            String entryVillage = (dbEntry['village_name'] ?? '')
+                .trim()
+                .toLowerCase();
+            if (entryVillage != villageName.toLowerCase()) continue;
 
-          if (count < 0 && denom != null) {
-            int available = await _getAvailableBalance(denom);
+            // Check person 1
+            if (dbEntry['persons'] != null) {
+              List<dynamic> personsList = dbEntry['persons'] as List;
+              if (personsList.isNotEmpty) {
+                String entryP1Name = (personsList[0]['name'] ?? '')
+                    .trim()
+                    .toLowerCase();
+                String entryP1Job = (personsList[0]['job'] ?? '')
+                    .trim()
+                    .toLowerCase();
 
-            if (count.abs() > available) {
+                if (entryP1Name == person1Name.toLowerCase() &&
+                    entryP1Job == person1Job.toLowerCase()) {
+                  matchingEntry = dbEntry;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (matchingEntry != null) {
+            // Show dialog with 3 options: Overwrite, New Entry, Cancel
+            final result = await showDialog<String>(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) =>
+                  AlertDialog(
+                    title: const Text(
+                      '⚠️ Similar Entry Found!',
+                      style: TextStyle(color: Colors.orange,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18),
+                    ),
+                    content: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'An entry with the same Village, Name, and Job already exists:',
+                            style: TextStyle(fontWeight: FontWeight.bold,
+                                fontSize: 14),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[50],
+                              border: Border.all(
+                                  color: Colors.orange, width: 2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '📍 Village: ${matchingEntry?['village_name'] ??
+                                      'N/A'}',
+                                  style: const TextStyle(fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '👤 Serial No: O${matchingEntry?['serial_no'] ??
+                                      '0'}',
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                const SizedBox(height: 4),
+                                if (matchingEntry != null &&
+                                    matchingEntry['persons'] != null) ...[
+                                  Text(
+                                    '📝 Name: ${(matchingEntry['persons'] as List)
+                                        .isNotEmpty
+                                        ? matchingEntry['persons'][0]['name'] ??
+                                        'N/A'
+                                        : 'N/A'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  Text(
+                                    '💼 Job: ${(matchingEntry['persons'] as List)
+                                        .isNotEmpty
+                                        ? matchingEntry['persons'][0]['job'] ??
+                                        'N/A'
+                                        : 'N/A'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  '💰 Amount: ₹${matchingEntry?['amount'] ??
+                                      '0'}',
+                                  style: const TextStyle(fontSize: 13,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'What would you like to do?',
+                            style: TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, 'cancel'),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.grey[300],
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        child: const Text(
+                          'CANCEL',
+                          style: TextStyle(color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, 'new'),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.blue[100],
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        child: const Text(
+                          'NEW ENTRY',
+                          style: TextStyle(color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.pop(
+                                context, 'overwrite:${matchingEntry!['id']}'),
+                        style: TextButton.styleFrom(
+                          backgroundColor: Colors.orange[100],
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        child: const Text(
+                          'OVERWRITE',
+                          style: TextStyle(color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+            );
+
+            // Handle user choice
+            if (result == 'cancel') {
+              return; // Stop save operation
+            } else if (result == 'new') {
+              // Remove this entry from grouped list and reload it into form
+              setState(() {
+                _groupedMois.remove(entry);
+
+                // Load entry data back into form
+                _phoneController.text = entry['phone'] ?? '';
+                _villageController.text = entry['village_name'] ?? '';
+                _livingPlaceController.text = entry['living_place'] ?? '';
+                _notesController.text = entry['notes'] ?? '';
+
+                var amountValue = entry['amount'];
+                if (amountValue is int) {
+                  _amountController.text = amountValue.toString();
+                } else if (amountValue is double) {
+                  _amountController.text = amountValue.toInt().toString();
+                }
+
+                _isUncle = entry['is_uncle'] ?? false;
+
+                if (entry['persons'] != null) {
+                  List<dynamic> personsList = entry['persons'] as List;
+                  if (personsList.isNotEmpty) {
+                    _person1Field1Controller.text =
+                        personsList[0]['name'] ?? '';
+                    _person1Field2Controller.text = personsList[0]['job'] ?? '';
+                  }
+                  if (personsList.length > 1) {
+                    _person2Controller.text = personsList[1]['details'] ?? '';
+                  }
+                }
+
+                // Clear group if empty
+                if (_groupedMois.isEmpty) {
+                  _currentGroupId = null;
+                  _lockedPaymentMethod = null;
+                }
+              });
+
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+                const SnackBar(
                   content: Text(
-                      '₹$denom: Insufficient balance. Available: $available, Requested: ${count.abs()}'),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 3),
+                      '✏️ Entry loaded back to form. Please modify it to make it different.'),
+                  backgroundColor: Colors.blue,
+                  duration: Duration(seconds: 3),
                 ),
               );
+
+              _phoneFocusNode.requestFocus();
+              return; // Stop save operation
+            } else if (result != null && result.startsWith('overwrite:')) {
+              // Get the MOI ID to overwrite
+              final moiIdToOverwrite = result.split(':')[1];
+
+              // Mark this temp entry to overwrite the existing one
+              entry['overwrite_id'] = moiIdToOverwrite;
+            }
+          }
+        } catch (e) {
+          print('Error checking similar entry: $e');
+        }
+      }
+
+
+      bool isFinalSave = _groupedMois.isNotEmpty;
+
+      if (isFinalSave) {
+        // ✅ GROUPED ENTRIES SAVE MODE
+
+        // Final save validation
+        if (_groupedMois.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Please add at least one entry to MOI Details before saving!'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        String phoneNumber = '';
+        if (_groupedMois.isNotEmpty) {
+          phoneNumber = _groupedMois[0]['phone'] ?? '';
+        }
+
+        print('📞 Phone number for global update check: $phoneNumber');
+        print('📊 Auto-filled data: $_autoFilledData');
+        print('🔄 Has auto-filled data changed: ${_hasAutoFilledDataChanged()}');
+
+        if (phoneNumber.isNotEmpty &&
+            phoneNumber.length == 10 &&
+            _hasAutoFilledDataChanged()) {
+          print(
+              '🔔 Auto-filled data has changed! Showing global update dialog...');
+          final shouldUpdateAll = await _showGlobalUpdateConfirmation(
+              phoneNumber);
+          if (shouldUpdateAll) {
+            print('✅ User chose to update all entries');
+            await _updateAllEntriesWithPhoneNumber(phoneNumber);
+            print('✅ Global update completed');
+          } else {
+            print('❌ User chose to update only this entry');
+          }
+          // Reset auto-filled data after handling
+          _autoFilledData = null;
+        } else {
+          print('⏭️ Skipping global update check - conditions not met');
+        }
+
+        // ✅ NEW: Check if single entry with OTHERS payment method
+        bool isSingleEntryWithOthers = _groupedMois.length == 1 &&
+            _groupedMois[0]['payment_method'] == 'OTHERS';
+
+        // ✅ CHANGE: Only validate denomination if payment method is CASH AND not single OTHERS entry AND not skipping denomination
+        if (_paymentMethod == 'CASH' && !isSingleEntryWithOthers &&
+            !_skipDenomination) {
+          int denomTotal = _getTotalAmount();
+
+          // Calculate total from MOI Details
+          int totalGroupAmount = 0;
+          for (var entry in _groupedMois) {
+            var amount = entry['amount'];
+            if (amount is int) {
+              totalGroupAmount += amount;
+            } else if (amount is double) {
+              totalGroupAmount += amount.toInt();
+            } else if (amount != null) {
+              totalGroupAmount += int.tryParse(amount.toString()) ?? 0;
+            }
+          }
+
+          await _loadPreviewSerialNo();
+
+          // Denomination is MANDATORY for CASH (when not skipping)
+          if (denomTotal == 0) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Please enter denomination details before saving!'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+
+          if (totalGroupAmount != denomTotal) {
+            int difference = totalGroupAmount - denomTotal;
+            String message = difference > 0
+                ? 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference
+                .abs()} is missing!'
+                : 'MOI Details total is ₹$totalGroupAmount but denomination is ₹$denomTotal. ₹${difference
+                .abs()} is extra!';
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(message),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+            return;
+          }
+
+          for (var row in _denomRows) {
+            int count = int.tryParse(row['countController'].text) ?? 0;
+            int? denom = row['selectedDenom'];
+
+            if (count < 0 && denom != null) {
+              int available = await _getAvailableBalance(denom);
+
+              if (count.abs() > available) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        '₹$denom: Insufficient balance. Available: $available, Requested: ${count
+                            .abs()}'),
+                    backgroundColor: Colors.red,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+                return;
+              }
+            }
+          }
+        }
+        for (var entry in _groupedMois) {
+          // Skip if this is an existing entry being edited
+          if (entry['is_temp'] != true) continue;
+
+          // Build check data for this entry
+          String villageName = entry['village_name'] ?? '';
+          int amount = 0;
+          var amountValue = entry['amount'];
+          if (amountValue is int) {
+            amount = amountValue;
+          } else if (amountValue is double) {
+            amount = amountValue.toInt();
+          } else if (amountValue != null) {
+            amount = int.tryParse(amountValue.toString()) ?? 0;
+          }
+
+          String person1Name = '';
+          String person1Job = '';
+          if (entry['persons'] != null) {
+            List<dynamic> personsList = entry['persons'] as List;
+            if (personsList.isNotEmpty) {
+              person1Name = personsList[0]['name'] ?? '';
+              person1Job = personsList[0]['job'] ?? '';
+            }
+          }
+
+          // Query database for matching entries
+          final response = await _supabase
+              .from('mois')
+              .select('*')
+              .eq('event_id', _eventId!)
+              .eq('is_deleted', false);
+
+          List<Map<String, dynamic>> matchingEntries = [];
+
+          for (var dbEntry in response) {
+            // Check village name (case-insensitive)
+            String entryVillage = dbEntry['village_name'] ?? '';
+            if (entryVillage.toLowerCase() != villageName.toLowerCase())
+              continue;
+
+            // Check amount
+            int entryAmount = 0;
+            var entryAmountValue = dbEntry['amount'];
+            if (entryAmountValue is int) {
+              entryAmount = entryAmountValue;
+            } else if (entryAmountValue is double) {
+              entryAmount = entryAmountValue.toInt();
+            } else if (entryAmountValue is num) {
+              entryAmount = entryAmountValue.toInt();
+            }
+            if (entryAmount != amount) continue;
+
+            // Check person 1 name and job
+            if (dbEntry['persons'] != null) {
+              List<dynamic> personsList = dbEntry['persons'] as List;
+              if (personsList.isNotEmpty) {
+                var p1 = personsList[0];
+                String entryP1Name = p1['name'] ?? '';
+                String entryP1Job = p1['job'] ?? '';
+
+                if (entryP1Name.toLowerCase() != person1Name.toLowerCase())
+                  continue;
+
+                if (person1Job.isNotEmpty &&
+                    entryP1Job.toLowerCase() != person1Job.toLowerCase())
+                  continue;
+              }
+            }
+
+            // All fields match
+            matchingEntries.add(dbEntry);
+          }
+
+          // If duplicates found, show warning dialog
+          if (matchingEntries.isNotEmpty) {
+            final shouldProceed = await _showDuplicateWarningDialog(
+              matchingEntries,
+              entry,
+            );
+
+            if (!shouldProceed) {
+              // User chose to cancel - stop the save operation
               return;
             }
           }
         }
-      }
-      for (var entry in _groupedMois) {
-        // Skip if this is an existing entry being edited
-        if (entry['is_temp'] != true) continue;
+        try {
+          List<String> savedMoiIds = [];
+          String? firstSavedMoiId; // ✅ ADD THIS to track first entry
 
-        // Build check data for this entry
-        String villageName = entry['village_name'] ?? '';
-        int amount = 0;
-        var amountValue = entry['amount'];
-        if (amountValue is int) {
-          amount = amountValue;
-        } else if (amountValue is double) {
-          amount = amountValue.toInt();
-        } else if (amountValue != null) {
-          amount = int.tryParse(amountValue.toString()) ?? 0;
-        }
+          // ✅ Save all temp entries using RPC
+          for (int i = 0; i < _groupedMois.length; i++) {
+            var entry = _groupedMois[i];
 
-        String person1Name = '';
-        String person1Job = '';
-        if (entry['persons'] != null) {
-          List<dynamic> personsList = entry['persons'] as List;
-          if (personsList.isNotEmpty) {
-            person1Name = personsList[0]['name'] ?? '';
-            person1Job = personsList[0]['job'] ?? '';
-          }
-        }
+            if (entry['is_temp'] == true) {
+              // ✅ CHECK: Should we overwrite an existing entry?
+              if (entry.containsKey('overwrite_id')) {
+                // OVERWRITE MODE: Update existing entry instead of creating new
+                final moiIdToOverwrite = entry['overwrite_id'];
 
-        // Query database for matching entries
-        final response = await _supabase
-            .from('mois')
-            .select('*')
-            .eq('event_id', _eventId!)
-            .eq('is_deleted', false);
+                print('🔄 Overwriting existing entry: $moiIdToOverwrite');
 
-        List<Map<String, dynamic>> matchingEntries = [];
+                List<Map<String, dynamic>>? personsData;
+                if (entry['persons'] != null &&
+                    (entry['persons'] as List).isNotEmpty) {
+                  personsData =
+                  List<Map<String, dynamic>>.from(entry['persons']);
+                }
 
-        for (var dbEntry in response) {
-          // Check village name (case-insensitive)
-          String entryVillage = dbEntry['village_name'] ?? '';
-          if (entryVillage.toLowerCase() != villageName.toLowerCase()) continue;
+                // Fetch current data for old_data
+                final currentData = await _supabase
+                    .from('mois')
+                    .select('*')
+                    .eq('id', moiIdToOverwrite)
+                    .single();
 
-          // Check amount
-          int entryAmount = 0;
-          var entryAmountValue = dbEntry['amount'];
-          if (entryAmountValue is int) {
-            entryAmount = entryAmountValue;
-          } else if (entryAmountValue is double) {
-            entryAmount = entryAmountValue.toInt();
-          } else if (entryAmountValue is num) {
-            entryAmount = entryAmountValue.toInt();
-          }
-          if (entryAmount != amount) continue;
+                // Update the existing entry
+                final moiData = {
+                  'amount': entry['amount'],
+                  'payment_method': _paymentMethod,
+                  'persons': personsData,
+                  'village_name': entry['village_name'],
+                  'living_place': entry['living_place'],
+                  'phone': entry['phone'],
+                  'is_uncle': entry['is_uncle'] ?? false,
+                  'notes': entry['notes'],
+                  'updated_at': DateTime.now().toIso8601String(),
+                  'old_data': currentData,
+                };
 
-          // Check person 1 name and job
-          if (dbEntry['persons'] != null) {
-            List<dynamic> personsList = dbEntry['persons'] as List;
-            if (personsList.isNotEmpty) {
-              var p1 = personsList[0];
-              String entryP1Name = p1['name'] ?? '';
-              String entryP1Job = p1['job'] ?? '';
+                await _supabase
+                    .from('mois')
+                    .update(moiData)
+                    .eq('id', moiIdToOverwrite);
 
-              if (entryP1Name.toLowerCase() != person1Name.toLowerCase()) continue;
+                // Update local list with overwritten data
+                setState(() {
+                  _groupedMois[i] = {
+                    ...entry,
+                    'id': moiIdToOverwrite,
+                    'serial_no': currentData['serial_no'],
+                    'is_temp': false,
+                  };
+                });
 
-              if (person1Job.isNotEmpty &&
-                  entryP1Job.toLowerCase() != person1Job.toLowerCase()) continue;
+                print('✅ Overwritten entry: $moiIdToOverwrite');
+              } else {
+                // NORMAL NEW ENTRY MODE: Use RPC
+                print('🔒 Saving temp entry ${i + 1}/${_groupedMois
+                    .length} with group_id: $_currentGroupId');
+
+                List<Map<String, dynamic>>? personsData;
+                if (entry['persons'] != null &&
+                    (entry['persons'] as List).isNotEmpty) {
+                  personsData =
+                  List<Map<String, dynamic>>.from(entry['persons']);
+                }
+
+                int? groupIdToPass;
+                if (i == 0 && entry['is_temp'] == true) {
+                  groupIdToPass = null;
+                } else {
+                  groupIdToPass = _currentGroupId;
+                }
+
+                final response = await _supabase.rpc(
+                    'insert_moi_safe', params: {
+                  'p_event_id': _eventId,
+                  'p_operator_id': _operatorId,
+                  'p_amount': entry['amount'],
+                  'p_payment_method': _paymentMethod,
+                  'p_persons': personsData,
+                  'p_village_name': entry['village_name'],
+                  'p_living_place': entry['living_place'],
+                  'p_phone': entry['phone'],
+                  'p_is_uncle': entry['is_uncle'] ?? false,
+                  'p_notes': entry['notes'],
+                  'p_group_id': groupIdToPass,
+                });
+
+                String newMoiId = response['id'];
+                int actualSerialNo = response['serial_no'];
+                int actualGroupId = response['group_id'];
+
+                if (firstSavedMoiId == null) {
+                  firstSavedMoiId = newMoiId;
+                  print('📌 First saved MOI ID: $firstSavedMoiId');
+                }
+
+                if (i == 0) {
+                  _currentGroupId = actualGroupId;
+                }
+
+                setState(() {
+                  _groupedMois[i] = {
+                    ...entry,
+                    'id': newMoiId,
+                    'serial_no': actualSerialNo,
+                    'group_id': actualGroupId,
+                    'is_temp': false,
+                  };
+                });
+
+                print(
+                    '✅ Temp entry saved: $newMoiId with serial: $actualSerialNo, group: $actualGroupId');
+              }
+            } else {
+              // ✅ EXISTING ENTRY (already in DB)
+              if (entry['is_modified'] == true) {
+                final currentData = await _supabase
+                    .from('mois')
+                    .select('*')
+                    .eq('id', entry['id'])
+                    .single();
+
+                // ✅ Store only editable fields in old_data
+                final oldDataToStore = {
+                  'village_name': currentData['village_name'],
+                  'living_place': currentData['living_place'],
+                  'amount': currentData['amount'],
+                  'persons': currentData['persons'],
+                  'phone': currentData['phone'],
+                  'notes': currentData['notes'],
+                  'payment_method': currentData['payment_method'],
+                  'is_uncle': currentData['is_uncle'],
+                  'updated_at': currentData['updated_at'],
+                  'old_data': currentData['old_data'], // Preserve the chain
+                };
+
+
+                final moiData = {
+                  'event_id': _eventId,
+                  'operator_id': _operatorId,
+                  'serial_no': entry['serial_no'],
+                  'amount': entry['amount'],
+                  'payment_method': _paymentMethod,
+                  'persons': entry['persons'],
+                  'village_name': entry['village_name'],
+                  'living_place': entry['living_place'],
+                  'phone': entry['phone'],
+                  'is_uncle': entry['is_uncle'] ?? false,
+                  'notes': entry['notes'],
+                  'group_id': _currentGroupId,
+                  'updated_at': DateTime.now().toIso8601String(),
+                  'old_data': oldDataToStore,
+                };
+
+                await _supabase
+                    .from('mois')
+                    .update(moiData)
+                    .eq('id', entry['id']);
+
+
+                savedMoiIds.add(entry['id']);
+                print('✅ Modified entry updated: ${entry['id']}');
+              } else {
+                savedMoiIds.add(entry['id']);
+                print('✅ Unmodified entry: ${entry['id']}');
+              }
             }
           }
 
-          // All fields match
-          matchingEntries.add(dbEntry);
-        }
+          // ✅ Refresh preview serial after saving
+          await _loadPreviewSerialNo();
 
-        // If duplicates found, show warning dialog
-        if (matchingEntries.isNotEmpty) {
-          final shouldProceed = await _showDuplicateWarningDialog(
-            matchingEntries,
-            entry,
-          );
-
-          if (!shouldProceed) {
-            // User chose to cancel - stop the save operation
-            return;
+// ✅ CRITICAL FIX: Save denominations using firstSavedMoiId (real DB ID)
+          if (_paymentMethod == 'CASH' && !_skipDenomination &&
+              firstSavedMoiId != null) {
+            print(
+                '💾 Saving denominations for group using first entry: $firstSavedMoiId');
+            await _saveDenominationsForGroup(firstSavedMoiId);
+          } else if (_paymentMethod == 'CASH' && !_skipDenomination &&
+              _groupedMois.isNotEmpty) {
+            // Fallback: use first entry's ID from grouped list
+            print(
+                '💾 Saving denominations using fallback: ${_groupedMois[0]['id']}');
+            await _saveDenominationsForGroup(_groupedMois[0]['id']);
           }
-        }
-      }
-      try {
-        List<String> savedMoiIds = [];
-        String? firstSavedMoiId; // ✅ ADD THIS to track first entry
 
-        // ✅ Save all temp entries using RPC
-        for (int i = 0; i < _groupedMois.length; i++) {
-          var entry = _groupedMois[i];
+// ✅ NEW: Check if skip_print is true
+          if (_skipPrint) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                      '✅ Entries saved successfully (Receipt skipped)'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              await _clearFormCompletely();
+              _phoneFocusNode.requestFocus();
+              setState(() => _isLoading = false);
+            }
+            return; // Exit without generating receipt
+          }
 
-          if (entry['is_temp'] == true) {
-            // ✅ CHECK: Should we overwrite an existing entry?
-            if (entry.containsKey('overwrite_id')) {
-              // OVERWRITE MODE: Update existing entry instead of creating new
-              final moiIdToOverwrite = entry['overwrite_id'];
+          // ✅ Check if group has only one entry
+          String? receiptType;
+          if (_groupedMois.length == 1) {
+            // ✅ CRITICAL FIX: Save the temp entry FIRST before generating receipt
+            var entry = _groupedMois[0];
 
-              print('🔄 Overwriting existing entry: $moiIdToOverwrite');
-
+            // Only save if it's a temp entry (not already in DB)
+            if (entry['is_temp'] == true) {
               List<Map<String, dynamic>>? personsData;
-              if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
+              if (entry['persons'] != null &&
+                  (entry['persons'] as List).isNotEmpty) {
                 personsData = List<Map<String, dynamic>>.from(entry['persons']);
-              }
-
-              // Fetch current data for old_data
-              final currentData = await _supabase
-                  .from('mois')
-                  .select('*')
-                  .eq('id', moiIdToOverwrite)
-                  .single();
-
-              // Update the existing entry
-              final moiData = {
-                'amount': entry['amount'],
-                'payment_method': _paymentMethod,
-                'persons': personsData,
-                'village_name': entry['village_name'],
-                'living_place': entry['living_place'],
-                'phone': entry['phone'],
-                'is_uncle': entry['is_uncle'] ?? false,
-                'notes': entry['notes'],
-                'updated_at': DateTime.now().toIso8601String(),
-                'old_data': currentData,
-              };
-
-              await _supabase
-                  .from('mois')
-                  .update(moiData)
-                  .eq('id', moiIdToOverwrite);
-
-              // Update local list with overwritten data
-              setState(() {
-                _groupedMois[i] = {
-                  ...entry,
-                  'id': moiIdToOverwrite,
-                  'serial_no': currentData['serial_no'],
-                  'is_temp': false,
-                };
-              });
-
-              print('✅ Overwritten entry: $moiIdToOverwrite');
-
-            } else {
-              // NORMAL NEW ENTRY MODE: Use RPC
-              print('🔒 Saving temp entry ${i + 1}/${_groupedMois.length} with group_id: $_currentGroupId');
-
-              List<Map<String, dynamic>>? personsData;
-              if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
-                personsData = List<Map<String, dynamic>>.from(entry['persons']);
-              }
-
-              int? groupIdToPass;
-              if (i == 0 && entry['is_temp'] == true) {
-                groupIdToPass = null;
-              } else {
-                groupIdToPass = _currentGroupId;
               }
 
               final response = await _supabase.rpc('insert_moi_safe', params: {
@@ -2638,178 +2886,264 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 'p_phone': entry['phone'],
                 'p_is_uncle': entry['is_uncle'] ?? false,
                 'p_notes': entry['notes'],
-                'p_group_id': groupIdToPass,
+                'p_group_id': null,
               });
 
               String newMoiId = response['id'];
               int actualSerialNo = response['serial_no'];
               int actualGroupId = response['group_id'];
 
-              if (firstSavedMoiId == null) {
-                firstSavedMoiId = newMoiId;
-                print('📌 First saved MOI ID: $firstSavedMoiId');
-              }
-
-              if (i == 0) {
-                _currentGroupId = actualGroupId;
-              }
-
+              // Update the entry with real DB data
               setState(() {
-                _groupedMois[i] = {
+                _groupedMois[0] = {
                   ...entry,
                   'id': newMoiId,
                   'serial_no': actualSerialNo,
                   'group_id': actualGroupId,
                   'is_temp': false,
                 };
+                _currentGroupId = actualGroupId;
               });
 
-              print('✅ Temp entry saved: $newMoiId with serial: $actualSerialNo, group: $actualGroupId');
+              entry = _groupedMois[0]; // Update reference
+              print(
+                  '✅ Single temp entry saved: $newMoiId with serial: $actualSerialNo');
             }
-          } else {
-            // ✅ EXISTING ENTRY (already in DB)
-            if (entry['is_modified'] == true) {
-              final currentData = await _supabase
-                  .from('mois')
-                  .select('*')
-                  .eq('id', entry['id'])
+
+            // ✅ Save denominations if CASH and not skipping
+            if (_paymentMethod == 'CASH' && !_skipDenomination) {
+              await _saveDenominationsForGroup(entry['id']);
+            }
+
+            // Now generate receipt
+            setState(() => _isLoading = true);
+
+            try {
+              final operatorName = await _getOperatorName();
+              final eventDetails = await _getEventDetails(); // Already exists
+
+// ADD THIS - fetch event title, type name, venue
+              final eventResponse = await _supabase
+                  .from('events')
+                  .select('title, venue, event_types(name)')
+                  .eq('id', _eventId!)
                   .single();
 
-              // ✅ Store only editable fields in old_data
-              final oldDataToStore = {
-                'village_name': currentData['village_name'],
-                'living_place': currentData['living_place'],
-                'amount': currentData['amount'],
-                'persons': currentData['persons'],
-                'phone': currentData['phone'],
-                'notes': currentData['notes'],
-                'payment_method': currentData['payment_method'],
-                'is_uncle': currentData['is_uncle'],
-                'updated_at': currentData['updated_at'],
-                'old_data': currentData['old_data'],  // Preserve the chain
-              };
+              String? eventTitle = eventResponse['title'];
+              String? venue = eventResponse['venue'];
+              String? eventFor = eventResponse['event_for'];
+              String? eventTypeName = eventResponse['event_types']?['name'];
 
+              // ✅ Build denominations from current form (same as group receipt) - only if not skipping
+              Map<int, int>? denominations;
+              if (_paymentMethod == 'CASH' && !_skipDenomination) {
+                denominations = {
+                  500: 0,
+                  200: 0,
+                  100: 0,
+                  50: 0,
+                  20: 0,
+                  10: 0,
+                  5: 0,
+                  1: 0,
+                };
 
+                for (var row in _denomRows) {
+                  int? denom = row['selectedDenom'];
+                  int count = int.tryParse(row['countController'].text) ?? 0;
+                  if (denom != null && count != 0) {
+                    denominations[denom] = (denominations[denom] ?? 0) + count;
+                  }
+                }
 
-              final moiData = {
-                'event_id': _eventId,
-                'operator_id': _operatorId,
-                'serial_no': entry['serial_no'],
-                'amount': entry['amount'],
-                'payment_method': _paymentMethod,
-                'persons': entry['persons'],
-                'village_name': entry['village_name'],
-                'living_place': entry['living_place'],
-                'phone': entry['phone'],
-                'is_uncle': entry['is_uncle'] ?? false,
-                'notes': entry['notes'],
-                'group_id': _currentGroupId,
-                'updated_at': DateTime.now().toIso8601String(),
-                'old_data': oldDataToStore,
-              };
+                // Check if we have any non-zero denominations
+                bool hasNonZeroDenoms =
+                denominations.values.any((count) => count != 0);
+                if (!hasNonZeroDenoms) {
+                  denominations = null;
+                }
+              }
 
-              await _supabase
-                  .from('mois')
-                  .update(moiData)
-                  .eq('id', entry['id']);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Generating receipt...'),
+                    backgroundColor: Colors.blue,
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              }
 
+              // Parse persons data
+              String? person1Name;
+              String? person1Job;
+              String? person2Details;
+              if (entry['persons'] != null) {
+                List<dynamic> personsList = entry['persons'] as List;
+                if (personsList.isNotEmpty) {
+                  person1Name = personsList[0]['name'];
+                  person1Job = personsList[0]['job'];
+                }
+                if (personsList.length > 1) {
+                  person2Details = personsList[1]['details'];
+                }
+              }
 
-              savedMoiIds.add(entry['id']);
-              print('✅ Modified entry updated: ${entry['id']}');
-            } else {
-              savedMoiIds.add(entry['id']);
-              print('✅ Unmodified entry: ${entry['id']}');
+              // ✅ FIX: Get amount correctly from entry
+              int entryAmount = 0;
+              var amountValue = entry['amount'];
+              if (amountValue is int) {
+                entryAmount = amountValue;
+              } else if (amountValue is double) {
+                entryAmount = amountValue.toInt();
+              } else if (amountValue != null) {
+                entryAmount = int.tryParse(amountValue.toString()) ?? 0;
+              }
+
+              final result = await MoiReceiptGenerator
+                  .generateSingleMoiReceiptWithImage(
+                context: context,
+                serialNo: entry['serial_no'],
+                operatorName: operatorName,
+                eventDate: eventDetails['event_date'],
+                eventTime: eventDetails['event_time'],
+                villageName: entry['village_name'],
+                livingPlace: entry['living_place'],
+                person1Name: person1Name,
+                person1Job: person1Job,
+                person2Details: person2Details,
+                phone: entry['phone'],
+                amount: entryAmount,
+                paymentMethod: _paymentMethod,
+                denominations: denominations,
+                customerName: _customerName,
+                city: _city,
+                customerPhone: _customerPhone,
+                isUncle: entry['is_uncle'] ?? false,
+                eventTitle: eventTitle,
+                eventFor: eventFor,
+                eventTypeName: eventTypeName,
+                venue: venue,
+                notes: entry['notes'],
+              );
+
+              if (result != null && mounted) {
+                // Print using image bytes
+                final printerService = ThermalPrinterService();
+                await printerService.connectAndPrintImage(
+                    context, result['imageBytes']);
+                await printerService.connectAndPrintImage(
+                    context, result['imageBytes']);
+
+                // Send PDF to WhatsApp
+                String? phoneNumber = entry['phone'];
+                if (phoneNumber != null && phoneNumber.isNotEmpty) {
+                  await _sendReceiptToWhatsApp(
+                      result['pdf'], 'mois', phoneNumbers: [phoneNumber],
+                      receiptNo: entry['serial_no']);
+                }
+              }
+
+              if (mounted) {
+                await _clearFormCompletely();
+                _phoneFocusNode.requestFocus();
+                setState(() => _isLoading = false);
+              }
+            } catch (e) {
+              print('Error generating single receipt: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            } finally {
+              setState(() => _isLoading = false);
+            }
+            return; // ✅ Exit early, don't show dialog
+          } else {
+            // Show receipt type selection dialog for multiple entries
+            if (mounted) {
+              receiptType = await showDialog<String>(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) =>
+                    AlertDialog(
+                      title: const Text(
+                        'Generate Receipt',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      content: const Text(
+                        'How would you like to generate the receipts?',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'single'),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.blue[50],
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          child: const Text(
+                            'Single Receipt',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'group'),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.green[50],
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          child: const Text(
+                            'Group Receipt',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, 'cancel'),
+                          style: TextButton.styleFrom(
+                            backgroundColor: Colors.grey[200],
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 12),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+              );
             }
           }
-        }
 
-        // ✅ Refresh preview serial after saving
-        await _loadPreviewSerialNo();
-
-// ✅ CRITICAL FIX: Save denominations using firstSavedMoiId (real DB ID)
-        if (_paymentMethod == 'CASH' && !_skipDenomination && firstSavedMoiId != null) {
-          print('💾 Saving denominations for group using first entry: $firstSavedMoiId');
-          await _saveDenominationsForGroup(firstSavedMoiId);
-        } else if (_paymentMethod == 'CASH' && !_skipDenomination && _groupedMois.isNotEmpty) {
-          // Fallback: use first entry's ID from grouped list
-          print('💾 Saving denominations using fallback: ${_groupedMois[0]['id']}');
-          await _saveDenominationsForGroup(_groupedMois[0]['id']);
-        }
-
-// ✅ NEW: Check if skip_print is true
-        if (_skipPrint) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Entries saved successfully (Receipt skipped)'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
+          if (receiptType == null || receiptType == 'cancel') {
+            // User cancelled, just clear form
             await _clearFormCompletely();
             _phoneFocusNode.requestFocus();
-          }
-          return;  // Exit without generating receipt
-        }
-
-        // ✅ Check if group has only one entry
-        String? receiptType;
-        if (_groupedMois.length == 1) {
-          // ✅ CRITICAL FIX: Save the temp entry FIRST before generating receipt
-          var entry = _groupedMois[0];
-
-          // Only save if it's a temp entry (not already in DB)
-          if (entry['is_temp'] == true) {
-            List<Map<String, dynamic>>? personsData;
-            if (entry['persons'] != null && (entry['persons'] as List).isNotEmpty) {
-              personsData = List<Map<String, dynamic>>.from(entry['persons']);
-            }
-
-            final response = await _supabase.rpc('insert_moi_safe', params: {
-              'p_event_id': _eventId,
-              'p_operator_id': _operatorId,
-              'p_amount': entry['amount'],
-              'p_payment_method': _paymentMethod,
-              'p_persons': personsData,
-              'p_village_name': entry['village_name'],
-              'p_living_place': entry['living_place'],
-              'p_phone': entry['phone'],
-              'p_is_uncle': entry['is_uncle'] ?? false,
-              'p_notes': entry['notes'],
-              'p_group_id': null,
-            });
-
-            String newMoiId = response['id'];
-            int actualSerialNo = response['serial_no'];
-            int actualGroupId = response['group_id'];
-
-            // Update the entry with real DB data
-            setState(() {
-              _groupedMois[0] = {
-                ...entry,
-                'id': newMoiId,
-                'serial_no': actualSerialNo,
-                'group_id': actualGroupId,
-                'is_temp': false,
-              };
-              _currentGroupId = actualGroupId;
-            });
-
-            entry = _groupedMois[0]; // Update reference
-            print('✅ Single temp entry saved: $newMoiId with serial: $actualSerialNo');
+            setState(() => _isLoading = false);
+            return;
           }
 
-          // ✅ Save denominations if CASH and not skipping
-          if (_paymentMethod == 'CASH' && !_skipDenomination) {
-            await _saveDenominationsForGroup(entry['id']);
-          }
-
-          // Now generate receipt
-          setState(() => _isLoading = true);
-
-          try {
+          // ✅ UPDATED: For split group receipts (around line 1460)
+          if (receiptType == 'single') {
             final operatorName = await _getOperatorName();
-            final eventDetails = await _getEventDetails();  // Already exists
+            final eventDetails = await _getEventDetails(); // Already exists
 
 // ADD THIS - fetch event title, type name, venue
             final eventResponse = await _supabase
@@ -2823,207 +3157,206 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             String? eventFor = eventResponse['event_for'];
             String? eventTypeName = eventResponse['event_types']?['name'];
 
-            // ✅ Build denominations from current form (same as group receipt) - only if not skipping
-            Map<int, int>? denominations;
-            if (_paymentMethod == 'CASH' && !_skipDenomination) {
-              denominations = {
-                500: 0,
-                200: 0,
-                100: 0,
-                50: 0,
-                20: 0,
-                10: 0,
-                5: 0,
-                1: 0,
-              };
-
-              for (var row in _denomRows) {
-                int? denom = row['selectedDenom'];
-                int count = int.tryParse(row['countController'].text) ?? 0;
-                if (denom != null && count != 0) {
-                  denominations[denom] = (denominations[denom] ?? 0) + count;
-                }
+            List<Map<String, dynamic>> entriesWithDenoms = [];
+            for (var entry in _groupedMois) {
+              Map<String, dynamic> entryData = Map.from(entry);
+              if (entry['payment_method'] == 'CASH') {
+                entryData['denominations'] =
+                await _getDenominations(entry['id']);
               }
-
-              // Check if we have any non-zero denominations
-              bool hasNonZeroDenoms =
-              denominations.values.any((count) => count != 0);
-              if (!hasNonZeroDenoms) {
-                denominations = null;
-              }
+              entriesWithDenoms.add(entryData);
             }
 
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Generating receipt...'),
-                  backgroundColor: Colors.blue,
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            }
-
-            // Parse persons data
-            String? person1Name;
-            String? person1Job;
-            String? person2Details;
-            if (entry['persons'] != null) {
-              List<dynamic> personsList = entry['persons'] as List;
-              if (personsList.isNotEmpty) {
-                person1Name = personsList[0]['name'];
-                person1Job = personsList[0]['job'];
-              }
-              if (personsList.length > 1) {
-                person2Details = personsList[1]['details'];
-              }
-            }
-
-            // ✅ FIX: Get amount correctly from entry
-            int entryAmount = 0;
-            var amountValue = entry['amount'];
-            if (amountValue is int) {
-              entryAmount = amountValue;
-            } else if (amountValue is double) {
-              entryAmount = amountValue.toInt();
-            } else if (amountValue != null) {
-              entryAmount = int.tryParse(amountValue.toString()) ?? 0;
-            }
-
-            final result = await MoiReceiptGenerator.generateSingleMoiReceiptWithImage(
+            // Generate split receipts with images
+            final receiptsWithImages = await MoiReceiptGenerator
+                .generateSplitGroupReceiptsWithImages(
               context: context,
-              serialNo: entry['serial_no'],
               operatorName: operatorName,
               eventDate: eventDetails['event_date'],
               eventTime: eventDetails['event_time'],
-              villageName: entry['village_name'],
-              livingPlace: entry['living_place'],
-              person1Name: person1Name,
-              person1Job: person1Job,
-              person2Details: person2Details,
-              phone: entry['phone'],
-              amount: entryAmount,
-              paymentMethod: _paymentMethod,
-              denominations: denominations,
+              groupEntries: entriesWithDenoms,
               customerName: _customerName,
               city: _city,
               customerPhone: _customerPhone,
-              isUncle: entry['is_uncle'] ?? false,
-              eventTitle: eventTitle,
-              eventFor: eventFor,
-              eventTypeName: eventTypeName,
-              venue: venue,
-              notes: entry['notes'],
             );
 
-            if (result != null && mounted) {
-              // Print using image bytes
+            if (receiptsWithImages.isNotEmpty && mounted) {
               final printerService = ThermalPrinterService();
-              await printerService.connectAndPrintImage(context, result['imageBytes']);
-              await printerService.connectAndPrintImage(context, result['imageBytes']);
 
-              // Send PDF to WhatsApp
-              String? phoneNumber = entry['phone'];
-              if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                await _sendReceiptToWhatsApp(result['pdf'], 'mois', phoneNumbers: [phoneNumber], receiptNo: entry['serial_no']);
+              for (int i = 0; i < receiptsWithImages.length; i++) {
+                final receipt = receiptsWithImages[i];
+
+                // Print using image bytes
+                await printerService.connectAndPrintImage(
+                    context, receipt['imageBytes']);
+                await printerService.connectAndPrintImage(
+                    context, receipt['imageBytes']);
+
+                // Send PDF to WhatsApp
+                if (i < entriesWithDenoms.length) {
+                  String? phone = entriesWithDenoms[i]['phone'];
+                  if (phone != null && phone.isNotEmpty) {
+                    await _sendReceiptToWhatsApp(
+                        receipt['pdf'],
+                        'mois',
+                        phoneNumbers: [phone],
+                        receiptNo: entriesWithDenoms[i]['serial_no']
+                    );
+                  }
+                }
               }
             }
+          }
 
-            if (mounted) {
-              await _clearFormCompletely();
-              _phoneFocusNode.requestFocus();
-            }
-          } catch (e) {
-            print('Error generating single receipt: $e');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          } finally {
+          if (mounted) {
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
             setState(() => _isLoading = false);
           }
-          return; // ✅ Exit early, don't show dialog
-        } else {
-          // Show receipt type selection dialog for multiple entries
+        } catch (e) {
+          print('Error saving grouped entries: $e');
           if (mounted) {
-            receiptType = await showDialog<String>(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                title: const Text(
-                  'Generate Receipt',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                content: const Text(
-                  'How would you like to generate the receipts?',
-                  style: TextStyle(fontSize: 14),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'single'),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.blue[50],
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Single Receipt',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'group'),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.green[50],
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Group Receipt',
-                      style: TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, 'cancel'),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.grey[200],
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            NetworkUtils.handleError(
+              context,
+              e,
+              onRetry: _handleSaveAndPrint,
+              customMessage: 'Error saving grouped entries',
             );
           }
         }
+        return;
+      }
 
-        if (receiptType == null || receiptType == 'cancel') {
-          // User cancelled, just clear form
-          await _clearFormCompletely();
-          _phoneFocusNode.requestFocus();
+      // ✅ SINGLE ENTRY MODE (not grouped)
+
+      // Single entry mode validation
+      bool hasValidPerson = _person1Field1Controller.text
+          .trim()
+          .isNotEmpty ||
+          _person2Controller.text
+              .trim()
+              .isNotEmpty;
+
+      if (!hasValidPerson) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Please add at least one person with a name')),
+        );
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      String enteredAmountText = _amountController.text.trim();
+      if (enteredAmountText.isEmpty || int.tryParse(enteredAmountText) == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Amount is mandatory!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // ✅ Only validate denomination if CASH and not skipping
+      if (_paymentMethod == 'CASH' && !_skipDenomination) {
+        int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
+        int denomTotal = _getTotalAmount();
+
+        if (denomTotal == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter denomination details')),
+          );
           return;
         }
 
-        // ✅ UPDATED: For split group receipts (around line 1460)
-        if (receiptType == 'single') {
+        if (denomTotal != enteredAmount) {
+          int difference = enteredAmount - denomTotal;
+          String message = difference > 0
+              ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference
+              .abs()} is missing!'
+              : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference
+              .abs()} is extra!';
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+      }
+      final existingEntries = await _checkExistingEntry();
+
+      if (existingEntries.isNotEmpty) {
+        final shouldProceed = await _showExistingEntryDialog(existingEntries);
+
+        if (!shouldProceed) {
+          // User chose not to proceed - exit
+          return;
+        }
+      }
+
+
+      final similarCheckResult = await _checkSimilarEntryBeforeSave();
+
+      if (similarCheckResult == 'cancel') {
+        // User cancelled - do nothing
+        return;
+      } else if (similarCheckResult == 'new') {
+        // User wants to create new entry - just return to form
+        // Form already has data, they can modify it
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Please modify the entry to make it different from the existing one'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+        return;
+      } else if (similarCheckResult != null &&
+          similarCheckResult.startsWith('overwrite:')) {
+        // Extract the MOI ID to overwrite
+        final moiIdToOverwrite = similarCheckResult.split(':')[1];
+
+        // Set edit mode to overwrite
+        setState(() {
+          _isEditMode = true;
+          _editingMoiId = moiIdToOverwrite;
+        });
+
+        // Continue with save (will update the existing entry)
+      }
+
+
+      // Save single entry
+      try {
+        String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
+
+        // After successful save, add this check:
+        if (_skipPrint) {
+          // Don't generate receipt, just show success and clear
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Entries saved successfully (Receipt skipped)'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+            setState(() => _isLoading = false);
+          }
+          return; // Exit without generating receipt
+        }
+
+        // ✅ Generate receipt after saving (only if not skipping)
+        if (moiId != null && mounted) {
           final operatorName = await _getOperatorName();
-          final eventDetails = await _getEventDetails();  // Already exists
+          final eventDetails = await _getEventDetails(); // Already exists
 
 // ADD THIS - fetch event title, type name, venue
           final eventResponse = await _supabase
@@ -3037,316 +3370,137 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           String? eventFor = eventResponse['event_for'];
           String? eventTypeName = eventResponse['event_types']?['name'];
 
-          List<Map<String, dynamic>> entriesWithDenoms = [];
-          for (var entry in _groupedMois) {
-            Map<String, dynamic> entryData = Map.from(entry);
-            if (entry['payment_method'] == 'CASH') {
-              entryData['denominations'] = await _getDenominations(entry['id']);
+          // ✅ Build denominations from current form (only if not skipping)
+          Map<int, int>? denominations;
+          if (_paymentMethod == 'CASH' && !_skipDenomination) {
+            print('🎯 Payment method is CASH, building denominations...');
+            print('🎯 Number of _denomRows: ${_denomRows.length}');
+
+            denominations = {
+              500: 0,
+              200: 0,
+              100: 0,
+              50: 0,
+              20: 0,
+              10: 0,
+              5: 0,
+              1: 0,
+            };
+
+            for (var row in _denomRows) {
+              int? denom = row['selectedDenom'];
+              int count = int.tryParse(row['countController'].text) ?? 0;
+              print('🎯 Row: denom=$denom, count=$count');
+              if (denom != null && count != 0) {
+                denominations[denom] = (denominations[denom] ?? 0) + count;
+              }
             }
-            entriesWithDenoms.add(entryData);
+
+            print('🔍 Denominations BEFORE validation: $denominations');
+
+            // ✅ CRITICAL: Check if we have any non-zero denominations
+            bool hasNonZeroDenoms =
+            denominations.values.any((count) => count != 0);
+            print('🔍 Has non-zero denominations: $hasNonZeroDenoms');
+
+            if (!hasNonZeroDenoms) {
+              print(
+                  '⚠️ WARNING: All denominations are zero in Save&Print! Setting to null.');
+              denominations = null;
+            } else {
+              print('✅ Valid denominations found: $denominations');
+            }
           }
 
-          // Generate split receipts with images
-          final receiptsWithImages = await MoiReceiptGenerator.generateSplitGroupReceiptsWithImages(
+          print(
+              '🔍 FINAL denominations being passed to receipt generator: $denominations');
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Generating receipt...'),
+              backgroundColor: Colors.blue,
+              duration: Duration(seconds: 1),
+            ),
+          );
+
+          print('🎯 About to call generateSingleMoiReceipt with:');
+          print('   - paymentMethod: $_paymentMethod');
+          print('   - denominations: $denominations');
+
+          final result = await MoiReceiptGenerator
+              .generateSingleMoiReceiptWithImage(
             context: context,
+            serialNo: _serialNo!,
             operatorName: operatorName,
             eventDate: eventDetails['event_date'],
             eventTime: eventDetails['event_time'],
-            groupEntries: entriesWithDenoms,
+            villageName: _villageController.text.trim(),
+            livingPlace: _livingPlaceController.text.trim(),
+            person1Name: _person1Field1Controller.text.trim(),
+            person1Job: _person1Field2Controller.text.trim(),
+            person2Details: _person2Controller.text.trim(),
+            phone: _phoneController.text.trim(),
+            notes: _notesController.text.trim(),
+            // ✅ ALREADY CORRECT
+            amount: _paymentMethod == 'CASH'
+                ? _getTotalAmount()
+                : int.tryParse(_amountController.text) ?? 0,
+            paymentMethod: _paymentMethod,
+            denominations: denominations,
             customerName: _customerName,
             city: _city,
             customerPhone: _customerPhone,
+            isUncle: _isUncle,
+            eventTitle: eventTitle,
+            eventFor: eventFor,
+            eventTypeName: eventTypeName,
+            venue: venue,
           );
 
-          if (receiptsWithImages.isNotEmpty && mounted) {
+          if (result != null && mounted) {
+            // Print using image bytes
             final printerService = ThermalPrinterService();
+            await printerService.connectAndPrintImage(
+                context, result['imageBytes']);
+            await printerService.connectAndPrintImage(
+                context, result['imageBytes']);
 
-            for (int i = 0; i < receiptsWithImages.length; i++) {
-              final receipt = receiptsWithImages[i];
-
-              // Print using image bytes
-              await printerService.connectAndPrintImage(context, receipt['imageBytes']);
-              await printerService.connectAndPrintImage(context, receipt['imageBytes']);
-
-              // Send PDF to WhatsApp
-              if (i < entriesWithDenoms.length) {
-                String? phone = entriesWithDenoms[i]['phone'];
-                if (phone != null && phone.isNotEmpty) {
-                  await _sendReceiptToWhatsApp(
-                      receipt['pdf'],
-                      'mois',
-                      phoneNumbers: [phone],
-                      receiptNo: entriesWithDenoms[i]['serial_no']
-                  );
-                }
-              }
+            // Send PDF to WhatsApp
+            String? phoneNumber = _phoneController.text.trim();
+            if (phoneNumber.isNotEmpty) {
+              await _sendReceiptToWhatsApp(
+                  result['pdf'], 'mois', phoneNumbers: [phoneNumber],
+                  receiptNo: _serialNo);
             }
           }
-        }
 
-        if (mounted) {
-          await _clearFormCompletely();
-          _phoneFocusNode.requestFocus();
+          if (mounted) {
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+            setState(() => _isLoading = false);
+          }
         }
-      } catch (e) {
-        print('Error saving grouped entries: $e');
+      }catch (e) {
+        print('Error saving: $e');
         if (mounted) {
+          setState(() => _isLoading = false);
           NetworkUtils.handleError(
             context,
             e,
             onRetry: _handleSaveAndPrint,
-            customMessage: 'Error saving grouped entries',
+            customMessage: 'Error saving MOI',
           );
         }
-      }
-      return;
-    }
-
-    // ✅ SINGLE ENTRY MODE (not grouped)
-
-    // Single entry mode validation
-    bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
-        _person2Controller.text.trim().isNotEmpty;
-
-    if (!hasValidPerson) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please add at least one person with a name')),
-      );
-      return;
-    }
-
-    String enteredAmountText = _amountController.text.trim();
-    if (enteredAmountText.isEmpty || int.tryParse(enteredAmountText) == 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Amount is mandatory!'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // ✅ Only validate denomination if CASH and not skipping
-    if (_paymentMethod == 'CASH' && !_skipDenomination) {
-      int enteredAmount = int.tryParse(enteredAmountText) ?? 0;
-      int denomTotal = _getTotalAmount();
-
-      if (denomTotal == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter denomination details')),
-        );
-        return;
-      }
-
-      if (denomTotal != enteredAmount) {
-        int difference = enteredAmount - denomTotal;
-        String message = difference > 0
-            ? 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is missing!'
-            : 'Amount is ₹$enteredAmount but denomination is ₹$denomTotal. ₹${difference.abs()} is extra!';
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        return;
-      }
-    }
-    final existingEntries = await _checkExistingEntry();
-
-    if (existingEntries.isNotEmpty) {
-      final shouldProceed = await _showExistingEntryDialog(existingEntries);
-
-      if (!shouldProceed) {
-        // User chose not to proceed - exit
-        return;
-      }
-    }
-
-
-
-    final similarCheckResult = await _checkSimilarEntryBeforeSave();
-
-    if (similarCheckResult == 'cancel') {
-      // User cancelled - do nothing
-      return;
-    } else if (similarCheckResult == 'new') {
-      // User wants to create new entry - just return to form
-      // Form already has data, they can modify it
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please modify the entry to make it different from the existing one'),
-          backgroundColor: Colors.blue,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    } else if (similarCheckResult != null && similarCheckResult.startsWith('overwrite:')) {
-      // Extract the MOI ID to overwrite
-      final moiIdToOverwrite = similarCheckResult.split(':')[1];
-
-      // Set edit mode to overwrite
-      setState(() {
-        _isEditMode = true;
-        _editingMoiId = moiIdToOverwrite;
-      });
-
-      // Continue with save (will update the existing entry)
-    }
-
-
-    // Save single entry
-    try {
-      String? moiId = await _saveMoi(null, forceUpdate: _isEditMode);
-
-      // After successful save, add this check:
-      if (_skipPrint) {
-        // Don't generate receipt, just show success and clear
+      } finally {
+        // ✅ IMPORTANT: Always reset loading at the end
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Entries saved successfully (Receipt skipped)'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          await _clearFormCompletely();
-          _phoneFocusNode.requestFocus();
-        }
-        return; // Exit without generating receipt
-      }
-
-      // ✅ Generate receipt after saving (only if not skipping)
-      if (moiId != null && mounted) {
-        final operatorName = await _getOperatorName();
-        final eventDetails = await _getEventDetails();  // Already exists
-
-// ADD THIS - fetch event title, type name, venue
-        final eventResponse = await _supabase
-            .from('events')
-            .select('title, venue, event_types(name)')
-            .eq('id', _eventId!)
-            .single();
-
-        String? eventTitle = eventResponse['title'];
-        String? venue = eventResponse['venue'];
-        String? eventFor = eventResponse['event_for'];
-        String? eventTypeName = eventResponse['event_types']?['name'];
-
-        // ✅ Build denominations from current form (only if not skipping)
-        Map<int, int>? denominations;
-        if (_paymentMethod == 'CASH' && !_skipDenomination) {
-          print('🎯 Payment method is CASH, building denominations...');
-          print('🎯 Number of _denomRows: ${_denomRows.length}');
-
-          denominations = {
-            500: 0,
-            200: 0,
-            100: 0,
-            50: 0,
-            20: 0,
-            10: 0,
-            5: 0,
-            1: 0,
-          };
-
-          for (var row in _denomRows) {
-            int? denom = row['selectedDenom'];
-            int count = int.tryParse(row['countController'].text) ?? 0;
-            print('🎯 Row: denom=$denom, count=$count');
-            if (denom != null && count != 0) {
-              denominations[denom] = (denominations[denom] ?? 0) + count;
-            }
-          }
-
-          print('🔍 Denominations BEFORE validation: $denominations');
-
-          // ✅ CRITICAL: Check if we have any non-zero denominations
-          bool hasNonZeroDenoms =
-          denominations.values.any((count) => count != 0);
-          print('🔍 Has non-zero denominations: $hasNonZeroDenoms');
-
-          if (!hasNonZeroDenoms) {
-            print(
-                '⚠️ WARNING: All denominations are zero in Save&Print! Setting to null.');
-            denominations = null;
-          } else {
-            print('✅ Valid denominations found: $denominations');
-          }
-        }
-
-        print(
-            '🔍 FINAL denominations being passed to receipt generator: $denominations');
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Generating receipt...'),
-            backgroundColor: Colors.blue,
-            duration: Duration(seconds: 1),
-          ),
-        );
-
-        print('🎯 About to call generateSingleMoiReceipt with:');
-        print('   - paymentMethod: $_paymentMethod');
-        print('   - denominations: $denominations');
-
-        final result = await MoiReceiptGenerator
-            .generateSingleMoiReceiptWithImage(
-          context: context,
-          serialNo: _serialNo!,
-          operatorName: operatorName,
-          eventDate: eventDetails['event_date'],
-          eventTime: eventDetails['event_time'],
-          villageName: _villageController.text.trim(),
-          livingPlace: _livingPlaceController.text.trim(),
-          person1Name: _person1Field1Controller.text.trim(),
-          person1Job: _person1Field2Controller.text.trim(),
-          person2Details: _person2Controller.text.trim(),
-          phone: _phoneController.text.trim(),
-          notes: _notesController.text.trim(),  // ✅ ALREADY CORRECT
-          amount: _paymentMethod == 'CASH'
-              ? _getTotalAmount()
-              : int.tryParse(_amountController.text) ?? 0,
-          paymentMethod: _paymentMethod,
-          denominations: denominations,
-          customerName: _customerName,
-          city: _city,
-          customerPhone: _customerPhone,
-          isUncle: _isUncle,
-          eventTitle: eventTitle,
-          eventFor: eventFor,
-          eventTypeName: eventTypeName,
-          venue: venue,
-        );
-
-        if (result != null && mounted) {
-          // Print using image bytes
-          final printerService = ThermalPrinterService();
-          await printerService.connectAndPrintImage(
-              context, result['imageBytes']);
-          await printerService.connectAndPrintImage(
-              context, result['imageBytes']);
-
-          // Send PDF to WhatsApp
-          String? phoneNumber = _phoneController.text.trim();
-          if (phoneNumber.isNotEmpty) {
-            await _sendReceiptToWhatsApp(
-                result['pdf'], 'mois', phoneNumbers: [phoneNumber],
-                receiptNo: _serialNo);
-          }
-        }
-
-        if (mounted) {
-          await _clearFormCompletely();
-          _phoneFocusNode.requestFocus();
+          setState(() => _isLoading = false);
         }
       }
-    }catch (e) {
-      print('Error saving: $e');
+    } catch (e) {
+      print('❌ Error in _handleSaveAndPrint: $e');
       if (mounted) {
+        setState(() => _isLoading = false);
         NetworkUtils.handleError(
           context,
           e,
@@ -3354,8 +3508,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customMessage: 'Error saving MOI',
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
   }
 
 
@@ -4146,6 +4303,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         const SnackBar(
             content: Text('Please add at least one person with a name')),
       );
+      if (mounted) setState(() => _isLoading = false);
       return false;
     }
 
@@ -5225,7 +5383,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           ),
         ),
-        body: SingleChildScrollView(
+        body:Stack(
+            children: [
+        SingleChildScrollView(
           padding: const EdgeInsets.all(12),
           child: Column(
             children: [
@@ -5301,6 +5461,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _buildActionButtons(),
             ],
           ),
+        ),
+              // ✅ NEW: Loading overlay
+              if (_isLoading)
+                Container(
+                  color: Colors.black.withOpacity(0.5),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          strokeWidth: 4,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Processing...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
         ),
       ),
     );
