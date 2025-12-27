@@ -32,6 +32,9 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
+    <!-- USB Host feature -->
+    <uses-feature android:name="android.hardware.usb.host" />
+
     <application
         android:usesCleartextTraffic="true"
         android:label="HiTechMoi"

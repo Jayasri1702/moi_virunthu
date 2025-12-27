@@ -5,6 +5,7 @@ import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image/image.dart' as img;
+import 'package:usb_serial/usb_serial.dart';
 
 class ThermalPrinterService {
   static final ThermalPrinterService _instance = ThermalPrinterService._internal();
@@ -13,15 +14,33 @@ class ThermalPrinterService {
 
   final BlueThermalPrinter _bluetooth = BlueThermalPrinter.instance;
   BluetoothDevice? _connectedDevice;
+  // ✅ ADD THESE NEW LINES
+  UsbPort? _usbPort;
+  UsbDevice? _connectedUsbDevice;
 
   static const String _lastPrinterKey = 'last_printer_address';
 
-  /// Check if printer is connected
+  // Check if printer is connected
   Future<bool> isConnected() async {
     try {
       return await _bluetooth.isConnected ?? false;
     } catch (e) {
       print('❌ Error checking connection: $e');
+      return false;
+    }
+  }
+
+  /// Check if USB printer is connected
+  Future<bool> isUsbConnected() async {
+    try {
+      if (_usbPort != null) {
+        return true;
+      }
+
+      List<UsbDevice> devices = await UsbSerial.listDevices();
+      return devices.isNotEmpty;
+    } catch (e) {
+      print('❌ Error checking USB connection: $e');
       return false;
     }
   }
@@ -66,6 +85,18 @@ class ThermalPrinterService {
     }
   }
 
+  /// Get list of USB devices
+  Future<List<UsbDevice>> getUsbDevices() async {
+    try {
+      List<UsbDevice> devices = await UsbSerial.listDevices();
+      print('🔌 Found ${devices.length} USB devices');
+      return devices;
+    } catch (e) {
+      print('❌ Error getting USB devices: $e');
+      return [];
+    }
+  }
+
   /// Connect to printer
   Future<bool> connect(BluetoothDevice device) async {
     try {
@@ -88,12 +119,67 @@ class ThermalPrinterService {
     }
   }
 
+  /// Connect to USB printer
+  Future<bool> connectUsb(UsbDevice device) async {
+    try {
+      print('🔌 Connecting to USB printer: ${device.productName}...');
+
+      // Disconnect if already connected
+      if (_usbPort != null) {
+        await _usbPort!.close();
+        _usbPort = null;
+      }
+
+      _usbPort = await device.create();
+
+      if (_usbPort == null) {
+        print('❌ Failed to create USB port');
+        return false;
+      }
+
+      bool opened = await _usbPort!.open();
+
+      if (!opened) {
+        print('❌ Failed to open USB port');
+        _usbPort = null;
+        return false;
+      }
+
+      // Configure port
+      await _usbPort!.setDTR(true);
+      await _usbPort!.setRTS(true);
+      await _usbPort!.setPortParameters(
+        9600, // baudRate
+        UsbPort.DATABITS_8,
+        UsbPort.STOPBITS_1,
+        UsbPort.PARITY_NONE,
+      );
+
+      _connectedUsbDevice = device;
+      print('✅ Connected to USB printer');
+      return true;
+    } catch (e) {
+      print('❌ USB connection error: $e');
+      _usbPort = null;
+      return false;
+    }
+  }
+
   /// Disconnect from printer
   Future<void> disconnect() async {
     try {
+      // ✅ Disconnect USB if connected
+      if (_usbPort != null) {
+        await _usbPort!.close();
+        _usbPort = null;
+        _connectedUsbDevice = null;
+        print('✅ USB Disconnected');
+      }
+
+      // Disconnect Bluetooth if connected
       await _bluetooth.disconnect();
       _connectedDevice = null;
-      print('✅ Disconnected');
+      print('✅ Bluetooth Disconnected');
     } catch (e) {
       print('❌ Error disconnecting: $e');
     }
@@ -273,7 +359,60 @@ class ThermalPrinterService {
     }
   }
 
-  /// Print PDF file (for WhatsApp - keep this for backward compatibility)
+  /// Print image bytes via USB
+  Future<bool> printImageBytesUsb(Uint8List imageBytes) async {
+    try {
+      if (_usbPort == null) {
+        print('❌ USB printer not connected');
+        return false;
+      }
+
+      print('🖨️ Converting image for USB thermal printer...');
+
+      // Convert image to ESC/POS format
+      List<int> escPosData = _convertImageToEscPos(imageBytes);
+
+      if (escPosData.isEmpty) {
+        print('❌ Failed to convert image');
+        return false;
+      }
+
+      print('🖨️ Sending ${escPosData.length} bytes to USB printer');
+
+      // Send data in chunks
+      const int chunkSize = 4096;
+      int totalChunks = (escPosData.length / chunkSize).ceil();
+
+      print('📦 Sending in $totalChunks chunks of ${chunkSize}B...');
+
+      for (int i = 0; i < escPosData.length; i += chunkSize) {
+        int end = (i + chunkSize < escPosData.length)
+            ? i + chunkSize
+            : escPosData.length;
+
+        await _usbPort!.write(Uint8List.fromList(escPosData.sublist(i, end)));
+
+        if ((i / chunkSize).floor() % 20 == 0 || end >= escPosData.length) {
+          int currentChunk = (i / chunkSize).floor() + 1;
+          print('📤 Sent $currentChunk/$totalChunks');
+        }
+      }
+
+      print('✅ All data sent via USB');
+
+      // Add spacing and cut paper
+      await _usbPort!.write(Uint8List.fromList([0x0A, 0x0A, 0x0A])); // Line feeds
+      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00])); // Paper cut
+
+      print('✅ USB Print completed');
+      return true;
+    } catch (e) {
+      print('❌ USB Print error: $e');
+      return false;
+    }
+  }
+
+  // Print PDF file (for WhatsApp - keep this for backward compatibility)
   Future<bool> printPdfFile(File pdfFile) async {
     try {
       bool connected = await isConnected();
@@ -369,10 +508,71 @@ class ThermalPrinterService {
     return null;
   }
 
-  /// Connect and print image bytes
+  /// Connect and print image bytes (USB FIRST, then Bluetooth)
   Future<bool> connectAndPrintImage(BuildContext context, Uint8List imageBytes) async {
     try {
-      // Check if already connected
+      // ✅ STEP 1: Check if USB printer is connected FIRST
+      List<UsbDevice> usbDevices = await getUsbDevices();
+
+      if (usbDevices.isNotEmpty) {
+        print('🔌 USB printer detected - using USB connection');
+
+        // Check if already connected to USB
+        if (_usbPort == null) {
+          // Connect to first USB device
+          bool usbConnected = await connectUsb(usbDevices[0]);
+
+          if (!usbConnected) {
+            print('⚠️ USB connection failed, falling back to Bluetooth');
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Connected to USB Printer'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            }
+
+            // Print via USB
+            bool printSuccess = await printImageBytesUsb(imageBytes);
+
+            if (printSuccess && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('✅ Receipt sent to USB printer'),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+
+            return printSuccess;
+          }
+        } else {
+          // Already connected to USB, just print
+          print('✅ Already connected to USB printer');
+
+          bool printSuccess = await printImageBytesUsb(imageBytes);
+
+          if (printSuccess && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Receipt sent to USB printer'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+
+          return printSuccess;
+        }
+      }
+
+      // ✅ STEP 2: No USB printer found, use BLUETOOTH
+      print('📱 No USB printer found, using Bluetooth');
+
       bool connected = await isConnected();
 
       if (!connected) {
@@ -434,13 +634,13 @@ class ThermalPrinterService {
         }
       }
 
-      // Print the image
+      // Print via Bluetooth
       bool printSuccess = await printImageBytes(imageBytes);
 
       if (printSuccess && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('✅ Receipt sent to printer'),
+            content: Text('✅ Receipt sent to Bluetooth printer'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 2),
           ),
@@ -462,7 +662,7 @@ class ThermalPrinterService {
     }
   }
 
-  /// Connect and print PDF (keep for backward compatibility)
+  // Connect and print PDF (keep for backward compatibility)
   Future<bool> connectAndPrint(BuildContext context, File pdfFile) async {
     try {
       // Check if already connected

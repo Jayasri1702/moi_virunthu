@@ -491,6 +491,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     }
   }
 
+  // Replace the _saveWithdrawal method in CashWithdrawalScreen with this updated version:
+
   Future<void> _saveWithdrawal() async {
     // Prevent multiple clicks
     if (_isSaving) return;
@@ -556,6 +558,19 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         return;
       }
 
+      // ✅ Format phone number with country code (like in CollectMoiScreen)
+      String phoneNumber = _phoneController.text.trim();
+      String storedPhone = phoneNumber; // Store as-is (10 digits)
+      String cleanedPhone = phoneNumber.replaceAll(RegExp(r'\D'), ''); // For validation
+
+      if (phoneNumber.isNotEmpty) {
+        String cleanedPhone = phoneNumber.replaceAll(RegExp(r'\D'), ''); // Remove non-digits
+
+        if (cleanedPhone.length == 10) {
+          cleanedPhone = '91$cleanedPhone'; // ✅ Add '91' ONLY for WhatsApp
+        }
+      }
+
       // Prepare denominations map
       Map<int, int> denominations = {
         500: int.tryParse(_denom500Controller.text) ?? 0,
@@ -568,12 +583,12 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         1: int.tryParse(_denom1Controller.text) ?? 0,
       };
 
-      // Insert withdrawal record with calculated amount
+      // Insert withdrawal record with formatted phone number
       final response = await _supabase.from('cash_withdrawals').insert({
         'event_id': eventId,
         'operator_id': operatorId,
         'requested_by': _requestedByController.text.trim(),
-        'requester_phone_number': _phoneController.text.trim(),
+        'requester_phone_number': storedPhone, // ✅ Store WITHOUT '91'
         'amount': _totalAmount,
         'reason': _reasonController.text.trim(),
       }).select();
@@ -604,6 +619,7 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         withdrawalDate: DateTime.now(),
         withdrawalTime: TimeOfDay.now(),
         requestedBy: _requestedByController.text.trim(),
+        requesterPhoneNumber: storedPhone, // ✅ Pass WITHOUT '91'
         amount: _totalAmount,
         denominations: denominations,
         reason: _reasonController.text.trim().isNotEmpty ? _reasonController.text.trim() : null,
@@ -637,11 +653,15 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
           print('📱 skip_whatsapp from DB: $skipWhatsapp');
           print('📱 to_whatsapp being sent: $toWhatsapp');
 
+          String backendPhone = storedPhone.isNotEmpty && storedPhone.length == 10
+              ? '91$storedPhone'
+              : '';
+
           // Submit receipt to backend
           await _submitReceiptToBackend(
             pdfFile: result['pdf'],
             eventId: eventId.toString(),
-            phoneNumber: _phoneController.text.trim(),
+            phoneNumber: backendPhone, // ✅ With '91' for API
             toWhatsapp: toWhatsapp,
             receiptNo: withdrawalId,
           );
@@ -690,6 +710,8 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
     }
   }
 
+// Replace the _sendReceiptToWhatsApp method in CashWithdrawalScreen with this updated version:
+
   Future<void> _sendReceiptToWhatsApp() async {
     if (!_withdrawalSaved) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -716,10 +738,37 @@ class _CashWithdrawalScreenState extends State<CashWithdrawalScreen> {
         throw Exception('No saved withdrawal data found');
       }
 
+      // ✅ Format phone number like in CollectMoiScreen
+      String phoneNumber = _phoneController.text.trim();
+      String cleanedPhone = phoneNumber.replaceAll(RegExp(r'\D'), ''); // Remove non-digits
+
+      if (cleanedPhone.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid phone number'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (cleanedPhone.length != 10) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Phone number must be exactly 10 digits'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // ✅ Add 91 for India country code
+      cleanedPhone = '91$cleanedPhone';
+
       // Send receipt to WhatsApp
       await WithdrawalReceiptGenerator.sendToWhatsApp(
         context: context,
-        phoneNumber: _phoneController.text.trim(),
+        phoneNumber: cleanedPhone, // ✅ Pass the formatted number with country code
         operatorName: operatorName,
         withdrawalDate: DateTime.now(),
         withdrawalTime: TimeOfDay.now(),

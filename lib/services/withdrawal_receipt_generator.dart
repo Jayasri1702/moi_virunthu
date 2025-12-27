@@ -58,6 +58,7 @@ class WithdrawalReceiptGenerator {
     required DateTime withdrawalDate,
     required TimeOfDay withdrawalTime,
     required String requestedBy,
+    required String? requesterPhoneNumber,
     required num amount,
     required Map<int, int> denominations,
     String? reason,
@@ -79,6 +80,7 @@ class WithdrawalReceiptGenerator {
         withdrawalDate: withdrawalDate,
         withdrawalTime: withdrawalTime,
         requestedBy: requestedBy,
+        requesterPhoneNumber: requesterPhoneNumber,
         amount: amount,
         denominations: denominations,
         reason: reason,
@@ -204,6 +206,7 @@ fontBase64: fontBase64,  // ADD THIS
     required DateTime withdrawalDate,
     required TimeOfDay withdrawalTime,
     required String requestedBy,
+    required String? requesterPhoneNumber,
     required num amount,
     required Map<int, int> denominations,
     String? reason,
@@ -224,6 +227,7 @@ fontBase64: fontBase64,  // ADD THIS
         withdrawalDate: withdrawalDate,
         withdrawalTime: withdrawalTime,
         requestedBy: requestedBy,
+        requesterPhoneNumber: requesterPhoneNumber,
         amount: amount,
         denominations: denominations,
         reason: reason,
@@ -377,6 +381,7 @@ fontBase64: fontBase64,  // ADD THIS
         withdrawalDate: withdrawalDate,
         withdrawalTime: withdrawalTime,
         requestedBy: requestedBy,
+        requesterPhoneNumber: phoneNumber,
         amount: amount,
         denominations: denominations,
         reason: reason,
@@ -525,6 +530,7 @@ fontBase64: fontBase64,  // ADD THIS
     required DateTime withdrawalDate,
     required TimeOfDay withdrawalTime,
     required String requestedBy,
+    required String? requesterPhoneNumber,
     required num amount,
     required Map<int, int> denominations,
     String? reason,
@@ -831,10 +837,13 @@ fontBase64: fontBase64,  // ADD THIS
     
     <div class="withdrawal-title">CASH WITHDRAWAL</div>
     
-    <div class="info-box">
-      <div class="info-label">Requested by</div>
-      <div class="info-value">$requestedBy</div>
-    </div>
+   <div class="info-box">
+  <div class="info-label">Requested by</div>
+  <div class="info-value">$requestedBy</div>
+  ${requesterPhoneNumber != null && requesterPhoneNumber!.isNotEmpty
+        ? '<div class="info-value" style="font-size: 14px; color: #666;">($requesterPhoneNumber)</div>'
+        : ''}
+</div>
     
     <div class="amount-box">
       <div class="amount-label">Withdrawal Amount</div>
