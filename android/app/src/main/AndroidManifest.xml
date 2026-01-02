@@ -32,8 +32,9 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
-    <!-- USB Host feature -->
+    <!-- ✅ USB permissions for thermal printer -->
     <uses-feature android:name="android.hardware.usb.host" />
+    <uses-permission android:name="android.permission.USB_PERMISSION" />
 
     <application
         android:usesCleartextTraffic="true"
@@ -69,6 +70,15 @@
                 <data android:scheme="file" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+
+            <!-- ✅ USB device attached intent filter -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
 
         </activity>
 

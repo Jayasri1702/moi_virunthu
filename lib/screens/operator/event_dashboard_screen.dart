@@ -239,18 +239,26 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         String? savedFileName;
 
         if (Platform.isAndroid) {
-          // FIXED: Changed from 'Download' to 'Downloads'
-          final downloadsDir = Directory('/storage/emulated/0/Download');
-          if (!await downloadsDir.exists()) {
-            await downloadsDir.create(recursive: true);
+          // Use app's external directory which doesn't need special permissions
+          final downloadsDir = await getExternalStorageDirectory();
+          if (downloadsDir == null) {
+            throw Exception('Cannot access storage directory');
           }
 
-          // Create filename with timestamp
+          // Create a Downloads subfolder in the app's directory
+          final downloadFolder = Directory('${downloadsDir.path}/Downloads');
+          if (!await downloadFolder.exists()) {
+            await downloadFolder.create(recursive: true);
+          }
+
+          // Create filename with timestamp and sanitize
           final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-          final fileName = 'receipts_${eventTitle.replaceAll(' ', '_')}_$timestamp.zip';
+// Sanitize filename: replace spaces with underscore and remove dots
+          final sanitizedTitle = eventTitle.replaceAll(' ', '_').replaceAll('.', '_');
+          final fileName = 'receipts_${sanitizedTitle}_$timestamp.zip';
 
           // Save file
-          final file = File('${downloadsDir.path}/$fileName');
+          final file = File('${downloadFolder.path}/$fileName');
           await file.writeAsBytes(bytes);
 
           savedFilePath = file.path;
@@ -261,10 +269,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           print('📁 File exists: ${await file.exists()}');
           print('📁 File size: ${await file.length()} bytes');
         } else if (Platform.isIOS) {
+
           // iOS: Save to app documents directory
           final appDir = await getApplicationDocumentsDirectory();
           final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-          final fileName = 'receipts_${eventTitle.replaceAll(' ', '_')}_$timestamp.zip';
+// Sanitize filename: replace spaces with underscore and remove dots
+          final sanitizedTitle = eventTitle.replaceAll(' ', '_').replaceAll('.', '_');
+          final fileName = 'receipts_${sanitizedTitle}_$timestamp.zip';
 
           final file = File('${appDir.path}/$fileName');
           await file.writeAsBytes(bytes);

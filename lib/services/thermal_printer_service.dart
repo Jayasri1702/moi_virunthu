@@ -48,7 +48,7 @@ class ThermalPrinterService {
     }
   }
 
-  /// Connect to USB printer (ATPOS AT-301)
+  /// Connect to USB printer (Aptos Thermal Printer)
   Future<bool> connectUsb(UsbDevice device) async {
     try {
       print('🔌 Connecting to USB printer: ${device.productName}...');
@@ -74,13 +74,13 @@ class ThermalPrinterService {
         return false;
       }
 
-      // Configure port for thermal printer
+      // Configure port for Aptos thermal printer
       await _usbPort!.setDTR(true);
       await _usbPort!.setRTS(true);
 
-      // Standard baud rate for ESC/POS printers
+      // Try 115200 baud rate first (common for Aptos), fallback to 9600
       await _usbPort!.setPortParameters(
-        9600, // baudRate - try 115200 if 9600 doesn't work
+        115200, // Higher baud rate for better performance
         UsbPort.DATABITS_8,
         UsbPort.STOPBITS_1,
         UsbPort.PARITY_NONE,
@@ -93,9 +93,10 @@ class ThermalPrinterService {
 
       print('✅ Connected to USB printer');
 
-      // Test connection with initialize command
+      // Initialize printer properly
+      await Future.delayed(Duration(milliseconds: 200));
       await _usbPort!.write(Uint8List.fromList([0x1B, 0x40])); // ESC @ - Initialize
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(Duration(milliseconds: 300));
 
       return true;
     } catch (e) {
@@ -119,7 +120,7 @@ class ThermalPrinterService {
     }
   }
 
-  /// Convert image to ESC/POS format
+  /// Convert image to ESC/POS format (optimized for Aptos)
   List<int> _convertImageToEscPos(Uint8List imageBytes) {
     try {
       print('🔄 Starting image conversion...');
@@ -133,29 +134,33 @@ class ThermalPrinterService {
 
       print('📏 Original size: ${image.width}x${image.height}');
 
-      // Resize to 576 pixels width (standard for 80mm thermal printer)
-      int targetWidth = 576;
-      image = img.copyResize(image, width: targetWidth, interpolation: img.Interpolation.cubic);
+      // Resize to 384 pixels width (suitable for 58mm thermal printer like Aptos)
+      // Use 576 for 80mm printer if yours is 80mm
+      int targetWidth = 384; // Change to 576 if you have 80mm printer
+      image = img.copyResize(
+          image,
+          width: targetWidth,
+          interpolation: img.Interpolation.linear
+      );
 
       print('📏 Resized to: ${image.width}x${image.height}');
 
-      // Trim white space
-      image = img.trim(image, mode: img.TrimMode.transparent);
-
-      // Convert to grayscale
+      // Convert to grayscale first
       image = img.grayscale(image);
 
-      print('🎨 Converted to grayscale');
+      // Apply stronger contrast for thermal printing
+      image = img.adjustColor(image, contrast: 1.6, brightness: 1.1);
 
-      // Enhance contrast and brightness
-      image = img.adjustColor(image, contrast: 1.4, brightness: 1.05);
-
-      // Sharpen for clearer text
-      image = img.convolution(image, filter: [
-        0, -1, 0,
-        -1, 5, -1,
-        0, -1, 0
-      ]);
+      // Apply threshold to convert to pure black and white
+      for (int y = 0; y < image.height; y++) {
+        for (int x = 0; x < image.width; x++) {
+          img.Pixel pixel = image.getPixel(x, y);
+          int gray = pixel.r.toInt();
+          // Use 140 threshold for clearer printing
+          int newValue = gray < 140 ? 0 : 255;
+          image.setPixelRgba(x, y, newValue, newValue, newValue, 255);
+        }
+      }
 
       print('✨ Enhanced image quality');
 
@@ -169,23 +174,25 @@ class ThermalPrinterService {
       // Initialize printer
       escPosData.addAll([0x1B, 0x40]); // ESC @ - Initialize printer
 
-      // Set line spacing to 0
-      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 n - Set line spacing
+      // Set line spacing to 0 for continuous printing
+      escPosData.addAll([0x1B, 0x33, 0x00]); // ESC 3 0
 
-      // Print in 24-pixel chunks
+      // Print in 24-pixel chunks (standard for ESC/POS)
       int chunkCount = 0;
       for (int y = 0; y < height; y += 24) {
         chunkCount++;
 
-        // ESC * 33 command (24-dot double-density)
+        // ESC * m nL nH - Select bit-image mode
+        // Mode 33 = 24-dot double-density
         escPosData.addAll([0x1B, 0x2A, 33]);
 
-        // Width in little-endian
+        // Width in little-endian format
         escPosData.add(width & 0xFF);
         escPosData.add((width >> 8) & 0xFF);
 
-        // Process image data
+        // Process each column
         for (int x = 0; x < width; x++) {
+          // Each column has 3 bytes (24 bits)
           for (int k = 0; k < 3; k++) {
             int slice = 0;
             for (int b = 0; b < 8; b++) {
@@ -194,7 +201,7 @@ class ThermalPrinterService {
                 img.Pixel pixel = image.getPixel(x, py);
                 int gray = pixel.r.toInt();
 
-                // Threshold at 128 for balanced printing
+                // Since we already thresholded, check if black
                 if (gray < 128) {
                   slice |= (1 << (7 - b));
                 }
@@ -204,17 +211,17 @@ class ThermalPrinterService {
           }
         }
 
-        // Line feed
+        // Line feed after each chunk
         escPosData.add(0x0A);
 
-        if (chunkCount % 10 == 0) {
+        if (chunkCount % 5 == 0) {
           print('📊 Processed $chunkCount chunks...');
         }
       }
 
       print('✅ Generated ${escPosData.length} bytes in $chunkCount chunks');
 
-      // Reset line spacing
+      // Reset line spacing to default
       escPosData.addAll([0x1B, 0x32]); // ESC 2
 
       return escPosData;
@@ -244,8 +251,8 @@ class ThermalPrinterService {
 
       print('🖨️ Sending ${escPosData.length} bytes to USB printer');
 
-      // Send data in chunks with small delays
-      const int chunkSize = 1024; // Smaller chunks for USB stability
+      // Send data in smaller chunks for stability
+      const int chunkSize = 512; // Smaller chunks for better compatibility
       int totalChunks = (escPosData.length / chunkSize).ceil();
 
       print('📦 Sending in $totalChunks chunks of ${chunkSize}B...');
@@ -259,32 +266,73 @@ class ThermalPrinterService {
 
         await _usbPort!.write(chunk);
 
-        // Small delay for printer buffer (important for USB)
-        await Future.delayed(Duration(milliseconds: 50));
+        // Important: Wait for printer buffer
+        await Future.delayed(Duration(milliseconds: 100));
 
-        if ((i / chunkSize).floor() % 10 == 0 || end >= escPosData.length) {
+        if ((i / chunkSize).floor() % 5 == 0 || end >= escPosData.length) {
           int currentChunk = (i / chunkSize).floor() + 1;
-          print('📤 Sent $currentChunk/$totalChunks');
+          print('📤 Sent $currentChunk/$totalChunks chunks');
         }
       }
 
       print('✅ All data sent via USB');
 
-      // Wait for data to be processed
-      await Future.delayed(Duration(milliseconds: 500));
+      // Wait for printing to complete
+      await Future.delayed(Duration(milliseconds: 1000));
 
-      // Add spacing
-      await _usbPort!.write(Uint8List.fromList([0x0A, 0x0A, 0x0A]));
+      // Feed paper and cut
+      await _usbPort!.write(Uint8List.fromList([
+        0x0A, 0x0A, 0x0A, 0x0A // 4 line feeds
+      ]));
+      await Future.delayed(Duration(milliseconds: 300));
+
+      // Cut paper - try both commands
+      // GS V 0 (full cut)
+      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00]));
       await Future.delayed(Duration(milliseconds: 200));
 
-      // Cut paper (ESC i - Full cut)
-      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00]));
+      // Alternative cut command (partial cut)
+      // await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x01]));
 
       print('✅ USB Print completed');
       return true;
     } catch (e) {
       print('❌ USB Print error: $e');
       print('Stack trace: ${StackTrace.current}');
+      return false;
+    }
+  }
+
+  /// Print test page to verify connection
+  Future<bool> printTestPage() async {
+    try {
+      if (_usbPort == null) {
+        print('❌ USB printer not connected');
+        return false;
+      }
+
+      print('🖨️ Printing test page...');
+
+      // Initialize
+      await _usbPort!.write(Uint8List.fromList([0x1B, 0x40]));
+      await Future.delayed(Duration(milliseconds: 200));
+
+      // Print test text
+      String testText = "=== TEST PRINT ===\n";
+      testText += "Aptos Thermal Printer\n";
+      testText += "Connection: OK\n";
+      testText += "==================\n\n\n";
+
+      await _usbPort!.write(Uint8List.fromList(testText.codeUnits));
+      await Future.delayed(Duration(milliseconds: 500));
+
+      // Cut
+      await _usbPort!.write(Uint8List.fromList([0x1D, 0x56, 0x00]));
+
+      print('✅ Test page sent');
+      return true;
+    } catch (e) {
+      print('❌ Test print error: $e');
       return false;
     }
   }
