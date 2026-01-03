@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Generic USB printer filter -->
-    <!-- This allows your app to detect when a USB printer is connected -->
+    <!-- ESC/POS Thermal Printer Filters -->
     <usb-device class="7" subclass="1" protocol="1" />
     <usb-device class="7" subclass="1" protocol="2" />
     <usb-device class="7" subclass="1" protocol="3" />
+    <usb-device class="7" subclass="1" protocol="255" />
 
-    <!-- Alternative: Add specific VID/PID if you know them -->
-    <!-- Replace vendor-id and product-id with actual values from your printer -->
-    <!-- <usb-device vendor-id="1234" product-id="5678" /> -->
+    <!-- Catch-all for ANY printer device -->
+    <usb-device class="7" />
+
+    <!-- Common thermal printer VID/PIDs (optional fallbacks) -->
+    <usb-device vendor-id="4659" product-id="14384" /> <!-- 0x4B43, 0x3830 - Common ESC/POS -->
 </resources>

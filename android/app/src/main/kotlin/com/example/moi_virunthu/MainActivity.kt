@@ -14,6 +14,10 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Register USB Printer Plugin
+        flutterEngine.plugins.add(UsbPrinterPlugin())
+
+        // WhatsApp integration
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "sendToWhatsApp") {
                 val phone = call.argument<String>("phone")
@@ -39,35 +43,27 @@ class MainActivity: FlutterActivity() {
                 return false
             }
 
-            // Get URI using FileProvider
             val uri = FileProvider.getUriForFile(
                 this,
                 "${applicationContext.packageName}.fileprovider",
                 file
             )
 
-            // Create Intent to send file directly to specific WhatsApp contact
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/pdf"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_TEXT, message)
-
-                // This is the key: specify the phone number
-                // WhatsApp uses this format: country_code + phone_number + @s.whatsapp.net
                 putExtra("jid", "$phone@s.whatsapp.net")
-
                 setPackage("com.whatsapp")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
-            // Check if WhatsApp is installed
             val packageManager = applicationContext.packageManager
             if (intent.resolveActivity(packageManager) != null) {
                 startActivity(intent)
                 true
             } else {
-                // Try WhatsApp Business if regular WhatsApp is not installed
                 intent.setPackage("com.whatsapp.w4b")
                 if (intent.resolveActivity(packageManager) != null) {
                     startActivity(intent)
