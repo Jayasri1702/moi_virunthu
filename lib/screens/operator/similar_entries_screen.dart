@@ -65,9 +65,6 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     }
   }
 
-  // Helper to extract name after dot (removes initial)
-  // "P. Prashanth" → "Prashanth"
-  // "Prashanth" → "Prashanth"
   String _extractNameWithoutInitial(String name) {
     if (name.isEmpty) return '';
 
@@ -75,16 +72,12 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     final dotIndex = trimmed.indexOf('.');
 
     if (dotIndex > 0 && dotIndex < trimmed.length - 1) {
-      // Has initial like "P. Prashanth"
       return trimmed.substring(dotIndex + 1).trim();
     }
 
     return trimmed;
   }
 
-  // Helper to extract person 2 name from details (before first comma, after dot if exists)
-  // "S. Jayasri, B.E, engineer" → "Jayasri" (for comparison)
-  // But keeps original "S. Jayasri" for display
   String _extractPerson2NameFull(String? details) {
     if (details == null || details.isEmpty) return '';
     final firstCommaIndex = details.indexOf(',');
@@ -98,9 +91,43 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     return _extractNameWithoutInitial(fullName);
   }
 
+  bool _isTamil(String text) {
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]');
+    return tamilRegex.hasMatch(text);
+  }
+
+  String _extractTamilPart(String text) {
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]+');
+    final matches = tamilRegex.allMatches(text);
+    if (matches.isNotEmpty) {
+      return matches.first.group(0) ?? '';
+    }
+    return '';
+  }
+
+  int _compareTamilStrings(String a, String b) {
+    final tamilOrder = {
+      'அ': 1, 'ஆ': 2, 'இ': 3, 'ஈ': 4, 'உ': 5, 'ஊ': 6, 'எ': 7, 'ஏ': 8,
+      'ஐ': 9, 'ஒ': 10, 'ஓ': 11, 'ஔ': 12,
+      'க': 13, 'ங': 14, 'ச': 15, 'ஞ': 16, 'ட': 17, 'ண': 18, 'த': 19, 'ந': 20,
+      'ப': 21, 'ம': 22, 'ய': 23, 'ர': 24, 'ல': 25, 'வ': 26, 'ழ': 27, 'ள': 28,
+      'ற': 29, 'ன': 30,
+    };
+
+    final aFirstChar = a.isNotEmpty ? a[0] : '';
+    final bFirstChar = b.isNotEmpty ? b[0] : '';
+
+    final aOrder = tamilOrder[aFirstChar] ?? aFirstChar.codeUnitAt(0);
+    final bOrder = tamilOrder[bFirstChar] ?? bFirstChar.codeUnitAt(0);
+
+    if (aOrder != bOrder) {
+      return aOrder.compareTo(bOrder);
+    }
+
+    return a.compareTo(b);
+  }
+
   void _filterSimilarEntries() {
-    // Group entries by composite key: village_name + person1_name + person1_job + person2_name
-    // All names are normalized (without initials) for comparison
     Map<String, List<Map<String, dynamic>>> groupedEntries = {};
 
     for (var entry in _allEntries) {
@@ -109,19 +136,16 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
 
       if (persons == null || persons.isEmpty) continue;
 
-      // Extract Person 1 data
       String person1NameRaw = '';
       String person1NameNormalized = '';
       String person1Job = '';
 
       if (persons.isNotEmpty) {
         person1NameRaw = persons[0]['name']?.toString() ?? '';
-        // Remove initial for comparison
         person1NameNormalized = _extractNameWithoutInitial(person1NameRaw).trim().toLowerCase();
         person1Job = (persons[0]['job']?.toString() ?? '').trim().toLowerCase();
       }
 
-      // Extract Person 2 name from details (before first comma, after dot)
       String person2NameRaw = '';
       String person2NameNormalized = '';
 
@@ -129,12 +153,10 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
         final person2Details = persons[1]['details']?.toString() ?? '';
         if (person2Details.isNotEmpty) {
           person2NameRaw = _extractPerson2NameFull(person2Details);
-          // Remove initial for comparison
           person2NameNormalized = _extractNameWithoutInitial(person2NameRaw).trim().toLowerCase();
         }
       }
 
-      // Create composite key with normalized names (without initials)
       final compositeKey = '$villageName|$person1NameNormalized|$person1Job';
 
       if (!groupedEntries.containsKey(compositeKey)) {
@@ -143,14 +165,12 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       groupedEntries[compositeKey]!.add(entry);
     }
 
-    // Filter groups with duplicates (more than 1 entry)
     Set<String> processedIds = {};
     List<Map<String, dynamic>> duplicates = [];
     Map<String, List<String>> matchGroups = {};
 
     groupedEntries.forEach((key, entries) {
       if (entries.length > 1) {
-        // This group has duplicates
         for (var entry in entries) {
           final entryId = entry['id'];
           if (!processedIds.contains(entryId)) {
@@ -158,28 +178,24 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
             processedIds.add(entryId);
           }
 
-          // Store which fields matched for highlighting
           if (!matchGroups.containsKey(entryId)) {
             matchGroups[entryId] = [];
           }
 
           final persons = entry['persons'] as List<dynamic>?;
           if (persons != null && persons.isNotEmpty) {
-            // Mark person 1 name as matching (normalized without initial)
             final p1NameRaw = persons[0]['name']?.toString() ?? '';
             final p1NameNormalized = _extractNameWithoutInitial(p1NameRaw).trim().toLowerCase();
             if (p1NameNormalized.isNotEmpty) {
               matchGroups[entryId]!.add('p1_name:$p1NameNormalized');
             }
 
-            // Mark person 1 job as matching
             final p1Job = persons[0]['job']?.toString().trim().toLowerCase() ?? '';
             if (p1Job.isNotEmpty) {
               matchGroups[entryId]!.add('p1_job:$p1Job');
             }
           }
 
-          // Mark village as matching
           final village = entry['village_name']?.toString().trim().toLowerCase() ?? '';
           if (village.isNotEmpty) {
             matchGroups[entryId]!.add('village:$village');
@@ -188,11 +204,38 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
       }
     });
 
-    // Sort by serial number
+    // ✅ SORT ALPHABETICALLY BY PERSON 1 NAME (Tamil first, then English)
     duplicates.sort((a, b) {
-      final aSerial = a['serial_no'] ?? 0;
-      final bSerial = b['serial_no'] ?? 0;
-      return aSerial.compareTo(bSerial);
+      final personsA = a['persons'] as List<dynamic>?;
+      final personsB = b['persons'] as List<dynamic>?;
+
+      if (personsA == null || personsA.isEmpty) return 1;
+      if (personsB == null || personsB.isEmpty) return -1;
+
+      final nameA = personsA[0]['name']?.toString() ?? '';
+      final nameB = personsB[0]['name']?.toString() ?? '';
+
+      // Extract name without initial for comparison
+      final normalizedA = _extractNameWithoutInitial(nameA);
+      final normalizedB = _extractNameWithoutInitial(nameB);
+
+      // Check if Tamil or English
+      final isTamilA = _isTamil(normalizedA);
+      final isTamilB = _isTamil(normalizedB);
+
+      // Tamil names come first
+      if (isTamilA && !isTamilB) return -1;
+      if (!isTamilA && isTamilB) return 1;
+
+      // Both Tamil - use Tamil sorting
+      if (isTamilA && isTamilB) {
+        final tamilPartA = _extractTamilPart(normalizedA);
+        final tamilPartB = _extractTamilPart(normalizedB);
+        return _compareTamilStrings(tamilPartA, tamilPartB);
+      }
+
+      // Both English - case insensitive sort
+      return normalizedA.toLowerCase().compareTo(normalizedB.toLowerCase());
     });
 
     setState(() {
@@ -209,15 +252,12 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     );
   }
 
-  // Updated helper method to check if a field is matching
-  // For names, it normalizes by removing initials before comparison
   bool _isFieldMatching(String entryId, String fieldType, String value) {
     if (!nameMatchGroups.containsKey(entryId)) return false;
     final matchingFields = nameMatchGroups[entryId]!;
 
     String normalizedValue;
     if (fieldType == 'p1_name' || fieldType == 'p2_name') {
-      // For name fields, remove initial before comparing
       normalizedValue = _extractNameWithoutInitial(value).trim().toLowerCase();
     } else {
       normalizedValue = value.trim().toLowerCase();
@@ -302,7 +342,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                     // BODY
                     Expanded(
                       child: SizedBox(
-                        width: 670, // total width of all columns
+                        width: 670,
                         child: ListView.builder(
                           itemCount: similarEntries.length,
                           itemBuilder: (context, index) {
@@ -310,24 +350,20 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
                             final entryId = entry['id'];
                             final persons = entry['persons'] as List<dynamic>?;
 
-                            // Display WITH initials (as stored in DB)
                             String person1NameDisplay = '';
                             String person1Job = '';
                             String person2NameDisplay = '';
 
                             if (persons != null && persons.isNotEmpty) {
-                              // Person 1: Show full name with initial
                               person1NameDisplay = persons[0]['name']?.toString() ?? '';
                               person1Job = persons[0]['job']?.toString() ?? '';
 
                               if (persons.length > 1) {
-                                // Person 2: Show full name with initial (before first comma)
                                 final person2Details = persons[1]['details']?.toString() ?? '';
                                 person2NameDisplay = _extractPerson2NameFull(person2Details);
                               }
                             }
 
-                            // Check if fields match (comparison done without initials)
                             final isP1NameMatch = _isFieldMatching(entryId, 'p1_name', person1NameDisplay);
                             final isP2NameMatch = _isFieldMatching(entryId, 'p2_name', person2NameDisplay);
                             final isVillageMatch = _isFieldMatching(entryId, 'village', entry['village_name'] ?? '');
