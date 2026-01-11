@@ -114,7 +114,9 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
     if (dateStr == null) return 'N/A';
     try {
       final date = DateTime.parse(dateStr);
-      return DateFormat('dd-MM-yyyy hh:mm a').format(date);
+      // Convert UTC to local time
+      final localDate = date.toLocal();
+      return DateFormat('dd-MM-yyyy hh:mm a').format(localDate);
     } catch (e) {
       return dateStr;
     }
