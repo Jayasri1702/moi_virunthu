@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../../services/receipt_generator.dart';
+import '../../services/booking_receipt_generator.dart';  // Changed from receipt_generator.dart
 import '../../services/auth_service.dart';
 import '../../utils/network_utils.dart';
 
@@ -268,8 +268,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         'remark': _remark.text.trim().isEmpty ? null : _remark.text.trim(),
         'status': _selectedStatus.toLowerCase(),
         'event_type': _selectedEventType,
-        'skip_denomination': _skipDenomination, // ✅ ADD THIS LINE
-        'skip_print': _skipPrint,               // ✅ ADD THIS LINE
+        'skip_denomination': _skipDenomination,
+        'skip_print': _skipPrint,
+        'skip_whatsapp': _skipWhatsApp,
       };
 
       String eventId;
@@ -334,30 +335,31 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         eventTypeName = eventType['name'];
       }
 
-      // Generate PDF using WebView
+      // Generate Booking Receipt PDF
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Generating receipt...'),
+            content: Text('Generating booking receipt...'),
             backgroundColor: Colors.blue,
             duration: Duration(seconds: 2),
           ),
         );
       }
 
-      final file = await ReceiptGenerator.generateReceiptPDF(
+      final file = await BookingReceiptGenerator.generateBookingReceipt(
         context: context,
         customerName: _customerName.text,
-        venue: _venue.text,
-        city: _city.text,
         contactNumber: _contactNumber.text,
         eventTypeName: eventTypeName,
         selectedDate: _selectedDate,
         selectedTime: _selectedTime,
+        venue: _venue.text,
+        city: _city.text,
+        eventFor: _eventFor.text,
       );
 
       if (file == null) {
-        throw Exception('Failed to generate PDF');
+        throw Exception('Failed to generate booking receipt');
       }
 
       // Format phone number for WhatsApp
@@ -376,9 +378,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           '📅 தேதி: ${DateFormat('dd-MM-yyyy').format(_selectedDate)}\n'
           '🏛️ இடம்: ${_venue.text}\n'
           '📍 நகரம்: ${_city.text}\n\n'
-          'உங்கள் ரசீது இணைக்கப்பட்டுள்ளது.\n\n'
+          'உங்கள் பதிவு ரசீது இணைக்கப்பட்டுள்ளது.\n\n'
           'நன்றி!\n'
-          'பேச்சி மொபைல் டெக்';
+          'ஹை-டெக் மொய்';
 
       // Send via WhatsApp
       try {
@@ -425,7 +427,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           context,
           e,
           onRetry: _generateReceiptAndSendWhatsApp,
-          customMessage: 'Error generating receipt',
+          customMessage: 'Error generating booking receipt',
         );
       }
     } finally {

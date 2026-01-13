@@ -1,11 +1,55 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class BookingReceiptGenerator {
+  // Cache for base64 logo
+  static String? _cachedLogoBase64;
+
+  // Cache for base64 font
+  static String? _cachedFontBase64;
+
+  // Load and cache logo as base64
+  static Future<String> _getLogoBase64() async {
+    if (_cachedLogoBase64 != null) {
+      return _cachedLogoBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/images/money_transfer.png');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedLogoBase64 = base64Encode(bytes);
+      return _cachedLogoBase64!;
+    } catch (e) {
+      print('Error loading logo: $e');
+      return '';
+    }
+  }
+
+  // Load and cache font as base64
+  static Future<String> _getFontBase64() async {
+    if (_cachedFontBase64 != null) {
+      return _cachedFontBase64!;
+    }
+
+    try {
+      final ByteData data = await rootBundle.load('assets/fonts/ALTRONED_Trial.ttf');
+      final List<int> bytes = data.buffer.asUint8List();
+      _cachedFontBase64 = base64Encode(bytes);
+      return _cachedFontBase64!;
+    } catch (e) {
+      print('Error loading font: $e');
+      return '';
+    }
+  }
+
   static Future<File?> generateBookingReceipt({
     required BuildContext context,
     required String customerName,
@@ -18,289 +62,363 @@ class BookingReceiptGenerator {
     String? eventFor,
   }) async {
     try {
-      final pdf = pw.Document();
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
 
-      // Format date
-      String formattedDate = DateFormat('dd-MM-yyyy').format(selectedDate);
-
-      // Tamil labels
-      const String tamilEventType = 'தேதி';  // Date
-      const String tamilDate = 'மண்டபம்';    // Venue (Hall)
-      const String tamilVenue = 'கம்ப்யூட்டர் எண்ணிக்கை';  // Computer Count
-      const String tamilLocation = 'புக்கிங் தொகை';  // Booking Amount
-      const String tamilAdvance = 'அட்வான்ஸ்';  // Advance
-      const String tamilTime = 'மீதம்';  // Balance
-
-      pdf.addPage(
-        pw.Page(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(0),
-          build: (pw.Context pdfContext) {
-            return pw.Column(
-              children: [
-                // Green Header with Logo and Company Details
-                pw.Container(
-                  width: double.infinity,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 20, horizontal: 30),
-                  color: PdfColor.fromHex('#0B6623'),
-                  child: pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Logo placeholder
-                      pw.Container(
-                        width: 100,
-                        height: 100,
-                        decoration: pw.BoxDecoration(
-                          color: PdfColors.white,
-                          borderRadius: pw.BorderRadius.circular(8),
-                        ),
-                        child: pw.Center(
-                          child: pw.Icon(
-                            const pw.IconData(0xe0cd),  // phone icon
-                            size: 50,
-                            color: PdfColor.fromHex('#0B6623'),
-                          ),
-                        ),
-                      ),
-
-                      // Company Details
-                      pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.end,
-                        children: [
-                          pw.Text(
-                            'Hi Tech Moi',
-                            style: pw.TextStyle(
-                              fontSize: 32,
-                              fontWeight: pw.FontWeight.bold,
-                              color: PdfColors.white,
-                            ),
-                          ),
-                          pw.SizedBox(height: 4),
-                          pw.Text(
-                            'Cheekanurani, Madurai - 625 514.',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              color: PdfColors.white,
-                            ),
-                          ),
-                          pw.SizedBox(height: 2),
-                          pw.Text(
-                            'Mobile: 9043606296, 9047556443',
-                            style: pw.TextStyle(
-                              fontSize: 14,
-                              color: PdfColors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Customer Details Section
-                pw.Container(
-                  width: double.infinity,
-                  padding: const pw.EdgeInsets.all(20),
-                  color: PdfColors.white,
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Row(
-                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                        children: [
-                          pw.Row(
-                            children: [
-                              pw.Text(
-                                'Customer Name : ',
-                                style: pw.TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: pw.FontWeight.bold,
-                                ),
-                              ),
-                              pw.Container(
-                                width: 200,
-                                decoration: const pw.BoxDecoration(
-                                  border: pw.Border(
-                                    bottom: pw.BorderSide(width: 1),
-                                  ),
-                                ),
-                                child: pw.Text(
-                                  customerName,
-                                  style: const pw.TextStyle(fontSize: 16),
-                                ),
-                              ),
-                            ],
-                          ),
-                          pw.Text(
-                            'Date : $formattedDate',
-                            style: pw.TextStyle(
-                              fontSize: 16,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      pw.SizedBox(height: 15),
-                      pw.Row(
-                        children: [
-                          pw.Text(
-                            'Contact Number : ',
-                            style: pw.TextStyle(
-                              fontSize: 16,
-                              fontWeight: pw.FontWeight.bold,
-                            ),
-                          ),
-                          pw.Container(
-                            width: 200,
-                            decoration: const pw.BoxDecoration(
-                              border: pw.Border(
-                                bottom: pw.BorderSide(width: 1),
-                              ),
-                            ),
-                            child: pw.Text(
-                              contactNumber,
-                              style: const pw.TextStyle(fontSize: 16),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Booking Details Header
-                pw.Container(
-                  width: double.infinity,
-                  padding: const pw.EdgeInsets.symmetric(vertical: 15),
-                  color: PdfColor.fromHex('#0B6623'),
-                  child: pw.Center(
-                    child: pw.Text(
-                      'Booking Details',
-                      style: pw.TextStyle(
-                        fontSize: 24,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Booking Details Table
-                pw.Container(
-                  width: double.infinity,
-                  child: pw.Table(
-                    border: pw.TableBorder.all(width: 2),
-                    children: [
-                      // Row 1: Event Type (தேதி)
-                      _buildTableRow(tamilEventType, formattedDate),
-
-                      // Row 2: Venue (மண்டபம்)
-                      _buildTableRow(tamilDate, venue ?? ''),
-
-                      // Row 3: Computer Count (கம்ப்யூட்டர் எண்ணிக்கை)
-                      _buildTableRow(tamilVenue, eventTypeName),
-
-                      // Row 4: Location (புக்கிங் தொகை)
-                      _buildTableRow(tamilLocation, city ?? ''),
-
-                      // Row 5: Advance (அட்வான்ஸ்)
-                      _buildTableRow(tamilAdvance, eventFor ?? ''),
-
-                      // Row 6: Balance (மீதம்)
-                      _buildTableRow(tamilTime, ''),
-                    ],
-                  ),
-                ),
-
-                pw.SizedBox(height: 30),
-
-                // Footer Message
-                pw.Container(
-                  width: double.infinity,
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 30),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        'அன்பார்ந்த வாடிக்கையாளரே,',
-                        style: pw.TextStyle(
-                          fontSize: 12,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(height: 10),
-                      pw.Text(
-                        '1. பில்லுவரும் பொருட்களை விழா நாளன்று ஏற்பாடு செய்து வைக்கவும்.\n   (டேபிள், சேர், சிறிய நோட்டு, பேனா மற்றும் ரப்பர் போட்).',
-                        style: const pw.TextStyle(fontSize: 11),
-                      ),
-                      pw.SizedBox(height: 5),
-                      pw.Text(
-                        '2. எங்களது நேரம் காலை 9 மணி முதல் மாலை 3 மணி வரை.',
-                        style: const pw.TextStyle(fontSize: 11),
-                      ),
-                      pw.SizedBox(height: 5),
-                      pw.Text(
-                        '3. விழா முடிந்துவன்று மண்டபத்தில் கணக்கு முடித்தவரை உடனுக்குடன்\n   மொபைல் நோட்டு வழங்கப்படும். பின்பு 10 நாட்கள் குமிந்து வீட்டிற்கு வந்த மொய்\n   விவரங்களை நீங்கள் விரும்பும் பட்சத்தில் அவற்றையும் ஏற்றி 2வது நோட்டு\n   வழங்கப்படும். அதற்கு தனிக்கட்டணம்.',
-                        style: const pw.TextStyle(fontSize: 11),
-                      ),
-                      pw.SizedBox(height: 5),
-                      pw.Text(
-                        '4. எக்காரணத்தைக்கொண்டும் முன்பணம் திருப்பிக்கொடுக்கப்பட மாட்டாது.',
-                        style: const pw.TextStyle(fontSize: 11),
-                      ),
-                      pw.SizedBox(height: 30),
-                      pw.Center(
-                        child: pw.Text(
-                          'Thank you for booking us!',
-                          style: pw.TextStyle(
-                            fontSize: 18,
-                            fontWeight: pw.FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+      final htmlContent = _generateHtmlContent(
+        customerName: customerName,
+        contactNumber: contactNumber,
+        eventTypeName: eventTypeName,
+        selectedDate: selectedDate,
+        selectedTime: selectedTime,
+        venue: venue ?? '',
+        city: city ?? '',
+        eventFor: eventFor ?? '',
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
       );
 
-      // Save PDF to file
       final output = await getTemporaryDirectory();
-      final file = File('${output.path}/booking_receipt_${DateTime.now().millisecondsSinceEpoch}.pdf');
-      await file.writeAsBytes(await pdf.save());
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'booking_receipt_${customerName.replaceAll(' ', '_')}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
 
-      return file;
+      File? generatedFile;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(794, 1123), // A4 size in pixels at 96 DPI
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 1123;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 1123;
+            }
+
+            await headlessWebView?.setSize(Size(794, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat.a4,
+                  margin: pw.EdgeInsets.zero,
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              generatedFile = file;
+              pdfGenerated = true;
+              print('Booking receipt generated successfully');
+            }
+          } catch (e) {
+            print('Error generating booking receipt: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) {
+          final file = File(filePath);
+          if (await file.exists() && await file.length() > 0) {
+            generatedFile = file;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      return generatedFile;
     } catch (e) {
-      print('Error generating booking receipt: $e');
+      print('Error in generateBookingReceipt: $e');
       return null;
     }
   }
 
-  static pw.TableRow _buildTableRow(String label, String value) {
-    return pw.TableRow(
-      children: [
-        pw.Container(
-          width: 250,
-          padding: const pw.EdgeInsets.all(15),
-          child: pw.Text(
-            label,
-            style: pw.TextStyle(
-              fontSize: 14,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-        ),
-        pw.Container(
-          padding: const pw.EdgeInsets.all(15),
-          child: pw.Text(
-            value,
-            style: const pw.TextStyle(fontSize: 14),
-          ),
-        ),
-      ],
-    );
+  static String _generateHtmlContent({
+    required String customerName,
+    required String contactNumber,
+    required String eventTypeName,
+    required DateTime selectedDate,
+    TimeOfDay? selectedTime,
+    required String venue,
+    required String city,
+    required String eventFor,
+    required String logoBase64,
+    required String fontBase64,
+  }) {
+    final dateStr = DateFormat('dd-MM-yyyy').format(selectedDate);
+    final currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
+
+    return '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    @font-face {
+      font-family: 'Altroned';
+      src: url(data:font/truetype;charset=utf-8;base64,$fontBase64) format('truetype');
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Noto Sans Tamil', Arial, sans-serif;
+      width: 794px;
+      background: white;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    .header {
+      background: #0B6623;
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    
+    .logo {
+      width: 90px;
+      height: 90px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      padding: 8px;
+    }
+    
+    .logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .company-info {
+      color: white;
+      text-align: left;
+    }
+    
+    .company-name {
+      font-family: 'Altroned', sans-serif;
+      font-size: 52px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: 1.5px;
+      line-height: 1;
+    }
+    
+    .company-address {
+      font-size: 18px;
+      margin-bottom: 2px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    
+    .customer-section {
+      padding: 12px 20px;
+      background: white;
+    }
+    
+    .customer-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 14px;
+      font-size: 22px;
+      font-weight: bold;
+    }
+    
+    .customer-field {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+    
+    .field-value {
+      border-bottom: 2px solid black;
+      min-width: 280px;
+      display: inline-block;
+      padding-bottom: 2px;
+    }
+    
+    .booking-header {
+      background: #0B6623;
+      color: white;
+      text-align: center;
+      padding: 16px;
+      font-size: 38px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    
+    .details-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .details-table td {
+      border: 2px solid black;
+      padding: 18px 20px;
+      font-size: 20px;
+    }
+    
+    .details-table td:first-child {
+      width: 280px;
+      background: #f5f5f5;
+      font-weight: bold;
+    }
+    
+    .details-table td:last-child {
+      font-weight: normal;
+    }
+    
+    .footer-section {
+      padding: 22px 25px;
+      background: white;
+    }
+    
+    .footer-title {
+      font-size: 17px;
+      font-weight: bold;
+      margin-bottom: 12px;
+    }
+    
+    .footer-list {
+      margin-left: 0;
+      padding-left: 20px;
+      list-style-position: outside;
+    }
+    
+    .footer-list li {
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 8px;
+      padding-left: 5px;
+    }
+    
+    .thank-you {
+      text-align: center;
+      font-size: 26px;
+      font-weight: bold;
+      margin-top: 22px;
+      padding: 12px;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <img src="data:image/png;base64,$logoBase64" alt="Logo">
+    </div>
+    <div class="company-info">
+      <div class="company-name">Hi Tech Moi</div>
+      <div class="company-address">Checkanurani, Madurai - 625 514.</div>
+      <div class="company-address">Mobile: 9043606296, 9047556443</div>
+    </div>
+  </div>
+  
+  <div class="customer-section">
+    <div class="customer-row">
+      <div class="customer-field">
+        <span>Customer Name :</span>
+        <span class="field-value">$customerName</span>
+      </div>
+      <div>Date : $currentDate</div>
+    </div>
+    <div class="customer-row">
+      <div class="customer-field">
+        <span>Contact Number :</span>
+        <span class="field-value">$contactNumber</span>
+      </div>
+      <div></div>
+    </div>
+  </div>
+  
+  <div class="booking-header">Booking Details</div>
+  
+  <table class="details-table">
+    <tr>
+      <td>தேதி</td>
+      <td>$dateStr</td>
+    </tr>
+    <tr>
+      <td>மண்டபம்</td>
+      <td>$venue</td>
+    </tr>
+    <tr>
+      <td>கம்ப்யூட்டர் எண்ணிக்கை</td>
+      <td>$eventTypeName</td>
+    </tr>
+    <tr>
+      <td>புக்கிங் தொகை</td>
+      <td>$city</td>
+    </tr>
+    <tr>
+      <td>அட்வான்ஸ்</td>
+      <td>$eventFor</td>
+    </tr>
+    <tr>
+      <td>மீதம்</td>
+      <td></td>
+    </tr>
+  </table>
+  
+  <div class="footer-section">
+    <div class="footer-title">அன்பார்ந்த வாடிக்கையாளரே,</div>
+    <ol class="footer-list">
+      <li>பின்வரும் பொருட்களை விழா நாளன்று ஏற்பாடு செய்து வைக்கவும். (டேபிள், சேர், சிறிய நோட்டு, பேனா மற்றும் ரப்பர் பேண்ட்).</li>
+      <li>எங்களது வேலை நேரம் காலை 9 மணி முதல் மாலை 3 மணி வரை.</li>
+      <li>விழா முடிந்தவுடன் மண்டபத்தில் கணக்கீடு முடித்தவுடன் உடனுக்குடன் மொய் நோட்டு வழங்கப்படும். பின்பு 10 நாட்கள் கழித்து வீட்டிற்கு வந்த மொய் விவரங்களை நீங்கள் விரும்பும் பட்சத்தில் அவற்றையும் ஏற்றி 2வது நோட்டு வழங்கப்படும். அதற்கு தனிக்கட்டணம்.</li>
+      <li>எக்காரணத்தைக் கொண்டும் முன்பணம் திருப்பித்தரப்பட மாட்டாது.</li>
+    </ol>
+    
+    <div class="thank-you">Thank you for booking us!</div>
+  </div>
+</body>
+</html>
+''';
   }
 }
