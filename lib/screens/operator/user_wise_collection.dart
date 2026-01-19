@@ -33,16 +33,17 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
       final data = await _auth.client
           .from('mois')
           .select('''
+          id,
+          operator_id,
+          amount,
+          users!mois_operator_id_fkey (
             id,
-            operator_id,
-            amount,
-            users!mois_operator_id_fkey (
-              id,
-              full_name
-            )
-          ''')
+            full_name
+          )
+        ''')
           .eq('event_id', widget.eventId)
-          .eq('is_deleted', false);
+          .eq('is_deleted', false)
+          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
 
       // Group by operator and calculate totals
       Map<String, Map<String, dynamic>> operatorStats = {};

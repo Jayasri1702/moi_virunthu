@@ -61,7 +61,8 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
           .select('village_name')
           .eq('event_id', widget.eventId)
           .eq('is_deleted', false)
-          .not('village_name', 'is', null);
+          .not('village_name', 'is', null)
+          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
 
       if (response == null || response.isEmpty) {
         setState(() {

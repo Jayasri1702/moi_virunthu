@@ -63,7 +63,8 @@ class _DenominationScreenState extends State<DenominationScreen> {
             payment_method
           )
         ''')
-          .eq('event_id', widget.eventId);
+          .eq('event_id', widget.eventId)
+          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
 
       // Calculate ONLY collected denominations per operator
       Map<String, Map<String, dynamic>> operatorDenoms = {};

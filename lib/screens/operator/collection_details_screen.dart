@@ -58,7 +58,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           .eq('event_id', _eventId!)
           .eq('operator_id', _operatorId!)
           .eq('is_deleted', false)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false)
+          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
 
       double total = 0.0;
       for (var moi in response) {
