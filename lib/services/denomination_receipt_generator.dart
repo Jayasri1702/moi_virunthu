@@ -398,9 +398,7 @@ class DenominationReceiptGenerator {
     required String fontBase64,
   }) {
     // ✅ FIXED: Use current date/time for receipt generation
-    final now = DateTime.now();
-    final dateStr = DateFormat('dd-MM-yyyy').format(now);
-    final timeStr = DateFormat('hh.mm a').format(now);
+    final eventDateStr = DateFormat('dd-MM-yyyy').format(eventDate);
 
     // Build denomination table rows
     String denominationRows = '';
@@ -664,6 +662,33 @@ class DenominationReceiptGenerator {
     font-weight: 700;
     margin: 6px 0;
   }
+  
+  .signature-section {
+  padding: 8px;
+}
+
+.signature-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.signature-box {
+  width: 45%;
+  text-align: center;
+  padding: 5px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.signature-label {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+  
   </style>
 </head>
 <body>
@@ -679,24 +704,14 @@ class DenominationReceiptGenerator {
     
     <div class="divider"></div>
     
-    <div class="date-time-row">
-      <div class="left-section">
-        <div>$dateStr</div>
-        <div>$timeStr</div>
-      </div>
-      <div class="right-section">
-        <div>Final</div>
-        <div>Denomination</div>
-      </div>
-    </div>
-    
     <div class="customer-info">
-      <div class="info-line">$customerName</div>
-      <div class="info-line">$eventTypeName</div>
-      <div class="info-line">$venue</div>
-      <div class="info-line">$city</div>
-      <div class="info-line">$contactNumber</div>
-    </div>
+  <div class="info-line">$customerName</div>
+  <div class="info-line">$eventTypeName</div>
+  <div class="info-line">$venue</div>
+  <div class="info-line">$city</div>
+  <div class="info-line">$contactNumber</div>
+  <div class="info-line">நாள் : $eventDateStr</div>
+</div>
     
     <div class="section-title">நோட்டு விபரம்</div>
     
@@ -739,16 +754,19 @@ class DenominationReceiptGenerator {
     </div>
     
     <div class="divider"></div>
-    
-    <div class="footer">
-      <div class="thanks">தங்கள் வருகைக்கு நன்றி!</div>
-      <div class="with-love">அன்புடன்</div>
-      <div class="footer-name">$customerName</div>
-      <div class="footer-name">$eventTypeName</div>
-      <div class="village-info">$venue</div>
-      <div class="village-info">$city</div>
-      <div class="phone">$contactNumber</div>
+
+<div class="signature-section">
+  <div class="signature-row">
+    <div class="signature-box">
+      <div class="signature-label">ஹை-டெக் மொய்</div>
+      <div class="signature-label">கையொப்பம்</div>
     </div>
+    <div class="signature-box">
+      <div class="signature-label">வாடிக்கையாளர்</div>
+      <div class="signature-label">கையொப்பம்</div>
+    </div>
+  </div>
+</div>
   </div>
 </body>
 </html>
