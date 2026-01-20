@@ -34,31 +34,48 @@ class _WithdrawalListScreenState extends State<WithdrawalListScreen> {
     });
 
     try {
-      final response = await _supabase
-          .from('cash_withdrawals')
-          .select('''
-            id,
-            requested_by,
-            requester_phone_number,
-            amount,
-            reason,
-            created_at,
-            users!cash_withdrawals_operator_id_fkey (
-              full_name
-            ),
-            cash_withdrawal_denominations (
-              denom_500,
-              denom_200,
-              denom_100,
-              denom_50,
-              denom_20,
-              denom_10,
-              denom_5,
-              denom_1
-            )
-          ''')
-          .eq('event_id', widget.eventId)
-          .order('created_at', ascending: false);
+      // Fetch all withdrawals with pagination
+      List<dynamic> response = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('cash_withdrawals')
+            .select('''
+        id,
+        requested_by,
+        requester_phone_number,
+        amount,
+        reason,
+        created_at,
+        users!cash_withdrawals_operator_id_fkey (
+          full_name
+        ),
+        cash_withdrawal_denominations (
+          denom_500,
+          denom_200,
+          denom_100,
+          denom_50,
+          denom_20,
+          denom_10,
+          denom_5,
+          denom_1
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .order('created_at', ascending: false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        response.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _withdrawals = List<Map<String, dynamic>>.from(response);

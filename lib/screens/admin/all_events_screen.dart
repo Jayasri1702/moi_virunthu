@@ -55,13 +55,30 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
   Future<void> _showOperatorsDialog(Map<String, dynamic> event) async {
     try {
       // Fetch assigned operators for this event
-      final assignments = await _auth.client
-          .from('event_assignments')
-          .select('''
-            operator_id,
-            users!inner(id, full_name, phone)
-          ''')
-          .eq('event_id', event['id']);
+      // Fetch assigned operators with pagination
+      List<dynamic> assignments = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('event_assignments')
+            .select('''
+        operator_id,
+        users!inner(id, full_name, phone)
+      ''')
+            .eq('event_id', event['id'])
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        assignments.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       if (!mounted) return;
 
@@ -208,10 +225,27 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
 
   Future<void> _loadEventTypes() async {
     try {
-      final data = await _auth.client
-          .from('event_types')
-          .select()
-          .order('name');
+      // Fetch all event types with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('event_types')
+            .select()
+            .order('name')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _eventTypes = List<Map<String, dynamic>>.from(data);
@@ -232,16 +266,31 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
     setState(() => _loading = true);
 
     try {
-      var query = _auth.client
-          .from('events')
-          .select('''
-            *,
-            event_types!inner(id, name)
-          ''')
-          .order('event_date', ascending: false)
-          .order('event_time', ascending: true);
+      // Fetch all events with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
 
-      final data = await query;
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('events')
+            .select('''
+        *,
+        event_types!inner(id, name)
+      ''')
+            .order('event_date', ascending: false)
+            .order('event_time', ascending: true)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final todayDate = DateTime.parse(today);

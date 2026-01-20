@@ -49,12 +49,29 @@ class _UncleReorderScreenState extends State<UncleReorderScreen> {
       final eventId = eventData!['id'];
 
       // Fetch all mois where is_uncle = true for this event
-      final response = await _supabase
-          .from('mois')
-          .select('id, persons, uncle_order')
-          .eq('event_id', eventId)
-          .eq('is_uncle', true)
-          .order('uncle_order', ascending: true);
+      // Fetch all mois where is_uncle = true for this event with pagination
+      List<dynamic> response = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('mois')
+            .select('id, persons, uncle_order')
+            .eq('event_id', eventId)
+            .eq('is_uncle', true)
+            .order('uncle_order', ascending: true)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        response.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       List<Map<String, dynamic>> loadedUncles = [];
 

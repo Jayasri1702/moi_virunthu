@@ -43,28 +43,44 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
     try {
       // Fetch MOI denominations for CASH payments (PURE COLLECTED DATA)
-      final moiData = await _auth.client
-          .from('moi_denominations')
-          .select('''
-          operator_id,
-          denom_500,
-          denom_200,
-          denom_100,
-          denom_50,
-          denom_20,
-          denom_10,
-          denom_5,
-          denom_1,
-          users!moi_denominations_operator_id_fkey (
-            id,
-            full_name
-          ),
-          mois!moi_denominations_moi_id_fkey (
-            payment_method
-          )
-        ''')
-          .eq('event_id', widget.eventId)
-          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
+      // Fetch ALL MOI denominations with pagination
+      List<dynamic> moiData = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('moi_denominations')
+            .select('''
+        operator_id,
+        denom_500,
+        denom_200,
+        denom_100,
+        denom_50,
+        denom_20,
+        denom_10,
+        denom_5,
+        denom_1,
+        users!moi_denominations_operator_id_fkey (
+          id,
+          full_name
+        ),
+        mois!moi_denominations_moi_id_fkey (
+          payment_method
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        moiData.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // Calculate ONLY collected denominations per operator
       Map<String, Map<String, dynamic>> operatorDenoms = {};
@@ -129,38 +145,71 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
     try {
       // Fetch total withdrawals (ALL operators)
-      final withdrawalData = await _auth.client
-          .from('cash_withdrawals')
-          .select('''
-          cash_withdrawal_denominations (
-            denom_500,
-            denom_200,
-            denom_100,
-            denom_50,
-            denom_20,
-            denom_10,
-            denom_5,
-            denom_1
-          )
-        ''')
-          .eq('event_id', widget.eventId);
+      // Fetch total withdrawals (ALL operators) with pagination
+      List<dynamic> withdrawalData = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('cash_withdrawals')
+            .select('''
+        cash_withdrawal_denominations (
+          denom_500,
+          denom_200,
+          denom_100,
+          denom_50,
+          denom_20,
+          denom_10,
+          denom_5,
+          denom_1
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        withdrawalData.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // Fetch total exchanges (ALL operators)
-      final exchangeData = await _auth.client
-          .from('cash_exchanges')
-          .select('''
-          cash_exchange_denominations (
-            denom_500,
-            denom_200,
-            denom_100,
-            denom_50,
-            denom_20,
-            denom_10,
-            denom_5,
-            denom_1
-          )
-        ''')
-          .eq('event_id', widget.eventId);
+      // Fetch total exchanges (ALL operators) with pagination
+      List<dynamic> exchangeData = [];
+      currentPage = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('cash_exchanges')
+            .select('''
+        cash_exchange_denominations (
+          denom_500,
+          denom_200,
+          denom_100,
+          denom_50,
+          denom_20,
+          denom_10,
+          denom_5,
+          denom_1
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        exchangeData.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // Calculate total withdrawals
       Map<int, int> withdrawals = {500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0};
@@ -208,17 +257,34 @@ class _DenominationScreenState extends State<DenominationScreen> {
 
     try {
       // Get total denomination amounts (CASH only)
-      final moiTotal = await _auth.client
-          .from('moi_denominations')
-          .select('''
-            total_amount,
-            mois!moi_denominations_moi_id_fkey (
-              payment_method,
-              is_deleted,
-              amount
-            )
-          ''')
-          .eq('event_id', widget.eventId);
+      // Get total denomination amounts (CASH only) with pagination
+      List<dynamic> moiTotal = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('moi_denominations')
+            .select('''
+        total_amount,
+        mois!moi_denominations_moi_id_fkey (
+          payment_method,
+          is_deleted,
+          amount
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        moiTotal.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       double totalCashCollected = 0;
       for (var entry in moiTotal) {
@@ -230,36 +296,81 @@ class _DenominationScreenState extends State<DenominationScreen> {
         }
       }
 
-      // Get total withdrawals
-      final withdrawalData = await _auth.client
-          .from('cash_withdrawals')
-          .select('amount')
-          .eq('event_id', widget.eventId);
+      // Get total withdrawals with pagination
+      List<dynamic> withdrawalData = [];
+      currentPage = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('cash_withdrawals')
+            .select('amount')
+            .eq('event_id', widget.eventId)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        withdrawalData.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       double totalWithdrawals = 0;
       for (var item in withdrawalData) {
         totalWithdrawals += ((item['amount'] ?? 0) as num).toDouble();
       }
 
-      // Get OTHERS payment total (Check/Advance/UPI)
-      final othersData = await _auth.client
-          .from('mois')
-          .select('amount')
-          .eq('event_id', widget.eventId)
-          .neq('payment_method', 'CASH')
-          .eq('is_deleted', false);
+      // Get OTHERS payment total (Check/Advance/UPI) with pagination
+      List<dynamic> othersData = [];
+      currentPage = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('mois')
+            .select('amount')
+            .eq('event_id', widget.eventId)
+            .neq('payment_method', 'CASH')
+            .eq('is_deleted', false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        othersData.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       double totalOthers = 0;
       for (var item in othersData) {
         totalOthers += ((item['amount'] ?? 0) as num).toDouble();
       }
 
-      // Get total people count
-      final peopleCount = await _auth.client
-          .from('mois')
-          .select('id')
-          .eq('event_id', widget.eventId)
-          .eq('is_deleted', false);
+      // Get total people count with pagination
+      List<dynamic> peopleCount = [];
+      currentPage = 0;
+      hasMore = true;
+
+      while (hasMore) {
+        final response = await _auth.client
+            .from('mois')
+            .select('id')
+            .eq('event_id', widget.eventId)
+            .eq('is_deleted', false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        peopleCount.addAll(response);
+
+        if (response.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // Calculate totals as per requirements:
       // Total Event Amount = Total Cash Collected + Check/Advance/UPI (without withdrawals)

@@ -26,7 +26,27 @@ class _UserListScreenState extends State<UserListScreen> {
   Future<void> _loadUsers() async {
     setState(() => _loading = true);
     try {
-      final data = await _auth.client.from('users').select().order('full_name');
+      // Fetch all users with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('users')
+            .select()
+            .order('full_name')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _users = (data as List).map((user) => UserModel.fromMap(user)).toList();
@@ -93,12 +113,28 @@ class _UserListScreenState extends State<UserListScreen> {
 
   Future<bool> _hasActiveEvents(String userId) async {
     try {
-      final activeEvents = await _auth.client
-          .from('event_assignments')
-          .select('event_id, events!inner(status)')
-          .eq('operator_id', userId)
-          .or('status.eq.upcoming,status.eq.live', referencedTable: 'events')
-          .limit(1);
+      // Check for active events with pagination
+      List<dynamic> activeEvents = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('event_assignments')
+            .select('event_id, events!inner(status)')
+            .eq('operator_id', userId)
+            .or('status.eq.upcoming,status.eq.live', referencedTable: 'events')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        activeEvents.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       return activeEvents.isNotEmpty;
     } catch (e) {
@@ -238,11 +274,28 @@ class _UserListScreenState extends State<UserListScreen> {
         // Fetch event details for display
         List<Map<String, dynamic>> activeEventsList = [];
         try {
-          final events = await _auth.client
-              .from('event_assignments')
-              .select('event_id, events!inner(id, title, event_date, status)')
-              .eq('operator_id', user.id)
-              .or('status.eq.upcoming,status.eq.live', referencedTable: 'events');
+          // Fetch event details with pagination
+          List<dynamic> events = [];
+          int pageSize = 1000;
+          int currentPage = 0;
+          bool hasMore = true;
+
+          while (hasMore) {
+            final pageResponse = await _auth.client
+                .from('event_assignments')
+                .select('event_id, events!inner(id, title, event_date, status)')
+                .eq('operator_id', user.id)
+                .or('status.eq.upcoming,status.eq.live', referencedTable: 'events')
+                .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+            events.addAll(pageResponse);
+
+            if (pageResponse.length < pageSize) {
+              hasMore = false;
+            } else {
+              currentPage++;
+            }
+          }
           activeEventsList = List<Map<String, dynamic>>.from(events);
         } catch (e) {
           print('Error fetching event details: $e');

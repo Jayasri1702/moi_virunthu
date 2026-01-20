@@ -56,13 +56,29 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
 
     try {
       // Fetch all non-deleted mois records with village names
-      final response = await _supabase
-          .from('mois')
-          .select('village_name')
-          .eq('event_id', widget.eventId)
-          .eq('is_deleted', false)
-          .not('village_name', 'is', null)
-          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
+      // Fetch all non-deleted mois records with village names using pagination
+      List<dynamic> response = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('mois')
+            .select('village_name')
+            .eq('event_id', widget.eventId)
+            .eq('is_deleted', false)
+            .not('village_name', 'is', null)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        response.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       if (response == null || response.isEmpty) {
         setState(() {

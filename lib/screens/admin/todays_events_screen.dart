@@ -102,10 +102,27 @@ class _TodaysEventsScreenState extends State<TodaysEventsScreen> {
 
   Future<void> _loadEventTypes() async {
     try {
-      final data = await _auth.client
-          .from('event_types')
-          .select()
-          .order('name');
+      // Fetch all event types with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('event_types')
+            .select()
+            .order('name')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _eventTypes = List<Map<String, dynamic>>.from(data);
@@ -128,16 +145,31 @@ class _TodaysEventsScreenState extends State<TodaysEventsScreen> {
     try {
       final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-      var query = _auth.client
-          .from('events')
-          .select('''
-            *,
-            event_types!inner(id, name)
-          ''')
-          .eq('event_date', today)
-          .order('event_time', ascending: true);
+      // Fetch today's events with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
 
-      final data = await query;
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('events')
+            .select('''
+        *,
+        event_types!inner(id, name)
+      ''')
+            .eq('event_date', today)
+            .order('event_time', ascending: true)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _events = List<Map<String, dynamic>>.from(data);

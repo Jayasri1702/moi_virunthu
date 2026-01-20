@@ -40,12 +40,29 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final data = await _auth.client
-          .from('mois')
-          .select('id, serial_no, persons, village_name, living_place, amount')
-          .eq('event_id', widget.eventId)
-          .eq('is_deleted', false)
-          .order('serial_no');
+      // Fetch all entries with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('mois')
+            .select('id, serial_no, persons, village_name, living_place, amount')
+            .eq('event_id', widget.eventId)
+            .eq('is_deleted', false)
+            .order('serial_no')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _allEntries = List<Map<String, dynamic>>.from(data);

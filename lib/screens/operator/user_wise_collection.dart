@@ -30,20 +30,36 @@ class _UserWiseCollectionScreenState extends State<UserWiseCollectionScreen> {
 
     try {
       // Fetch all mois entries for this event with operator info
-      final data = await _auth.client
-          .from('mois')
-          .select('''
+      // Fetch all mois entries for this event with operator info using pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('mois')
+            .select('''
+        id,
+        operator_id,
+        amount,
+        users!mois_operator_id_fkey (
           id,
-          operator_id,
-          amount,
-          users!mois_operator_id_fkey (
-            id,
-            full_name
-          )
-        ''')
-          .eq('event_id', widget.eventId)
-          .eq('is_deleted', false)
-          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
+          full_name
+        )
+      ''')
+            .eq('event_id', widget.eventId)
+            .eq('is_deleted', false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // Group by operator and calculate totals
       Map<String, Map<String, dynamic>> operatorStats = {};

@@ -54,12 +54,29 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     setState(() => _loading = true);
 
     try {
-      final data = await _auth.client
-          .from('mois')
-          .select('*')
-          .eq('event_id', _eventId!)
-          .eq('is_deleted', false)
-          .order('serial_no', ascending: true);
+      // Fetch all mois with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('mois')
+            .select('*')
+            .eq('event_id', _eventId!)
+            .eq('is_deleted', false)
+            .order('serial_no', ascending: true)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _mois = List<Map<String, dynamic>>.from(data);

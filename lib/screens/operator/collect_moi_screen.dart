@@ -34,6 +34,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   // Denomination controllers with dropdown support
   final List<Map<String, dynamic>> _denomRows = [];
+  final _formKey = GlobalKey<FormState>();
 
   // In state variables section, add:
   final _amountFocusNode = FocusNode();
@@ -1121,6 +1122,29 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     // Validation checks
     bool hasValidPerson = _person1Field1Controller.text.trim().isNotEmpty ||
         _person2Controller.text.trim().isNotEmpty;
+
+    // Add in _handleGroup() after line 900:
+    if (_villageController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Village name is mandatory!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_person1Field1Controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Person 1 name is mandatory!'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+// The amount validation already exists, keep it
 
     if (!hasValidPerson) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -3247,6 +3271,29 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
 
       // ✅ SINGLE ENTRY MODE (not grouped)
+
+      // Add in _handleGroup() after line 900:
+      if (_villageController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Village name is mandatory!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (_person1Field1Controller.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Person 1 name is mandatory!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+// The amount validation already exists, keep it
 
       // Single entry mode validation
       bool hasValidPerson = _person1Field1Controller.text
@@ -5384,7 +5431,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
         return KeyEventResult.ignored;
       },
-      child: Scaffold(
+        child: Form(                    // ✅ ADD THIS
+          key: _formKey,                // ✅ ADD THIS
+          child: Scaffold(
         backgroundColor: Colors.grey[100],
         appBar: AppBar(
           backgroundColor: Colors.white,
@@ -5509,6 +5558,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ],
         ),
       ),
+        ),
     );
   }
 
@@ -5660,8 +5710,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     style:
                     TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                TextField(
+                TextFormField(
                   controller: _villageController,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Village name is required';
+                    }
+                    return null;
+                  },
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -5713,8 +5769,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const Text('Init, Name 1',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          TextField(
+          TextFormField(
             controller: _person1Field1Controller,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Name is required';
+              }
+              return null;
+            },
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'e.g., init, name',
@@ -5790,8 +5852,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
                 border: Border.all(color: Colors.black, width: 2)),
-            child: TextField(
+            child: TextFormField(
               controller: _amountController,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Amount is required';
+                }
+                if (int.tryParse(value) == 0) {
+                  return 'Amount cannot be zero';
+                }
+                return null;
+              },
               focusNode: _amountFocusNode,
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,

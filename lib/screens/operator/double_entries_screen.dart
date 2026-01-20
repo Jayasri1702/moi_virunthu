@@ -38,12 +38,29 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final data = await _auth.client
-          .from('mois')
-          .select('id, serial_no, persons, village_name, living_place, amount')
-          .eq('event_id', widget.eventId)
-          .eq('is_deleted', false)
-          .order('serial_no');
+      // Fetch all entries with pagination
+      List<dynamic> data = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _auth.client
+            .from('mois')
+            .select('id, serial_no, persons, village_name, living_place, amount')
+            .eq('event_id', widget.eventId)
+            .eq('is_deleted', false)
+            .order('serial_no')
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        data.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       setState(() {
         _allEntries = List<Map<String, dynamic>>.from(data);
@@ -147,6 +164,42 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
     return trimmed;
   }
 
+  bool _isTamil(String text) {
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]');
+    return tamilRegex.hasMatch(text);
+  }
+
+  String _extractTamilPart(String text) {
+    final tamilRegex = RegExp(r'[\u0B80-\u0BFF]+');
+    final matches = tamilRegex.allMatches(text);
+    if (matches.isNotEmpty) {
+      return matches.first.group(0) ?? '';
+    }
+    return '';
+  }
+
+  int _compareTamilStrings(String a, String b) {
+    final tamilOrder = {
+      'அ': 1, 'ஆ': 2, 'இ': 3, 'ஈ': 4, 'உ': 5, 'ஊ': 6, 'எ': 7, 'ஏ': 8,
+      'ஐ': 9, 'ஒ': 10, 'ஓ': 11, 'ஔ': 12,
+      'க': 13, 'ங': 14, 'ச': 15, 'ஞ': 16, 'ட': 17, 'ண': 18, 'த': 19, 'ந': 20,
+      'ப': 21, 'ம': 22, 'ய': 23, 'ர': 24, 'ல': 25, 'வ': 26, 'ழ': 27, 'ள': 28,
+      'ற': 29, 'ன': 30,
+    };
+
+    final aFirstChar = a.isNotEmpty ? a[0] : '';
+    final bFirstChar = b.isNotEmpty ? b[0] : '';
+
+    final aOrder = tamilOrder[aFirstChar] ?? aFirstChar.codeUnitAt(0);
+    final bOrder = tamilOrder[bFirstChar] ?? bFirstChar.codeUnitAt(0);
+
+    if (aOrder != bOrder) {
+      return aOrder.compareTo(bOrder);
+    }
+
+    return a.compareTo(b);
+  }
+
   void _filterDoubleEntries() {
     // Group entries by composite key: village_name + initial + name + job + amount
     Map<String, List<Map<String, dynamic>>> groupedEntries = {};
@@ -232,11 +285,38 @@ class _DoubleEntriesScreenState extends State<DoubleEntriesScreen> {
       }
     });
 
-    // Sort by serial number
+    // ✅ SORT ALPHABETICALLY BY PERSON 1 NAME (Tamil first, then English)
     duplicates.sort((a, b) {
-      final aSerial = a['serial_no'] ?? 0;
-      final bSerial = b['serial_no'] ?? 0;
-      return aSerial.compareTo(bSerial);
+      final personsA = a['persons'] as List<dynamic>?;
+      final personsB = b['persons'] as List<dynamic>?;
+
+      if (personsA == null || personsA.isEmpty) return 1;
+      if (personsB == null || personsB.isEmpty) return -1;
+
+      final nameA = personsA[0]['name']?.toString() ?? '';
+      final nameB = personsB[0]['name']?.toString() ?? '';
+
+      // Extract name without initial for comparison
+      final normalizedA = _extractNameWithoutInitial(nameA);
+      final normalizedB = _extractNameWithoutInitial(nameB);
+
+      // Check if Tamil or English
+      final isTamilA = _isTamil(normalizedA);
+      final isTamilB = _isTamil(normalizedB);
+
+      // Tamil names come first
+      if (isTamilA && !isTamilB) return -1;
+      if (!isTamilA && isTamilB) return 1;
+
+      // Both Tamil - use Tamil sorting
+      if (isTamilA && isTamilB) {
+        final tamilPartA = _extractTamilPart(normalizedA);
+        final tamilPartB = _extractTamilPart(normalizedB);
+        return _compareTamilStrings(tamilPartA, tamilPartB);
+      }
+
+      // Both English - case insensitive sort
+      return normalizedA.toLowerCase().compareTo(normalizedB.toLowerCase());
     });
 
     setState(() {

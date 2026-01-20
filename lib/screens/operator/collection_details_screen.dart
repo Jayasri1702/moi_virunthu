@@ -52,14 +52,30 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
     }
 
     try {
-      final response = await _supabase
-          .from('mois')
-          .select('*')
-          .eq('event_id', _eventId!)
-          .eq('operator_id', _operatorId!)
-          .eq('is_deleted', false)
-          .order('created_at', ascending: false)
-          .range(0, 5000);  // ✅ Added limit change from 1000 to 5000
+      // Fetch all mois with pagination
+      List<dynamic> response = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('mois')
+            .select('*')
+            .eq('event_id', _eventId!)
+            .eq('operator_id', _operatorId!)
+            .eq('is_deleted', false)
+            .order('created_at', ascending: false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        response.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       double total = 0.0;
       for (var moi in response) {
@@ -363,14 +379,31 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
     }
 
     // ✅ NEW: Check if it's a group MOI by counting actual group members
+    // ✅ NEW: Check if it's a group MOI by counting actual group members
     if (moi['group_id'] != null) {
-      // Get all MOIs in this group
-      final groupMois = await _supabase
-          .from('mois')
-          .select('id')
-          .eq('event_id', _eventId!)
-          .eq('group_id', moi['group_id'])
-          .eq('is_deleted', false);
+      // Get all MOIs in this group with pagination
+      List<dynamic> groupMois = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('mois')
+            .select('id')
+            .eq('event_id', _eventId!)
+            .eq('group_id', moi['group_id'])
+            .eq('is_deleted', false)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        groupMois.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       // ✅ If only ONE entry in the group, treat as single receipt
       if (groupMois.length == 1) {
@@ -534,13 +567,30 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
 
     try {
       // Get all MOIs in this group
-      final groupMois = await _supabase
-          .from('mois')
-          .select('*')
-          .eq('event_id', _eventId!)
-          .eq('group_id', groupId)
-          .eq('is_deleted', false)
-          .order('created_at', ascending: true);
+      // Get all MOIs in this group with pagination
+      List<dynamic> groupMois = [];
+      int pageSize = 1000;
+      int currentPage = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        final pageResponse = await _supabase
+            .from('mois')
+            .select('*')
+            .eq('event_id', _eventId!)
+            .eq('group_id', groupId)
+            .eq('is_deleted', false)
+            .order('created_at', ascending: true)
+            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+
+        groupMois.addAll(pageResponse);
+
+        if (pageResponse.length < pageSize) {
+          hasMore = false;
+        } else {
+          currentPage++;
+        }
+      }
 
       if (groupMois.isEmpty) {
         throw Exception('No entries found for this group');
