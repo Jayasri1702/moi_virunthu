@@ -354,8 +354,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         selectedDate: _selectedDate,
         selectedTime: _selectedTime,
         venue: _venue.text,
-        city: _city.text,
-        eventFor: _eventFor.text,
+        bookedAmount: double.tryParse(_bookedAmount.text) ?? 0,
+        advanceAmount: double.tryParse(_advanceAmount.text) ?? 0,
       );
 
       if (file == null) {

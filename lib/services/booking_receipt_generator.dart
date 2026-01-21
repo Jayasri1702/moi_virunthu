@@ -58,13 +58,14 @@ class BookingReceiptGenerator {
     required DateTime selectedDate,
     TimeOfDay? selectedTime,
     String? venue,
-    String? city,
-    String? eventFor,
+    required double bookedAmount,
+    required double advanceAmount,
   }) async {
     try {
       final logoBase64 = await _getLogoBase64();
       final fontBase64 = await _getFontBase64();
 
+      final balanceAmount = bookedAmount - advanceAmount;
       final htmlContent = _generateHtmlContent(
         customerName: customerName,
         contactNumber: contactNumber,
@@ -72,8 +73,9 @@ class BookingReceiptGenerator {
         selectedDate: selectedDate,
         selectedTime: selectedTime,
         venue: venue ?? '',
-        city: city ?? '',
-        eventFor: eventFor ?? '',
+        bookedAmount: bookedAmount.toStringAsFixed(2),
+        advanceAmount: advanceAmount.toStringAsFixed(2),
+        balanceAmount: balanceAmount.toStringAsFixed(2),
         logoBase64: logoBase64,
         fontBase64: fontBase64,
       );
@@ -172,8 +174,9 @@ class BookingReceiptGenerator {
     required DateTime selectedDate,
     TimeOfDay? selectedTime,
     required String venue,
-    required String city,
-    required String eventFor,
+    required String bookedAmount,
+    required String advanceAmount,
+    required String balanceAmount,
     required String logoBase64,
     required String fontBase64,
   }) {
@@ -298,21 +301,17 @@ class BookingReceiptGenerator {
       border-collapse: collapse;
     }
     
-    .details-table td {
-      border: 2px solid black;
-      padding: 18px 20px;
-      font-size: 20px;
-    }
-    
-    .details-table td:first-child {
-      width: 280px;
-      background: #f5f5f5;
-      font-weight: bold;
-    }
-    
-    .details-table td:last-child {
-      font-weight: normal;
-    }
+   .details-table td {
+  border: 2px solid black;
+  padding: 18px 20px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.details-table td:first-child {
+  width: 280px;
+  background: #f5f5f5;
+}
     
     .footer-section {
       padding: 22px 25px;
@@ -380,31 +379,31 @@ class BookingReceiptGenerator {
   <div class="booking-header">Booking Details</div>
   
   <table class="details-table">
-    <tr>
-      <td>தேதி</td>
-      <td>$dateStr</td>
-    </tr>
-    <tr>
-      <td>மண்டபம்</td>
-      <td>$venue</td>
-    </tr>
-    <tr>
-      <td>கம்ப்யூட்டர் எண்ணிக்கை</td>
-      <td>$eventTypeName</td>
-    </tr>
-    <tr>
-      <td>புக்கிங் தொகை</td>
-      <td>$city</td>
-    </tr>
-    <tr>
-      <td>அட்வான்ஸ்</td>
-      <td>$eventFor</td>
-    </tr>
-    <tr>
-      <td>மீதம்</td>
-      <td></td>
-    </tr>
-  </table>
+  <tr>
+    <td>தேதி</td>
+    <td>$dateStr</td>
+  </tr>
+  <tr>
+    <td>மண்டபம்</td>
+    <td>$venue</td>
+  </tr>
+  <tr>
+    <td>கம்ப்யூட்டர் எண்ணிக்கை</td>
+    <td>$eventTypeName</td>
+  </tr>
+  <tr>
+    <td>புக்கிங் தொகை</td>
+    <td>$bookedAmount</td>
+  </tr>
+  <tr>
+    <td>அட்வான்ஸ்</td>
+    <td>$advanceAmount</td>
+  </tr>
+  <tr>
+    <td>மீதம்</td>
+    <td>$balanceAmount</td>
+  </tr>
+</table>
   
   <div class="footer-section">
     <div class="footer-title">அன்பார்ந்த வாடிக்கையாளரே,</div>
