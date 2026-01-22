@@ -60,6 +60,7 @@ class BookingReceiptGenerator {
     String? venue,
     required double bookedAmount,
     required double advanceAmount,
+    required int totalComputers,  // ADD THIS PARAMETER
   }) async {
     try {
       final logoBase64 = await _getLogoBase64();
@@ -78,6 +79,7 @@ class BookingReceiptGenerator {
         balanceAmount: balanceAmount.toStringAsFixed(2),
         logoBase64: logoBase64,
         fontBase64: fontBase64,
+        totalComputers: totalComputers.toString(),  // ADD THIS
       );
 
       final output = await getTemporaryDirectory();
@@ -179,6 +181,7 @@ class BookingReceiptGenerator {
     required String balanceAmount,
     required String logoBase64,
     required String fontBase64,
+    required String totalComputers,  // ADD THIS
   }) {
     final dateStr = DateFormat('dd-MM-yyyy').format(selectedDate);
     final currentDate = DateFormat('dd-MM-yyyy').format(DateTime.now());
@@ -252,7 +255,7 @@ class BookingReceiptGenerator {
       line-height: 1;
     }
     
-    .company-address {
+  .company-address {
       font-size: 18px;
       margin-bottom: 2px;
       font-weight: 700;
@@ -265,13 +268,13 @@ class BookingReceiptGenerator {
     }
     
     .customer-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      margin-bottom: 14px;
-      font-size: 22px;
-      font-weight: bold;
-    }
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 14px;
+  font-size: 24px;  /* ✅ CHANGE from 22px to 24px */
+  font-weight: bold;
+}
     
     .customer-field {
       display: flex;
@@ -286,7 +289,7 @@ class BookingReceiptGenerator {
       padding-bottom: 2px;
     }
     
-    .booking-header {
+   .booking-header {
       background: #0B6623;
       color: white;
       text-align: center;
@@ -305,7 +308,7 @@ class BookingReceiptGenerator {
   border: 2px solid black;
   padding: 18px 20px;
   font-size: 20px;
-  font-weight: bold;
+  font-weight: normal;  
 }
 
 .details-table td:first-child {
@@ -337,7 +340,7 @@ class BookingReceiptGenerator {
       padding-left: 5px;
     }
     
-    .thank-you {
+   .thank-you {
       text-align: center;
       font-size: 26px;
       font-weight: bold;
@@ -345,6 +348,7 @@ class BookingReceiptGenerator {
       padding: 12px;
       letter-spacing: 0.5px;
     }
+
   </style>
 </head>
 <body>
@@ -389,7 +393,7 @@ class BookingReceiptGenerator {
   </tr>
   <tr>
     <td>கம்ப்யூட்டர் எண்ணிக்கை</td>
-    <td>$eventTypeName</td>
+    <td>$totalComputers</td>
   </tr>
   <tr>
     <td>புக்கிங் தொகை</td>

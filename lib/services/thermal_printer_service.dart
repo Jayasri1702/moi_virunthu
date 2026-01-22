@@ -350,6 +350,19 @@ class ThermalPrinterService {
       if (await isUsbConnected()) {
         print('✅ USB already connected, printing...');
         bool success = await printImageBytesUsb(imageBytes);
+
+        if (success) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ Printed via USB'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return true;
+        }
       }
 
       // Try to connect to USB
@@ -365,8 +378,7 @@ class ThermalPrinterService {
         if (lastVid != null && lastPid != null) {
           try {
             usbDevice = usbDevices.firstWhere(
-                  (d) =>
-              d.vid.toString() == lastVid && d.pid.toString() == lastPid,
+                  (d) => d.vid.toString() == lastVid && d.pid.toString() == lastPid,
             );
             if (await connectUsb(usbDevice)) {
               print('✅ USB auto-connected');
@@ -411,6 +423,15 @@ class ThermalPrinterService {
       if (await isBluetoothConnected()) {
         print('✅ Bluetooth already connected, printing...');
         bool success = await printImageBytesBluetooth(imageBytes);
+
+        if (success && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Printed via Bluetooth'),
+              backgroundColor: Colors.blue,
+            ),
+          );
+        }
         return success;
       }
 
@@ -476,12 +497,28 @@ class ThermalPrinterService {
         return success;
       }
 
-      // If all failed - DON'T show error here, let caller handle it
-      print('❌ Failed to connect to any printer');
+      // If all failed
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to connect to any printer'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return false;
+
     } catch (e) {
       print('❌ Error in connectAndPrintImage: $e');
-      // DON'T show error here, let caller handle it
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Print failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return false;
     }
   }
