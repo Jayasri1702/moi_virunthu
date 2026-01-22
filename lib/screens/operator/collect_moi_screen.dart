@@ -3208,6 +3208,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 customerName: _customerName,
                 city: _city,
                 customerPhone: _customerPhone,
+                eventTitle: eventTitle,
+                eventFor: eventFor,
+                eventTypeName: eventTypeName,
+                venue: venue,
               );
 
               if (receiptsWithImages.isNotEmpty && mounted) {
@@ -3626,9 +3630,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         eventDate: eventDetails['event_date'],
         eventTime: eventDetails['event_time'],
         groupEntries: entriesWithDenoms,
-        customerName: _customerName, // ✅ NEW
-        city: _city, // ✅ NEW
-        customerPhone: _customerPhone, // ✅ NEW
+        customerName: _customerName, //
+        city: _city, //
+        customerPhone: _customerPhone,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
       );
 
       if (files.isNotEmpty && mounted) {
@@ -4071,6 +4079,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         customerName: _customerName,
         city: _city,
         customerPhone: _customerPhone,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
       );
 
       if (file != null && mounted) {
@@ -4090,6 +4102,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customerName: _customerName,
           city: _city,
           customerPhone: _customerPhone,
+          eventTitle: eventTitle,
+          eventFor: eventFor,
+          eventTypeName: eventTypeName,
+          venue: venue,
         );
         if (result != null) {
           final printerService = ThermalPrinterService();
@@ -5317,9 +5333,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           eventDate: eventDetails['event_date'],
           eventTime: eventDetails['event_time'],
           groupEntries: entriesWithDenoms,
-          customerName: _customerName, // ✅ NEW
-          city: _city, // ✅ NEW
-          customerPhone: _customerPhone, // ✅ NEW
+          customerName: _customerName,
+          city: _city,
+          customerPhone: _customerPhone,
+          eventTitle: eventTitle,
+          eventFor: eventFor,
+          eventTypeName: eventTypeName,
+          venue: venue,
         );
 
         if (files.isNotEmpty && mounted) {
