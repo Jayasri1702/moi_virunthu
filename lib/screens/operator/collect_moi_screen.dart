@@ -3171,6 +3171,162 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormCompletely();
           await _loadPreviewSerialNo();
 
+// ✅ Generate receipts based on type
+          try {
+            final operatorName = await _getOperatorName();
+            final eventDetails = await _getEventDetails();
+
+            final eventResponse = await _supabase
+                .from('events')
+                .select('title, venue, event_types(name)')
+                .eq('id', _eventId!)
+                .single();
+
+            String? eventTitle = eventResponse['title'];
+            String? venue = eventResponse['venue'];
+            String? eventFor = eventResponse['event_for'];
+            String? eventTypeName = eventResponse['event_types']?['name'];
+
+            if (receiptType == 'group') {
+              // Generate consolidated group receipt
+              double totalAmount = 0.0;
+              Map<int, int> totalDenominations = {
+                500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
+              };
+
+              for (var entry in savedGroupedMois) {
+                var amountValue = entry['amount'];
+                if (amountValue is int) {
+                  totalAmount += amountValue.toDouble();
+                } else if (amountValue is double) {
+                  totalAmount += amountValue;
+                } else if (amountValue is num) {
+                  totalAmount += amountValue.toDouble();
+                }
+
+                if (entry['payment_method'] == 'CASH') {
+                  final denoms = await _getDenominations(entry['id']);
+                  if (denoms != null) {
+                    denoms.forEach((denom, count) {
+                      totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
+                    });
+                  }
+                }
+              }
+
+              final result = await MoiReceiptGenerator.generateGroupMoiReceiptWithImage(
+                context: context,
+                groupId: savedGroupedMois[0]['group_id'],
+                operatorName: operatorName,
+                eventDate: eventDetails['event_date'],
+                eventTime: eventDetails['event_time'],
+                groupEntries: savedGroupedMois,
+                totalAmount: totalAmount,
+                totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
+                customerName: _customerName,
+                city: _city,
+                customerPhone: _customerPhone,
+                eventTitle: eventTitle,
+                eventFor: eventFor,
+                eventTypeName: eventTypeName,
+                venue: venue,
+              );
+
+              if (result != null && mounted) {
+                final printerService = ThermalPrinterService();
+                await printerService.connectAndPrintImage(context, result['imageBytes']);
+                await printerService.connectAndPrintImage(context, result['imageBytes']);
+
+                // Send to all WhatsApp numbers
+                List<String> phoneNumbers = [];
+                for (var entry in savedGroupedMois) {
+                  String? phone = entry['phone'];
+                  if (phone != null && phone.isNotEmpty) {
+                    phoneNumbers.add(phone);
+                  }
+                }
+
+                if (phoneNumbers.isNotEmpty) {
+                  await _sendReceiptToWhatsApp(
+                      result['pdf'],
+                      'mois',
+                      phoneNumbers: phoneNumbers,
+                      receiptNo: savedGroupedMois[0]['group_id']
+                  );
+                }
+              }
+            }else if (receiptType == 'single') {
+              // ✅ For split group receipts
+              List<Map<String, dynamic>> entriesWithDenoms = [];
+              for (var entry in savedGroupedMois) {
+                Map<String, dynamic> entryData = Map.from(entry);
+                if (entry['payment_method'] == 'CASH') {
+                  entryData['denominations'] = await _getDenominations(entry['id']);
+                }
+                entriesWithDenoms.add(entryData);
+              }
+
+              // Generate split receipts with images
+              final receiptsWithImages = await MoiReceiptGenerator.generateSplitGroupReceiptsWithImages(
+                context: context,
+                operatorName: operatorName,
+                eventDate: eventDetails['event_date'],
+                eventTime: eventDetails['event_time'],
+                groupEntries: entriesWithDenoms,
+                customerName: _customerName,
+                city: _city,
+                customerPhone: _customerPhone,
+                eventTitle: eventTitle,
+                eventFor: eventFor,
+                eventTypeName: eventTypeName,
+                venue: venue,
+              );
+
+              if (receiptsWithImages.isNotEmpty && mounted) {
+                final printerService = ThermalPrinterService();
+
+                for (int i = 0; i < receiptsWithImages.length; i++) {
+                  final receipt = receiptsWithImages[i];
+
+                  // Print using image bytes
+                  await printerService.connectAndPrintImage(context, receipt['imageBytes']);
+                  await printerService.connectAndPrintImage(context, receipt['imageBytes']);
+
+                  // Send PDF to WhatsApp
+                  if (i < entriesWithDenoms.length) {
+                    String? phone = entriesWithDenoms[i]['phone'];
+                    if (phone != null && phone.isNotEmpty) {
+                      await _sendReceiptToWhatsApp(
+                          receipt['pdf'],
+                          'mois',
+                          phoneNumbers: [phone],
+                          receiptNo: entriesWithDenoms[i]['serial_no']
+                      );
+                    }
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            print('Error generating receipts: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          } finally {
+            if (mounted) {
+              _phoneFocusNode.requestFocus();
+              setState(() => _isLoading = false);
+            }
+          }
+          return;
+
+
+
 // ✅ For split group receipts
           if (receiptType == 'single') {
             try {
