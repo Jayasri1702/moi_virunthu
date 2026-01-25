@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../../services/thermal_printer_service.dart';
+import 'package:flutter/foundation.dart';  // ✅ Add this for compute()
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -53,6 +54,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String? _lockedPaymentMethod; // Add this line
   bool _skipDenomination = false;  // ADD
   bool _skipPrint = false;         // ADD
+  bool _isPrinting = false;
 
   // Edit mode variables
   bool _isEditMode = false;
@@ -2870,14 +2872,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 // ✅ NEW: Check if skip_print is true
           if (_skipPrint) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      '✅ Entries saved successfully (Receipt skipped)'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ),
-              );
               await _clearFormCompletely();
               _phoneFocusNode.requestFocus();
               setState(() => _isLoading = false);
@@ -3024,19 +3018,29 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 entryAmount = int.tryParse(amountValue.toString()) ?? 0;
               }
 
-              final result = await MoiReceiptGenerator
-                  .generateSingleMoiReceiptWithImage(
-                context: context,
+              // ✅ Clear form immediately (user can start typing)
+              if (mounted) {
+                await _clearFormCompletely();
+                _phoneFocusNode.requestFocus();
+                setState(() => _isPrinting = false);
+              }
+
+              // ✅ Generate and print in background (async, won't block UI)
+              _generateAndPrintReceipt(
                 serialNo: entry['serial_no'],
                 operatorName: operatorName,
                 eventDate: eventDetails['event_date'],
                 eventTime: eventDetails['event_time'],
                 villageName: entry['village_name'],
                 livingPlace: entry['living_place'],
-                person1Name: person1Name,
-                person1Job: person1Job,
-                person2Details: person2Details,
+                person1Name: entry['persons'] != null && (entry['persons'] as List).isNotEmpty
+                    ? entry['persons'][0]['name'] : null,
+                person1Job: entry['persons'] != null && (entry['persons'] as List).isNotEmpty
+                    ? entry['persons'][0]['job'] : null,
+                person2Details: entry['persons'] != null && (entry['persons'] as List).length > 1
+                    ? entry['persons'][1]['details'] : null,
                 phone: entry['phone'],
+                notes: entry['notes'],
                 amount: entryAmount,
                 paymentMethod: _paymentMethod,
                 denominations: denominations,
@@ -3048,25 +3052,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 eventFor: eventFor,
                 eventTypeName: eventTypeName,
                 venue: venue,
-                notes: entry['notes'],
               );
 
-              if (result != null && mounted) {
-                // Print using image bytes
-                final printerService = ThermalPrinterService();
-                await printerService.connectAndPrintImage(
-                    context, result['imageBytes']);
-                await printerService.connectAndPrintImage(
-                    context, result['imageBytes']);
-
-                // Send PDF to WhatsApp
-                String? phoneNumber = entry['phone'];
-                if (phoneNumber != null && phoneNumber.isNotEmpty) {
-                  await _sendReceiptToWhatsApp(
-                      result['pdf'], 'mois', phoneNumbers: [phoneNumber],
-                      receiptNo: entry['serial_no']);
-                }
-              }
+              return; // ✅ Exit immediately, don't wait for printing
 
               if (mounted) {
                 await _clearFormCompletely();
@@ -3565,13 +3553,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (_skipPrint) {
           // Don't generate receipt, just show success and clear
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ Entries saved successfully (Receipt skipped)'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
+
             await _clearFormCompletely();
             _phoneFocusNode.requestFocus();
             setState(() => _isLoading = false);
@@ -3683,28 +3665,39 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             venue: venue,
           );
 
-          if (result != null && mounted) {
-            // Print using image bytes
-            final printerService = ThermalPrinterService();
-            await printerService.connectAndPrintImage(
-                context, result['imageBytes']);
-            await printerService.connectAndPrintImage(
-                context, result['imageBytes']);
-
-            // Send PDF to WhatsApp
-            String? phoneNumber = _phoneController.text.trim();
-            if (phoneNumber.isNotEmpty) {
-              await _sendReceiptToWhatsApp(
-                  result['pdf'], 'mois', phoneNumbers: [phoneNumber],
-                  receiptNo: _serialNo);
-            }
-          }
-
           if (mounted) {
             await _clearFormCompletely();
             _phoneFocusNode.requestFocus();
-            setState(() => _isLoading = false);
+            setState(() => _isPrinting = false);
           }
+
+          // ✅ Print in background
+          _generateAndPrintReceipt(
+            serialNo: _serialNo!,
+            operatorName: operatorName,
+            eventDate: eventDetails['event_date'],
+            eventTime: eventDetails['event_time'],
+            villageName: _villageController.text.trim(),
+            livingPlace: _livingPlaceController.text.trim(),
+            person1Name: _person1Field1Controller.text.trim(),
+            person1Job: _person1Field2Controller.text.trim(),
+            person2Details: _person2Controller.text.trim(),
+            phone: _phoneController.text.trim(),
+            notes: _notesController.text.trim(),
+            amount: _paymentMethod == 'CASH'
+                ? _getTotalAmount()
+                : int.tryParse(_amountController.text) ?? 0,
+            paymentMethod: _paymentMethod,
+            denominations: denominations,
+            customerName: _customerName,
+            city: _city,
+            customerPhone: _customerPhone,
+            isUncle: _isUncle,
+            eventTitle: eventTitle,
+            eventFor: eventFor,
+            eventTypeName: eventTypeName,
+            venue: venue,
+          );
         }
       }catch (e) {
         print('Error saving: $e');
@@ -3737,6 +3730,103 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // ✅ NEW: Background receipt generation and printing
+  Future<void> _generateAndPrintReceipt({
+    required int serialNo,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    String? villageName,
+    String? livingPlace,
+    String? person1Name,
+    String? person1Job,
+    String? person2Details,
+    String? phone,
+    String? notes,
+    required int amount,
+    required String paymentMethod,
+    Map<int, int>? denominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+    required bool isUncle,
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+  }) async {
+    try {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🖨️ Generating receipt in background...'),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+
+      // Generate receipt (heavy operation)
+      final result = await MoiReceiptGenerator.generateSingleMoiReceiptWithImage(
+        context: mounted ? context : null,
+        serialNo: serialNo,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: villageName,
+        livingPlace: livingPlace,
+        person1Name: person1Name,
+        person1Job: person1Job,
+        person2Details: person2Details,
+        phone: phone,
+        notes: notes,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        denominations: denominations,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        isUncle: isUncle,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
+      );
+
+      if (result != null && mounted) {
+        // Print
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
+        await printerService.connectAndPrintImage(context, result['imageBytes']);
+
+
+
+        // Send WhatsApp (fire and forget)
+        if (phone != null && phone.isNotEmpty) {
+          _sendReceiptToWhatsApp(
+            result['pdf'],
+            'mois',
+            phoneNumbers: [phone],
+            receiptNo: serialNo,
+          ).catchError((e) {
+            print('WhatsApp send error: $e');
+          });
+        }
+      }
+    } catch (e) {
+      print('Error in background receipt generation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Print error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -5092,65 +5182,36 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       bool skipWhatsApp = eventResponse['skip_whatsapp'] ?? false;
       print('📱 skip_whatsapp from DB: $skipWhatsApp');
 
-      // Step 2: Check if we should skip WhatsApp
-      if (skipWhatsApp) {
-        print('⏭️ SKIPPING WhatsApp - skip_whatsapp is TRUE');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⏭️ WhatsApp sending skipped (disabled in event settings)'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
+      // ✅ CRITICAL: Always store in backend, control WhatsApp sending via to_whatsapp parameter
+      String toWhatsApp = (!skipWhatsApp).toString(); // "true" = send to WhatsApp, "false" = skip WhatsApp
 
-      // Step 3: Validate phone numbers
-      if (phoneNumbers == null || phoneNumbers.isEmpty) {
-        print('⏭️ SKIPPING WhatsApp - No phone numbers provided');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⏭️ WhatsApp skipped - No phone numbers available'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Step 4: Clean and format phone numbers
+      // Step 2: Validate and clean phone numbers
       List<String> validPhones = [];
-      for (String phoneNum in phoneNumbers) {  // ✅ Changed to phoneNum
-        String cleanedPhone = phoneNum.replaceAll(RegExp(r'\D'), '');
-        if (phoneNum.isEmpty) continue;
+      if (phoneNumbers != null && phoneNumbers.isNotEmpty) {
+        for (String phoneNum in phoneNumbers) {
+          String cleanedPhone = phoneNum.replaceAll(RegExp(r'\D'), '');
+          if (cleanedPhone.isEmpty) continue;
 
-        if (cleanedPhone.length == 10) {
-          cleanedPhone = '91$cleanedPhone'; // Add India country code
-          validPhones.add(cleanedPhone);
+          if (cleanedPhone.length == 10) {
+            cleanedPhone = '91$cleanedPhone'; // Add India country code
+            validPhones.add(cleanedPhone);
+          }
         }
-      }
-
-      if (validPhones.isEmpty) {
-        print('⏭️ SKIPPING WhatsApp - No valid phone numbers after cleaning');
-        return;
       }
 
       print('📱 Valid phone numbers: $validPhones');
+      print('📱 to_whatsapp parameter: $toWhatsApp');
 
-      // Step 5: Prepare form data
-      String toWhatsApp = (!skipWhatsApp).toString();
-
-      // Step 6: Send to each phone number
+      // Step 3: Send to backend (ALWAYS - regardless of skip_whatsapp flag or phone numbers)
       int successCount = 0;
       int failCount = 0;
 
-      for (String cleanedPhone in validPhones) {
+      // ✅ IMPORTANT: If no phone numbers, still send once to store in backend
+      List<String> phonesToProcess = validPhones.isEmpty ? [''] : validPhones;
+
+      for (String cleanedPhone in phonesToProcess) {
         try {
-          print('📤 Sending to: $cleanedPhone');
+          print('📤 Sending to backend${cleanedPhone.isNotEmpty ? " for: $cleanedPhone" : " (no phone)"}');
 
           var request = http.MultipartRequest(
             'POST',
@@ -5165,8 +5226,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           // Add form fields
           request.fields['event_id'] = _eventId!;
-          request.fields['phone_number'] = cleanedPhone;
-          request.fields['to_whatsapp'] = toWhatsApp;
+          request.fields['phone_number'] = cleanedPhone; // Can be empty string
+          request.fields['to_whatsapp'] = toWhatsApp; // ✅ Backend decides whether to send WhatsApp
           request.fields['receipt_type'] = receiptType;
           request.fields['receipt_no'] = receiptNo?.toString() ?? '';
 
@@ -5183,14 +5244,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           final responseBody = await streamedResponse.stream.bytesToString();
 
           if (streamedResponse.statusCode == 200) {
-            print('✅ SUCCESS: Receipt sent to $cleanedPhone');
+            print('✅ SUCCESS: Receipt stored in backend${cleanedPhone.isNotEmpty ? " for $cleanedPhone" : ""}');
             successCount++;
           } else {
-            print('❌ FAILED: Receipt not sent to $cleanedPhone (${streamedResponse.statusCode})');
+            print('❌ FAILED: Receipt not stored (${streamedResponse.statusCode})');
+            print('Response: $responseBody');
             failCount++;
           }
         } catch (e) {
-          print('❌ ERROR sending to $cleanedPhone: $e');
+          print('❌ ERROR sending${cleanedPhone.isNotEmpty ? " for $cleanedPhone" : ""}: $e');
           failCount++;
         }
       }
@@ -5198,9 +5260,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // Show final status
       if (mounted) {
         if (successCount > 0) {
+          String message;
+          if (skipWhatsApp) {
+            message = '✅ Receipt saved to backend (WhatsApp skipped)';
+          } else {
+            message = validPhones.isEmpty
+                ? '✅ Receipt saved to backend'
+                : '✅ Receipt sent to $successCount number(s)${failCount > 0 ? ', $failCount failed' : ''}';
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ Receipt sent to $successCount number(s)${failCount > 0 ? ', $failCount failed' : ''}'),
+              content: Text(message),
               backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
               duration: const Duration(seconds: 3),
             ),
@@ -5208,7 +5279,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('❌ Failed to send receipts via WhatsApp'),
+              content: Text('❌ Failed to save receipt to backend'),
               backgroundColor: Colors.red,
               duration: const Duration(seconds: 3),
             ),
@@ -5219,18 +5290,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       print('📱 ========== SUMMARY ==========');
       print('📱 Success: $successCount');
       print('📱 Failed: $failCount');
+      print('📱 Skip WhatsApp: $skipWhatsApp');
       print('📱 ==============================');
 
     } catch (e, stackTrace) {
       print('❌ ========== EXCEPTION ==========');
-      print('❌ Error sending receipt to WhatsApp: $e');
+      print('❌ Error sending receipt to backend: $e');
       print('❌ Stack trace: $stackTrace');
       print('❌ ================================');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ WhatsApp error: ${e.toString()}'),
+            content: Text('❌ Backend error: ${e.toString()}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
@@ -5238,7 +5310,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
   }
-
   Future<int> _getAvailableBalance(int denomination) async {
     try {
       if (_eventId == null) return 0;
@@ -6761,15 +6832,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         await _clearFormForNextEntry();
       }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Entry deleted successfully'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       print('Error deleting entry: $e');
       if (mounted) {
