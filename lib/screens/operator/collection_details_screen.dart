@@ -314,6 +314,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         'operator_id': _operatorId,
         'edit_mode': true,
         'moi_data': moi,
+        'isCollectionDetailsEditPage': true,  // ✅ ADD THIS LINE
       },
     ).then((_) {
       _loadCollectionDetails();

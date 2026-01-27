@@ -55,6 +55,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   bool _skipDenomination = false;  // ADD
   bool _skipPrint = false;         // ADD
   bool _isPrinting = false;
+  bool _isCollectionDetailsEditPage = false;  // ✅ ADD THIS LINE
 
   // Edit mode variables
   bool _isEditMode = false;
@@ -225,6 +226,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (args != null && args is Map<String, dynamic>) {
       _eventId = args['id'];
       _operatorId = args['operator_id'];
+
+      _isCollectionDetailsEditPage = args['isCollectionDetailsEditPage'] ?? false;
 
       // ✅ CRITICAL FIX: Always fetch skip flags from events table (not from arguments)
       // This ensures we get the latest values even in edit mode
@@ -1247,6 +1250,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       await _clearFormForNextEntry();
       await _loadPreviewSerialNo();  // ✅ Update preview for next entry
       _phoneFocusNode.requestFocus();
+
     } catch (e) {
       print('Error in group operation: $e');
       if (mounted) {
@@ -2030,6 +2034,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         if (shouldProceed == 'clear') {
           await _clearFormForNextEntry();
           _phoneFocusNode.requestFocus();
+
           if (mounted) setState(() => _isLoading = false);
           return;
         } else if (shouldProceed == 'group') {
@@ -2189,6 +2194,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormCompletely();
           _phoneFocusNode.requestFocus();
           setState(() => _isLoading = false);
+
           return;
         }
       }
@@ -2805,6 +2811,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               await _clearFormCompletely();
               _phoneFocusNode.requestFocus();
               setState(() => _isLoading = false);
+
             }
             return; // Exit without generating receipt
           }
@@ -2953,6 +2960,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 await _clearFormCompletely();
                 _phoneFocusNode.requestFocus();
                 setState(() => _isPrinting = false);
+                if (_isCollectionDetailsEditPage) {
+                  Navigator.pop(context);  // Return to collection details
+                  _isCollectionDetailsEditPage = false;
+                }
               }
 
               // ✅ Generate and print in background (async, won't block UI)
@@ -2984,13 +2995,22 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 venue: venue,
               );
 
-              return; // ✅ Exit immediately, don't wait for printing
-
               if (mounted) {
                 await _clearFormCompletely();
                 _phoneFocusNode.requestFocus();
                 setState(() => _isLoading = false);
               }
+
+              if (_isCollectionDetailsEditPage) {
+                _isCollectionDetailsEditPage = false;
+                Navigator.pop(context);
+                return;
+              }
+
+              return; // ✅ Exit immediately, don't wait for printing
+
+
+
             } catch (e) {
               print('Error generating single receipt: $e');
               if (mounted) {
@@ -3079,6 +3099,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             await _clearFormCompletely();
             _phoneFocusNode.requestFocus();
             setState(() => _isLoading = false);
+
+            if (_isCollectionDetailsEditPage) {
+              Navigator.pop(context);  // Return to collection details
+              _isCollectionDetailsEditPage = false;
+            }
+
             return;
           }
 
@@ -3088,6 +3114,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 // ✅ CLEAR FORM IMMEDIATELY AFTER USER SELECTS RECEIPT TYPE
           await _clearFormCompletely();
           await _loadPreviewSerialNo();
+
+          if (_isCollectionDetailsEditPage) {
+            _isCollectionDetailsEditPage = false;
+            Navigator.pop(context);
+            // Continue with receipt generation in background (don't return yet)
+          }
 
 // ✅ Generate receipts based on type
           try {
@@ -3164,7 +3196,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   }
                 }
 
-                if (phoneNumbers.isNotEmpty) {
+                //if (phoneNumbers.isNotEmpty) {
                   await _sendReceiptToWhatsApp(
                       result['pdf'],
                       'mois',
@@ -3172,7 +3204,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                       receiptNo: savedGroupedMois[0]['group_id']
                   );
                 }
-              }
+             // }
             }else if (receiptType == 'single') {
               // ✅ For split group receipts
               List<Map<String, dynamic>> entriesWithDenoms = [];
@@ -3206,22 +3238,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 for (int i = 0; i < receiptsWithImages.length; i++) {
                   final receipt = receiptsWithImages[i];
 
-                  // Print using image bytes
                   await printerService.connectAndPrintImage(context, receipt['imageBytes']);
-                  // await printerService.connectAndPrintImage(context, receipt['imageBytes']);
 
-                  // Send PDF to WhatsApp
                   if (i < entriesWithDenoms.length) {
                     String? phone = entriesWithDenoms[i]['phone'];
-                    if (phone != null && phone.isNotEmpty) {
-                      await _sendReceiptToWhatsApp(
-                          receipt['pdf'],
-                          'mois',
-                          phoneNumbers: [phone],
-                          receiptNo: entriesWithDenoms[i]['serial_no']
-                      );
-                    }
+                    // ✅ ALWAYS send to backend (even if no phone)
+                    await _sendReceiptToWhatsApp(
+                        receipt['pdf'],
+                        'mois',
+                        phoneNumbers: phone != null && phone.isNotEmpty ? [phone] : [],
+                        receiptNo: entriesWithDenoms[i]['serial_no']
+                    );
                   }
+
+
                 }
               }
             }
@@ -3240,93 +3270,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _phoneFocusNode.requestFocus();
               setState(() => _isLoading = false);
             }
-          }
-          return;
-
-
-
-// ✅ For split group receipts
-          if (receiptType == 'single') {
-            try {
-              final operatorName = await _getOperatorName();
-              final eventDetails = await _getEventDetails();
-
-              final eventResponse = await _supabase
-                  .from('events')
-                  .select('title, venue, event_types(name)')
-                  .eq('id', _eventId!)
-                  .single();
-
-              String? eventTitle = eventResponse['title'];
-              String? venue = eventResponse['venue'];
-              String? eventFor = eventResponse['event_for'];
-              String? eventTypeName = eventResponse['event_types']?['name'];
-
-              List<Map<String, dynamic>> entriesWithDenoms = [];
-              // ✅ USE savedGroupedMois instead of _groupedMois
-              for (var entry in savedGroupedMois) {
-                Map<String, dynamic> entryData = Map.from(entry);
-                if (entry['payment_method'] == 'CASH') {
-                  entryData['denominations'] = await _getDenominations(entry['id']);
-                }
-                entriesWithDenoms.add(entryData);
-              }
-
-              final receiptsWithImages = await MoiReceiptGenerator
-                  .generateSplitGroupReceiptsWithImages(
-                context: context,
-                operatorName: operatorName,
-                eventDate: eventDetails['event_date'],
-                eventTime: eventDetails['event_time'],
-                groupEntries: entriesWithDenoms,
-                customerName: _customerName,
-                city: _city,
-                customerPhone: _customerPhone,
-                eventTitle: eventTitle,
-                eventFor: eventFor,
-                eventTypeName: eventTypeName,
-                venue: venue,
-              );
-
-              if (receiptsWithImages.isNotEmpty && mounted) {
-                final printerService = ThermalPrinterService();
-
-                for (int i = 0; i < receiptsWithImages.length; i++) {
-                  final receipt = receiptsWithImages[i];
-
-                  await printerService.connectAndPrintImage(context, receipt['imageBytes']);
-                  await printerService.connectAndPrintImage(context, receipt['imageBytes']);
-
-                  if (i < entriesWithDenoms.length) {
-                    String? phone = entriesWithDenoms[i]['phone'];
-                    if (phone != null && phone.isNotEmpty) {
-                      await _sendReceiptToWhatsApp(
-                          receipt['pdf'],
-                          'mois',
-                          phoneNumbers: [phone],
-                          receiptNo: entriesWithDenoms[i]['serial_no']
-                      );
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              print('Error generating split receipts: $e');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: ${e.toString()}'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            } finally {
-              if (mounted) {
-                _phoneFocusNode.requestFocus();
-                setState(() => _isLoading = false);
-              }
-            }
-            return;
           }
 
           if (mounted) {
@@ -3488,6 +3431,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             _phoneFocusNode.requestFocus();
             setState(() => _isLoading = false);
           }
+
+          if (_isCollectionDetailsEditPage) {
+            Navigator.pop(context);  // Return to collection details
+            _isCollectionDetailsEditPage = false;
+          }
           return; // Exit without generating receipt
         }
 
@@ -3599,6 +3547,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             await _clearFormCompletely();
             _phoneFocusNode.requestFocus();
             setState(() => _isPrinting = false);
+            if (_isCollectionDetailsEditPage) {
+              Navigator.pop(context);  // Return to collection details
+              _isCollectionDetailsEditPage = false;
+            }
           }
 
           // ✅ Print in background
@@ -3736,16 +3688,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
 
         // Send WhatsApp (fire and forget)
-        if (phone != null && phone.isNotEmpty) {
-          _sendReceiptToWhatsApp(
-            result['pdf'],
-            'mois',
-            phoneNumbers: [phone],
-            receiptNo: serialNo,
-          ).catchError((e) {
-            print('WhatsApp send error: $e');
-          });
-        }
+        // ✅ ALWAYS send to backend (fire and forget)
+        _sendReceiptToWhatsApp(
+          result['pdf'],
+          'mois',
+          phoneNumbers: phone != null && phone.isNotEmpty ? [phone] : [],
+          receiptNo: serialNo,
+        ).catchError((e) {
+          print('Backend/WhatsApp send error: $e');
+        });
       }
     } catch (e) {
       print('Error in background receipt generation: $e');
@@ -5141,16 +5092,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       print('📱 Valid phone numbers: $validPhones');
       print('📱 to_whatsapp parameter: $toWhatsApp');
 
-      // Step 3: Send to backend (ALWAYS - regardless of skip_whatsapp flag or phone numbers)
+      // ✅ CRITICAL CHANGE: ALWAYS send to backend (even with no phone numbers)
       int successCount = 0;
       int failCount = 0;
 
-      // ✅ IMPORTANT: If no phone numbers, still send once to store in backend
+      // ✅ If no phone numbers, send once with empty phone to store in backend
       List<String> phonesToProcess = validPhones.isEmpty ? [''] : validPhones;
 
       for (String cleanedPhone in phonesToProcess) {
         try {
-          print('📤 Sending to backend${cleanedPhone.isNotEmpty ? " for: $cleanedPhone" : " (no phone)"}');
+          print('📤 Sending to backend${cleanedPhone.isNotEmpty ? " for: $cleanedPhone" : " (no phone - backend storage only)"}');
 
           var request = http.MultipartRequest(
             'POST',
@@ -5165,7 +5116,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           // Add form fields
           request.fields['event_id'] = _eventId!;
-          request.fields['phone_number'] = cleanedPhone; // Can be empty string
+          request.fields['phone_number'] = cleanedPhone; // ✅ Can be empty string
           request.fields['to_whatsapp'] = toWhatsApp; // ✅ Backend decides whether to send WhatsApp
           request.fields['receipt_type'] = receiptType;
           request.fields['receipt_no'] = receiptNo?.toString() ?? '';
@@ -5249,6 +5200,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     }
   }
+
   Future<int> _getAvailableBalance(int denomination) async {
     try {
       if (_eventId == null) return 0;
