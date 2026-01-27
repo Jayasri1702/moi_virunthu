@@ -163,6 +163,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
         person1Job = (persons[0]['job']?.toString() ?? '').trim().toLowerCase();
       }
 
+      // ✅ Person 2 is now optional - not used in grouping key
       String person2NameRaw = '';
       String person2NameNormalized = '';
 
@@ -174,6 +175,7 @@ class _SimilarEntriesScreenState extends State<SimilarEntriesScreen> {
         }
       }
 
+// ✅ CHANGED: Only use Person 1 Name, Job, and Village (Person 2 is optional)
       final compositeKey = '$villageName|$person1NameNormalized|$person1Job';
 
       if (!groupedEntries.containsKey(compositeKey)) {

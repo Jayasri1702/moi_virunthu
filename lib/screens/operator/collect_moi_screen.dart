@@ -4080,16 +4080,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return result ?? false;
   }
 
-  // Add this NEW method anywhere in the class (e.g., after _showDuplicateWarningDialog)
   Future<String?> _checkSimilarEntryBeforeSave() async {
     try {
       // Get current form values
       String villageName = _villageController.text.trim().replaceAll(' ', '');
       String person1Name = _person1Field1Controller.text.trim().replaceAll(' ', '');
       String person1Job = _person1Field2Controller.text.trim();
+      String person2Details = _person2Controller.text.trim();
 
       if (villageName.isEmpty || person1Name.isEmpty) {
-        return null; // Skip check if essential fields are empty
+        return null;
       }
 
       // Query database for similar entries in THIS event
@@ -4103,34 +4103,55 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       Map<String, dynamic>? matchingEntry;
 
       for (var entry in response) {
-        // Skip if this is the entry we're currently editing
         if (_isEditMode && _editingMoiId != null && entry['id'] == _editingMoiId) {
           continue;
         }
 
-        // Check village name (case-insensitive)
         String entryVillage = (entry['village_name'] ?? '').trim().toLowerCase();
         if (entryVillage != villageName.toLowerCase()) continue;
 
-        // Check person 1
         if (entry['persons'] != null) {
           List<dynamic> personsList = entry['persons'] as List;
+
           if (personsList.isNotEmpty) {
             String entryP1Name = (personsList[0]['name'] ?? '').trim().toLowerCase();
             String entryP1Job = (personsList[0]['job'] ?? '').trim().toLowerCase();
 
-            // Compare names and jobs
-            if (entryP1Name == person1Name.toLowerCase() &&
-                entryP1Job == person1Job.toLowerCase()) {
-              matchingEntry = entry;
-              break; // Found a match
+            if (entryP1Name != person1Name.toLowerCase()) continue;
+            if (person1Job.isNotEmpty && entryP1Job != person1Job.toLowerCase()) continue;
+          } else {
+            continue;
+          }
+
+          if (person2Details.isNotEmpty && personsList.length > 1) {
+            String entryP2Details = (personsList[1]['details'] ?? '').trim().toLowerCase();
+            if (entryP2Details.isNotEmpty && entryP2Details != person2Details.toLowerCase()) {
+              continue;
             }
           }
+        } else {
+          continue;
         }
+
+        matchingEntry = entry;
+        break;
       }
 
       if (matchingEntry == null) {
-        return null; // No similar entry found
+        return null;
+      }
+
+      // ✅ FIXED: Build Person 2 display string BEFORE the dialog
+      String person2DisplayText = 'N/A';
+      if (matchingEntry['persons'] != null) {
+        final personsList = matchingEntry['persons'] as List;
+        if (personsList.length > 1) {
+          final p2 = personsList[1];
+          final p2Details = p2['details'] ?? '';
+          if (p2Details.isNotEmpty) {
+            person2DisplayText = p2Details;
+          }
+        }
       }
 
       // Show dialog with 3 options
@@ -4148,8 +4169,26 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'An entry with the same Village, Name, and Job already exists:',
+                  'An entry with the same Village, Person 1 Name, and Job already exists:',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    border: Border.all(color: Colors.blue, width: 1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'ℹ️ Person 2 details are optional and not used for matching.',
+                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.blue),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -4172,16 +4211,41 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                         style: const TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 4),
+                      // ✅ FIXED: Person 1 details
                       if (matchingEntry != null && matchingEntry['persons'] != null) ...[
-                        Text(
-                          '📝 Name: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['name'] ?? 'N/A' : 'N/A'}',
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        Text(
-                          '💼 Job: ${(matchingEntry['persons'] as List).isNotEmpty ? matchingEntry['persons'][0]['job'] ?? 'N/A' : 'N/A'}',
-                          style: const TextStyle(fontSize: 13),
+                        Builder(
+                          builder: (context) {
+                            final personsList = matchingEntry!['persons'] as List;
+                            if (personsList.isNotEmpty) {
+                              final p1 = personsList[0];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '📝 Person 1 Name: ${p1['name'] ?? 'N/A'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  Text(
+                                    '💼 Person 1 Job: ${p1['job'] ?? 'N/A'}',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                              );
+                            }
+                            return const SizedBox.shrink();
+                          },
                         ),
                       ],
+                      // ✅ CRITICAL FIX: Person 2 - ALWAYS display with pre-computed text
+                      const SizedBox(height: 4),
+                      Text(
+                        '👥 Person 2: $person2DisplayText',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.deepOrange,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}',
@@ -4199,7 +4263,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           ),
           actions: [
-            // Cancel button
             TextButton(
               onPressed: () => Navigator.pop(context, 'cancel'),
               style: TextButton.styleFrom(
@@ -4211,7 +4274,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
-            // New Entry button
             TextButton(
               onPressed: () => Navigator.pop(context, 'new'),
               style: TextButton.styleFrom(
@@ -4223,7 +4285,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
-            // Overwrite button
             TextButton(
               onPressed: () => Navigator.pop(context, 'overwrite:${matchingEntry!['id']}'),
               style: TextButton.styleFrom(
@@ -4239,7 +4300,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         ),
       );
 
-      return result; // Returns: 'cancel', 'new', or 'overwrite:ID'
+      return result;
     } catch (e) {
       print('Error checking similar entry: $e');
       return null;

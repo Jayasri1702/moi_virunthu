@@ -118,11 +118,32 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
         String personsText = _getPersonsCompact(moi['persons']).toLowerCase();
         String villageName = (moi['village_name'] ?? '').toLowerCase();
         String phone = (moi['phone'] ?? '').toLowerCase();
-        String searchQuery = query.toLowerCase();
+        String searchQuery = query.toLowerCase().trim();
+
+        // ✅ NEW: Check if search query is in serial number format (s:06 or S:06)
+        if (searchQuery.startsWith('s:')) {
+          // Extract the number after 's:'
+          String serialNumberStr = searchQuery.substring(2).trim();
+
+          // Try to parse as integer
+          int? searchSerialNo = int.tryParse(serialNumberStr);
+
+          if (searchSerialNo != null) {
+            // Compare with MOI serial number
+            int moiSerialNo = moi['serial_no'] ?? 0;
+            return moiSerialNo == searchSerialNo;
+          }
+
+          // If parsing failed, fall through to regular search
+        }
+
+        // ✅ Regular search (existing logic)
+        String serialNo = 'o${moi['serial_no'] ?? ''}'.toLowerCase();
 
         return personsText.contains(searchQuery) ||
             villageName.contains(searchQuery) ||
-            phone.contains(searchQuery);
+            phone.contains(searchQuery) ||
+            serialNo.contains(searchQuery);
       }).toList();
     });
   }
@@ -793,7 +814,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
               controller: _searchController,
               onChanged: _filterMois,
               decoration: InputDecoration(
-                hintText: 'Search by name, village, or phone...',
+                hintText: 'Search by name, village, phone, or s:06 for serial...',
                 border: InputBorder.none,
                 icon: const Icon(Icons.search, color: Colors.black),
                 suffixIcon: _searchController.text.isNotEmpty
