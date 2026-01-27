@@ -894,6 +894,65 @@ class _DenominationScreenState extends State<DenominationScreen> {
                             ),
                           ),
 
+                          // Final Count Row (Total Count + Exchanges - Withdrawals)
+                          Container(
+                            decoration: BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.grey[300]!, width: 1),
+                              ),
+                              color: Colors.purple[50],
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            child: IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _buildFooterCell('Final Count', width: 120, bold: true, color: Colors.purple[900]),
+                                  _buildFooterCell(
+                                    ((totals['counts'][500] as int) + (totalExchanges[500] ?? 0) - (totalWithdrawals[500] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][200] as int) + (totalExchanges[200] ?? 0) - (totalWithdrawals[200] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][100] as int) + (totalExchanges[100] ?? 0) - (totalWithdrawals[100] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][50] as int) + (totalExchanges[50] ?? 0) - (totalWithdrawals[50] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][20] as int) + (totalExchanges[20] ?? 0) - (totalWithdrawals[20] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][10] as int) + (totalExchanges[10] ?? 0) - (totalWithdrawals[10] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][5] as int) + (totalExchanges[5] ?? 0) - (totalWithdrawals[5] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell(
+                                    ((totals['counts'][1] as int) + (totalExchanges[1] ?? 0) - (totalWithdrawals[1] ?? 0)).toString(),
+                                    width: 60,
+                                    color: Colors.purple[900],
+                                  ),
+                                  _buildFooterCell('', width: 100),
+                                ],
+                              ),
+                            ),
+                          ),
+
                           // FINAL BALANCE ROW (Total - Withdrawals, with Exchange affecting denominations)
                   // FINAL BALANCE ROW (Total + Exchange + Withdrawal[negative] = Total + Exchange - Withdrawal)
                   Container(

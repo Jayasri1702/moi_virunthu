@@ -137,6 +137,25 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           // If parsing failed, fall through to regular search
         }
 
+        // ✅ NEW: Check if search query is in amount format (a:500 or A:500)
+        if (searchQuery.startsWith('a:')) {
+          // Extract the amount after 'a:'
+          String amountStr = searchQuery.substring(2).trim();
+
+          // Try to parse as number
+          double? searchAmount = double.tryParse(amountStr);
+
+          if (searchAmount != null) {
+            // Compare with MOI amount
+            double moiAmount = (moi['amount'] is int)
+                ? (moi['amount'] as int).toDouble()
+                : (moi['amount'] as double);
+            return moiAmount == searchAmount;
+          }
+
+          // If parsing failed, fall through to regular search
+        }
+
         // ✅ Regular search (existing logic)
         String serialNo = 'o${moi['serial_no'] ?? ''}'.toLowerCase();
 
@@ -814,7 +833,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
               controller: _searchController,
               onChanged: _filterMois,
               decoration: InputDecoration(
-                hintText: 'Search by name, village, phone, or s:06 for serial...',
+                hintText: 'Search by name, village, phone, s:06 for serial, a:500 for amount...',
                 border: InputBorder.none,
                 icon: const Icon(Icons.search, color: Colors.black),
                 suffixIcon: _searchController.text.isNotEmpty
