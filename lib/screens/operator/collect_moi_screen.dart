@@ -2267,192 +2267,122 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           if (matchingEntry != null) {
             // Show dialog with 3 options: Overwrite, New Entry, Cancel
+            // ✅ Build FULL existing entry details
+            String existingEntryDetails = '';
+            existingEntryDetails += '📍 Village: ${matchingEntry?['village_name'] ?? 'N/A'}\n';
+            existingEntryDetails += '🏙️ Living Place: ${matchingEntry?['living_place'] ?? 'N/A'}\n';
+            existingEntryDetails += '📞 Phone: ${matchingEntry?['phone'] ?? 'N/A'}\n';
+            existingEntryDetails += '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}\n';
+            existingEntryDetails += '💳 Payment: ${matchingEntry?['payment_method'] ?? 'N/A'}\n';
+            existingEntryDetails += '👤 Uncle: ${(matchingEntry?['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
+
+            if (matchingEntry?['persons'] != null) {
+              List<dynamic> personsList = matchingEntry!['persons'] as List;
+              if (personsList.isNotEmpty) {
+                var p1 = personsList[0];
+                existingEntryDetails += '\n👤 Person 1:\n';
+                existingEntryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
+                existingEntryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
+              }
+              if (personsList.length > 1) {
+                var p2 = personsList[1];
+                existingEntryDetails += '\n👤 Person 2:\n';
+                existingEntryDetails += '  Details: ${p2['details'] ?? 'N/A'}\n';
+              }
+            }
+
+            if (matchingEntry?['notes'] != null && matchingEntry!['notes'].toString().isNotEmpty) {
+              existingEntryDetails += '\n📝 Notes: ${matchingEntry['notes']}\n';
+            }
+
+// ✅ Get serial number safely
+            final serialNo = matchingEntry?['serial_no'] ?? 0;
+
+// ✅ Show dialog with 2 options only (REMOVED OVERWRITE)
             final result = await showDialog<String>(
               context: context,
               barrierDismissible: false,
-              builder: (context) =>
-                  AlertDialog(
-                    title: const Text(
-                      '⚠️ Similar Entry Found!',
-                      style: TextStyle(color: Colors.orange,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18),
-                    ),
-                    content: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'An entry with the same Village, Name, and Job already exists:',
-                            style: TextStyle(fontWeight: FontWeight.bold,
-                                fontSize: 14),
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[50],
-                              border: Border.all(
-                                  color: Colors.orange, width: 2),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '📍 Village: ${matchingEntry?['village_name'] ??
-                                      'N/A'}',
-                                  style: const TextStyle(fontSize: 13,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '👤 Serial No: O${matchingEntry?['serial_no'] ??
-                                      '0'}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                                const SizedBox(height: 4),
-                                if (matchingEntry != null &&
-                                    matchingEntry['persons'] != null) ...[
-                                  Text(
-                                    '📝 Name: ${(matchingEntry['persons'] as List)
-                                        .isNotEmpty
-                                        ? matchingEntry['persons'][0]['name'] ??
-                                        'N/A'
-                                        : 'N/A'}',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  Text(
-                                    '💼 Job: ${(matchingEntry['persons'] as List)
-                                        .isNotEmpty
-                                        ? matchingEntry['persons'][0]['job'] ??
-                                        'N/A'
-                                        : 'N/A'}',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ],
-                                const SizedBox(height: 4),
-                                Text(
-                                  '💰 Amount: ₹${matchingEntry?['amount'] ??
-                                      '0'}',
-                                  style: const TextStyle(fontSize: 13,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'What would you like to do?',
-                            style: TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w600),
-                          ),
-                        ],
+              builder: (context) => AlertDialog(
+                title: const Text(
+                  '⚠️ Similar Entry Found!',
+                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'An entry with the same Village, Person 1 Name, and Job already exists in Serial No: O$serialNo',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, 'cancel'),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.grey[300],
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Existing Entry Details:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            decoration: TextDecoration.underline),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[50],
+                          border: Border.all(color: Colors.orange, width: 2),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Text(
-                          'CANCEL',
-                          style: TextStyle(color: Colors.black,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11),
+                        child: Text(
+                          existingEntryDetails,
+                          style: const TextStyle(fontSize: 12, height: 1.5),
                         ),
                       ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, 'new'),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.blue[100],
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        child: const Text(
-                          'NEW ENTRY',
-                          style: TextStyle(color: Colors.blue,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            Navigator.pop(
-                                context, 'overwrite:${matchingEntry!['id']}'),
-                        style: TextButton.styleFrom(
-                          backgroundColor: Colors.orange[100],
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        child: const Text(
-                          'OVERWRITE',
-                          style: TextStyle(color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11),
-                        ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Do you want to save this as a new entry anyway?',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'cancel'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.red[100],
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text(
+                      'NO, CANCEL',
+                      style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, 'new'),
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.green[100],
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    ),
+                    child: const Text(
+                      'YES, SAVE NEW',
+                      style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             );
 
             // Handle user choice
+            // ✅ FIXED: Handle user choice
             if (result == 'cancel') {
-              return; // Stop save operation
+              // User cancelled - stop save operation
+              return;
             } else if (result == 'new') {
-              // Remove this entry from grouped list and reload it into form
-              setState(() {
-                _groupedMois.remove(entry);
-
-                // Load entry data back into form
-                _phoneController.text = entry['phone'] ?? '';
-                _villageController.text = entry['village_name'] ?? '';
-                _livingPlaceController.text = entry['living_place'] ?? '';
-                _notesController.text = entry['notes'] ?? '';
-
-                var amountValue = entry['amount'];
-                if (amountValue is int) {
-                  _amountController.text = amountValue.toString();
-                } else if (amountValue is double) {
-                  _amountController.text = amountValue.toInt().toString();
-                }
-
-                _isUncle = entry['is_uncle'] ?? false;
-
-                if (entry['persons'] != null) {
-                  List<dynamic> personsList = entry['persons'] as List;
-                  if (personsList.isNotEmpty) {
-                    _person1Field1Controller.text =
-                        personsList[0]['name'] ?? '';
-                    _person1Field2Controller.text = personsList[0]['job'] ?? '';
-                  }
-                  if (personsList.length > 1) {
-                    _person2Controller.text = personsList[1]['details'] ?? '';
-                  }
-                }
-
-                // Clear group if empty
-                if (_groupedMois.isEmpty) {
-                  _currentGroupId = null;
-                  _lockedPaymentMethod = null;
-                }
-              });
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                      '✏️ Entry loaded back to form. Please modify it to make it different.'),
-                  backgroundColor: Colors.blue,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-
-              _phoneFocusNode.requestFocus();
-              return; // Stop save operation
+              // ✅ User confirmed to save as new entry - CONTINUE WITH SAVE
+              // Do nothing here, just continue with the save process below
+              print('✅ User confirmed to save duplicate entry - proceeding with save');
             } else if (result != null && result.startsWith('overwrite:')) {
               // Get the MOI ID to overwrite
               final moiIdToOverwrite = result.split(':')[1];
@@ -4141,20 +4071,38 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         return null;
       }
 
-      // ✅ FIXED: Build Person 2 display string BEFORE the dialog
-      String person2DisplayText = 'N/A';
+      // ✅ Build FULL existing entry details
+      String existingEntryDetails = '';
+      existingEntryDetails += '📍 Village: ${matchingEntry['village_name'] ?? 'N/A'}\n';
+      existingEntryDetails += '🏙️ Living Place: ${matchingEntry['living_place'] ?? 'N/A'}\n';
+      existingEntryDetails += '📞 Phone: ${matchingEntry['phone'] ?? 'N/A'}\n';
+      existingEntryDetails += '💰 Amount: ₹${matchingEntry['amount']}\n';
+      existingEntryDetails += '💳 Payment: ${matchingEntry['payment_method'] ?? 'N/A'}\n';
+      existingEntryDetails += '👤 Uncle: ${(matchingEntry['is_uncle'] ?? false) ? 'Yes' : 'No'}\n';
+
       if (matchingEntry['persons'] != null) {
-        final personsList = matchingEntry['persons'] as List;
+        List<dynamic> personsList = matchingEntry['persons'] as List;
+        if (personsList.isNotEmpty) {
+          var p1 = personsList[0];
+          existingEntryDetails += '\n👤 Person 1:\n';
+          existingEntryDetails += '  Name: ${p1['name'] ?? 'N/A'}\n';
+          existingEntryDetails += '  Job: ${p1['job'] ?? 'N/A'}\n';
+        }
         if (personsList.length > 1) {
-          final p2 = personsList[1];
-          final p2Details = p2['details'] ?? '';
-          if (p2Details.isNotEmpty) {
-            person2DisplayText = p2Details;
-          }
+          var p2 = personsList[1];
+          existingEntryDetails += '\n👤 Person 2:\n';
+          existingEntryDetails += '  Details: ${p2['details'] ?? 'N/A'}\n';
         }
       }
 
-      // Show dialog with 3 options
+      if (matchingEntry['notes'] != null && matchingEntry['notes'].toString().isNotEmpty) {
+        existingEntryDetails += '\n📝 Notes: ${matchingEntry['notes']}\n';
+      }
+
+      // ✅ FIXED: Get serial number safely
+      final serialNo = matchingEntry['serial_no'] ?? 0;
+
+      // ✅ Show dialog with 2 options only (REMOVED OVERWRITE)
       final result = await showDialog<String>(
         context: context,
         barrierDismissible: false,
@@ -4168,29 +4116,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'An entry with the same Village, Person 1 Name, and Job already exists:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    border: Border.all(color: Colors.blue, width: 1),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ℹ️ Person 2 details are optional and not used for matching.',
-                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.blue),
-                      ),
-                    ],
-                  ),
+                Text(
+                  'An entry with the same Village, Person 1 Name, and Job already exists in Serial No: O$serialNo',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                const Text(
+                  'Existing Entry Details:',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      decoration: TextDecoration.underline),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -4198,65 +4138,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     border: Border.all(color: Colors.orange, width: 2),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '📍 Village: ${matchingEntry?['village_name'] ?? 'N/A'}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '👤 Serial No: O${matchingEntry?['serial_no'] ?? '0'}',
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      const SizedBox(height: 4),
-                      // ✅ FIXED: Person 1 details
-                      if (matchingEntry != null && matchingEntry['persons'] != null) ...[
-                        Builder(
-                          builder: (context) {
-                            final personsList = matchingEntry!['persons'] as List;
-                            if (personsList.isNotEmpty) {
-                              final p1 = personsList[0];
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '📝 Person 1 Name: ${p1['name'] ?? 'N/A'}',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  Text(
-                                    '💼 Person 1 Job: ${p1['job'] ?? 'N/A'}',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ],
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ],
-                      // ✅ CRITICAL FIX: Person 2 - ALWAYS display with pre-computed text
-                      const SizedBox(height: 4),
-                      Text(
-                        '👥 Person 2: $person2DisplayText',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.deepOrange,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '💰 Amount: ₹${matchingEntry?['amount'] ?? '0'}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                      ),
-                    ],
+                  child: Text(
+                    existingEntryDetails,
+                    style: const TextStyle(fontSize: 12, height: 1.5),
                   ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
-                  'What would you like to do?',
+                  'Do you want to save this as a new entry anyway?',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ],
@@ -4266,34 +4155,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context, 'cancel'),
               style: TextButton.styleFrom(
-                backgroundColor: Colors.grey[300],
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                backgroundColor: Colors.red[100],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: const Text(
-                'CANCEL',
-                style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                'NO, CANCEL',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, 'new'),
               style: TextButton.styleFrom(
-                backgroundColor: Colors.blue[100],
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                backgroundColor: Colors.green[100],
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: const Text(
-                'NEW ENTRY',
-                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, 'overwrite:${matchingEntry!['id']}'),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.orange[100],
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-              child: const Text(
-                'OVERWRITE',
-                style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 12),
+                'YES, SAVE NEW',
+                style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12),
               ),
             ),
           ],
