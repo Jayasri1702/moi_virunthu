@@ -656,12 +656,12 @@ class _ExchangeDenominationScreenState
     required String eventId,
     required String phoneNumber,
     required bool toWhatsapp,
-    required int receiptNo,
+    required dynamic receiptNo,
   }) async {
     try {
       print('📱 ========== BACKEND SUBMISSION STARTED (Exchange) ==========');
       print('📱 Event ID: $eventId');
-      print('📱 Phone Number: $phoneNumber'); // Will be empty string
+      print('📱 Phone Number: ${phoneNumber.isEmpty ? "(empty - backend storage only)" : phoneNumber}');
       print('📱 PDF Path: ${pdfFile.path}');
       print('📱 to_whatsapp: $toWhatsapp'); // Will be false
 
@@ -678,10 +678,12 @@ class _ExchangeDenominationScreenState
 
       // Add form fields
       request.fields['event_id'] = eventId;
-      request.fields['phone_number'] = phoneNumber; // Empty string
-      request.fields['to_whatsapp'] = toWhatsapp.toString(); // 'false'
+      request.fields['phone_number'] = phoneNumber; // Can be empty string - backend will handle it
+      request.fields['to_whatsapp'] = toWhatsapp.toString(); // 'false' for exchanges
       request.fields['receipt_type'] = 'exchange';
       request.fields['receipt_no'] = receiptNo.toString();
+
+      print('📱 Sending request to backend...');
 
       // Add PDF file
       var pdfMultipart = await http.MultipartFile.fromPath(
@@ -695,15 +697,41 @@ class _ExchangeDenominationScreenState
       final streamedResponse = await request.send();
       final responseBody = await streamedResponse.stream.bytesToString();
 
+      print('📱 Response status: ${streamedResponse.statusCode}');
+      print('📱 Response body: $responseBody');
+
       if (streamedResponse.statusCode == 200) {
-        print('✅ SUCCESS: Exchange receipt submitted to backend');
+        print('✅ SUCCESS: Exchange receipt stored in backend');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Exchange receipt saved successfully'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       } else {
         print('❌ FAILED: Exchange receipt submission failed (${streamedResponse.statusCode})');
         print('Response: $responseBody');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Receipt saved but backend storage failed (${streamedResponse.statusCode})'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e, stackTrace) {
+      print('❌ ========== EXCEPTION ==========');
       print('❌ Error submitting exchange receipt to backend: $e');
-      print('Stack trace: $stackTrace');
+      print('❌ Stack trace: $stackTrace');
+      print('❌ ================================');
+
+      // Don't show error to user - this is a background operation
+      // The exchange was already saved successfully in the database
     }
   }
 

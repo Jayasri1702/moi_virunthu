@@ -2983,7 +2983,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 phone: entry['phone'],
                 notes: entry['notes'],
                 amount: entryAmount,
-                paymentMethod: _paymentMethod,
+                paymentMethod: entry['payment_method'] ?? 'CASH',
                 denominations: denominations,
                 customerName: _customerName,
                 city: _city,

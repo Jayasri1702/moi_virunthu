@@ -26,6 +26,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   double _totalAmount = 0.0;
   int _totalCount = 0;
 
+  String _paymentFilter = 'ALL'; // 'ALL', 'CASH', or 'OTHERS'
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -106,64 +108,61 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
   }
 
   void _filterMois(String query) {
-    if (query.isEmpty) {
-      setState(() {
-        _filteredMois = _mois;
-      });
-      return;
-    }
-
     setState(() {
-      _filteredMois = _mois.where((moi) {
-        String personsText = _getPersonsCompact(moi['persons']).toLowerCase();
-        String villageName = (moi['village_name'] ?? '').toLowerCase();
-        String phone = (moi['phone'] ?? '').toLowerCase();
+      // Start with all MOIs
+      List<Map<String, dynamic>> filtered = _mois;
+
+      // ✅ NEW: Apply payment method filter first
+      if (_paymentFilter == 'CASH') {
+        filtered = filtered.where((moi) => moi['payment_method'] == 'CASH').toList();
+      } else if (_paymentFilter == 'OTHERS') {
+        filtered = filtered.where((moi) => moi['payment_method'] != 'CASH').toList();
+      }
+
+      // Then apply search query filter
+      if (query.isNotEmpty) {
         String searchQuery = query.toLowerCase().trim();
 
-        // ✅ NEW: Check if search query is in serial number format (s:06 or S:06)
-        if (searchQuery.startsWith('s:')) {
-          // Extract the number after 's:'
-          String serialNumberStr = searchQuery.substring(2).trim();
+        filtered = filtered.where((moi) {
+          String personsText = _getPersonsCompact(moi['persons']).toLowerCase();
+          String villageName = (moi['village_name'] ?? '').toLowerCase();
+          String phone = (moi['phone'] ?? '').toLowerCase();
 
-          // Try to parse as integer
-          int? searchSerialNo = int.tryParse(serialNumberStr);
+          // Check if search query is in serial number format (s:06 or S:06)
+          if (searchQuery.startsWith('s:')) {
+            String serialNumberStr = searchQuery.substring(2).trim();
+            int? searchSerialNo = int.tryParse(serialNumberStr);
 
-          if (searchSerialNo != null) {
-            // Compare with MOI serial number
-            int moiSerialNo = moi['serial_no'] ?? 0;
-            return moiSerialNo == searchSerialNo;
+            if (searchSerialNo != null) {
+              int moiSerialNo = moi['serial_no'] ?? 0;
+              return moiSerialNo == searchSerialNo;
+            }
           }
 
-          // If parsing failed, fall through to regular search
-        }
+          // Check if search query is in amount format (a:500 or A:500)
+          if (searchQuery.startsWith('a:')) {
+            String amountStr = searchQuery.substring(2).trim();
+            double? searchAmount = double.tryParse(amountStr);
 
-        // ✅ NEW: Check if search query is in amount format (a:500 or A:500)
-        if (searchQuery.startsWith('a:')) {
-          // Extract the amount after 'a:'
-          String amountStr = searchQuery.substring(2).trim();
-
-          // Try to parse as number
-          double? searchAmount = double.tryParse(amountStr);
-
-          if (searchAmount != null) {
-            // Compare with MOI amount
-            double moiAmount = (moi['amount'] is int)
-                ? (moi['amount'] as int).toDouble()
-                : (moi['amount'] as double);
-            return moiAmount == searchAmount;
+            if (searchAmount != null) {
+              double moiAmount = (moi['amount'] is int)
+                  ? (moi['amount'] as int).toDouble()
+                  : (moi['amount'] as double);
+              return moiAmount == searchAmount;
+            }
           }
 
-          // If parsing failed, fall through to regular search
-        }
+          // Regular search
+          String serialNo = 'o${moi['serial_no'] ?? ''}'.toLowerCase();
 
-        // ✅ Regular search (existing logic)
-        String serialNo = 'o${moi['serial_no'] ?? ''}'.toLowerCase();
+          return personsText.contains(searchQuery) ||
+              villageName.contains(searchQuery) ||
+              phone.contains(searchQuery) ||
+              serialNo.contains(searchQuery);
+        }).toList();
+      }
 
-        return personsText.contains(searchQuery) ||
-            villageName.contains(searchQuery) ||
-            phone.contains(searchQuery) ||
-            serialNo.contains(searchQuery);
-      }).toList();
+      _filteredMois = filtered;
     });
   }
 
@@ -822,9 +821,160 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
+          // ✅ NEW: Payment Filter Radio Buttons
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  'Filter:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _paymentFilter = 'ALL';
+                              _filterMois(_searchController.text);
+                            });
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black, width: 2),
+                                  color: _paymentFilter == 'ALL' ? Colors.black : Colors.white,
+                                ),
+                                child: _paymentFilter == 'ALL'
+                                    ? const Center(
+                                  child: Icon(
+                                    Icons.circle,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                    : null,
+                              ),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'All',
+                                  style: TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _paymentFilter = 'CASH';
+                              _filterMois(_searchController.text);
+                            });
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black, width: 2),
+                                  color: _paymentFilter == 'CASH' ? Colors.black : Colors.white,
+                                ),
+                                child: _paymentFilter == 'CASH'
+                                    ? const Center(
+                                  child: Icon(
+                                    Icons.circle,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                    : null,
+                              ),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'Cash',
+                                  style: TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              _paymentFilter = 'OTHERS';
+                              _filterMois(_searchController.text);
+                            });
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black, width: 2),
+                                  color: _paymentFilter == 'OTHERS' ? Colors.black : Colors.white,
+                                ),
+                                child: _paymentFilter == 'OTHERS'
+                                    ? const Center(
+                                  child: Icon(
+                                    Icons.circle,
+                                    size: 10,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                    : null,
+                              ),
+                              const SizedBox(width: 6),
+                              const Flexible(
+                                child: Text(
+                                  'Others',
+                                  style: TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Search Box
           Container(
-            margin: const EdgeInsets.all(16),
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -843,7 +993,7 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
                   onPressed: () {
                     setState(() {
                       _searchController.clear();
-                      _filteredMois = _mois;
+                      _filterMois('');
                     });
                   },
                 )
@@ -913,6 +1063,8 @@ class _CollectionDetailsScreenState extends State<CollectionDetailsScreen> {
           ),
 
           const SizedBox(height: 16),
+
+          // Rest of your existing code continues here (List of MOIs)...
 
           // List of MOIs
           Expanded(
