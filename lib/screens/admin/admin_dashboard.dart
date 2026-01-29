@@ -210,8 +210,24 @@ class AdminDashboard extends StatelessWidget {
                             color: const Color(0xFF8F8F8F), // Purple highlight
                           ),
                         ),
+                        const SizedBox(width: 12),
                       ],
                     ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildGridButton(
+                      'Profit Dashboard',
+                      Icons.analytics,
+                          () => Navigator.pushNamed(context, '/admin/profit-dashboard'),
+                      color: const Color(0xFF8F8F8F),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(child: SizedBox()),
+                ],
+              ),
                     const SizedBox(height: 24),
                   ],
                 ),

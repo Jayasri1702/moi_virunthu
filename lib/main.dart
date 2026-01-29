@@ -21,6 +21,7 @@ import 'screens/operator/moi_receipt_preview_screen.dart';
 import 'screens/admin/correct_person_data_screen.dart';
 import 'screens/admin/cover_image_manager.dart';
 import 'screens/admin/splash_screen.dart'; // Add this import
+import 'screens/admin/profit_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +62,7 @@ class MyApp extends StatelessWidget {
         '/operator/moi-receipt-preview': (context) => const MoiReceiptPreviewScreen(),
         '/admin/correct-person-data': (context) => const CorrectPersonDataScreen(),
         '/admin/cover-image': (context) => const CoverImageManagerScreen(),
+        '/admin/profit-dashboard': (context) => const ProfitDashboardScreen(),
       },
     );
   }
