@@ -2955,19 +2955,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 entryAmount = int.tryParse(amountValue.toString()) ?? 0;
               }
 
-              // ✅ Clear form immediately (user can start typing)
-              if (mounted) {
-                await _clearFormCompletely();
-                _phoneFocusNode.requestFocus();
-                setState(() => _isPrinting = false);
-                if (_isCollectionDetailsEditPage) {
-                  Navigator.pop(context);  // Return to collection details
-                  _isCollectionDetailsEditPage = false;
-                }
-              }
 
               // ✅ Generate and print in background (async, won't block UI)
-              _generateAndPrintReceipt(
+              await _generateAndPrintReceipt(
                 serialNo: entry['serial_no'],
                 operatorName: operatorName,
                 eventDate: eventDetails['event_date'],
@@ -2995,16 +2985,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 venue: venue,
               );
 
+              // ✅ Don't return early - let receipt print first
               if (mounted) {
                 await _clearFormCompletely();
                 _phoneFocusNode.requestFocus();
-                setState(() => _isLoading = false);
-              }
-
-              if (_isCollectionDetailsEditPage) {
-                _isCollectionDetailsEditPage = false;
-                Navigator.pop(context);
-                return;
+                setState(() => _isPrinting = false);
+                if (_isCollectionDetailsEditPage) {
+                  Navigator.pop(context);  // Return to collection details
+                  _isCollectionDetailsEditPage = false;
+                }
               }
 
               return; // ✅ Exit immediately, don't wait for printing
@@ -3543,18 +3532,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             venue: venue,
           );
 
-          if (mounted) {
-            await _clearFormCompletely();
-            _phoneFocusNode.requestFocus();
-            setState(() => _isPrinting = false);
-            if (_isCollectionDetailsEditPage) {
-              Navigator.pop(context);  // Return to collection details
-              _isCollectionDetailsEditPage = false;
-            }
-          }
-
           // ✅ Print in background
-          _generateAndPrintReceipt(
+          await _generateAndPrintReceipt(
             serialNo: _serialNo!,
             operatorName: operatorName,
             eventDate: eventDetails['event_date'],
@@ -3580,6 +3559,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             eventTypeName: eventTypeName,
             venue: venue,
           );
+
+          if (mounted) {
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+            setState(() => _isPrinting = false);
+            if (_isCollectionDetailsEditPage) {
+              Navigator.pop(context);  // Return to collection details
+              _isCollectionDetailsEditPage = false;
+            }
+          }
         }
       }catch (e) {
         print('Error saving: $e');
