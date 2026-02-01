@@ -8,13 +8,88 @@ import 'package:pdf/pdf.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
+import 'dart:typed_data';
 
 class DenominationReceiptGenerator {
   // Cache for base64 logo
   static String? _cachedLogoBase64;
 
-// Cache for base64 font
+  // Cache for base64 font
   static String? _cachedFontBase64;
+
+  // ✅ Reusable WebView instance - initialized once and kept alive
+  static HeadlessInAppWebView? _webViewInstance;
+  static bool _isWebViewReady = false;
+  static bool _isInitializing = false;
+
+  // ✅ Initialize and warm up WebView once
+  static Future<void> _ensureWebViewReady() async {
+    // If already ready, return immediately
+    if (_isWebViewReady && _webViewInstance != null) {
+      return;
+    }
+
+    // If another call is initializing, wait for it
+    if (_isInitializing) {
+      while (_isInitializing) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+      return;
+    }
+
+    _isInitializing = true;
+
+    try {
+      // Create and warm up WebView with minimal HTML
+      final warmupHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>Warming up...</body>
+</html>
+''';
+
+      _webViewInstance = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: warmupHtml),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 100),
+        onLoadStop: (controller, url) async {
+          _isWebViewReady = true;
+          print('✅ WebView warmed up and ready');
+        },
+      );
+
+      await _webViewInstance!.run();
+
+      // Wait for initial warmup to complete
+      int attempts = 0;
+      while (!_isWebViewReady && attempts < 20) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        attempts++;
+      }
+
+      if (!_isWebViewReady) {
+        throw Exception('WebView warmup timeout');
+      }
+    } finally {
+      _isInitializing = false;
+    }
+  }
+
+  // ✅ Dispose WebView when no longer needed (call this on app dispose if needed)
+  static Future<void> disposeWebView() async {
+    if (_webViewInstance != null) {
+      await _webViewInstance!.dispose();
+      _webViewInstance = null;
+      _isWebViewReady = false;
+    }
+  }
 
 // Load and cache logo as base64
   static Future<String> _getLogoBase64() async {
@@ -67,15 +142,13 @@ class DenominationReceiptGenerator {
     required double verupaadu,
     required int peopleCount,
     required double totalOthersAmount,
-    // NEW PARAMETERS for withdrawal and exchange counts
     required Map<int, int> totalWithdrawalCounts,
     required Map<int, int> totalExchangeCounts,
-
   }) async {
     try {
-      final logoBase64 = await _getLogoBase64();
-      final fontBase64 = await _getFontBase64();
-      final htmlContent = _generateDenominationHtml(
+      // ✅ Reuse the same logic, just return only PDF
+      final result = await generateDenominationReceiptWithImage(
+        context: context,
         customerName: customerName,
         eventTypeName: eventTypeName,
         venue: venue,
@@ -93,106 +166,15 @@ class DenominationReceiptGenerator {
         totalOthersAmount: totalOthersAmount,
         totalWithdrawalCounts: totalWithdrawalCounts,
         totalExchangeCounts: totalExchangeCounts,
-        logoBase64: logoBase64,
-        fontBase64: fontBase64,
       );
 
-      final output = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'denomination_receipt_$timestamp.pdf';
-      final filePath = '${output.path}/$fileName';
-
-      File? generatedFile;
-      bool pdfGenerated = false;
-
-      HeadlessInAppWebView? headlessWebView;
-
-      headlessWebView = HeadlessInAppWebView(
-        initialData: InAppWebViewInitialData(data: htmlContent),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          useHybridComposition: true,
-        ),
-        initialSize: Size(302, 800),
-        onLoadStop: (controller, url) async {
-          try {
-            await Future.delayed(const Duration(milliseconds: 1500));
-
-            // Get the actual content height
-            final contentHeight = await controller.evaluateJavascript(
-                source: "document.body.scrollHeight"
-            );
-
-            int height = 800; // default
-            if (contentHeight != null) {
-              height = int.tryParse(contentHeight.toString()) ?? 800;
-            }
-
-            // Resize to actual content
-            await headlessWebView?.setSize(Size(302, height.toDouble()));
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            final screenshot = await controller.takeScreenshot();
-
-            if (screenshot != null) {
-              final pdf = pw.Document();
-              final image = pw.MemoryImage(screenshot);
-
-              // Calculate PDF height based on content
-              final pdfWidth = 80 * PdfPageFormat.mm;
-              final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
-
-              pdf.addPage(
-                pw.Page(
-                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
-                  build: (pw.Context context) {
-                    return pw.Image(image, fit: pw.BoxFit.fill);
-                  },
-                ),
-              );
-
-              final file = File(filePath);
-              await file.writeAsBytes(await pdf.save());
-              generatedFile = file;
-              pdfGenerated = true;
-              print('Denomination receipt PDF generated: $filePath');
-            }
-          } catch (e) {
-            print('Error generating denomination receipt PDF: $e');
-          } finally {
-            if (headlessWebView != null) {
-              await headlessWebView.dispose();
-            }
-          }
-        },
-        onConsoleMessage: (controller, consoleMessage) {
-          print('WebView Console: ${consoleMessage.message}');
-        },
-      );
-
-      await headlessWebView.run();
-
-      int attempts = 0;
-      while (attempts < 30 && !pdfGenerated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (pdfGenerated) {
-          final file = File(filePath);
-          if (await file.exists() && await file.length() > 0) {
-            generatedFile = file;
-            break;
-          }
-        }
-        attempts++;
-      }
-
-      return generatedFile;
+      return result?['pdf'] as File?;
     } catch (e) {
       print('Error in generateDenominationReceipt: $e');
       return null;
     }
   }
 
-  // ✅ NEW METHOD: Generate denomination receipt with image for thermal printing
   static Future<Map<String, dynamic>?> generateDenominationReceiptWithImage({
     required BuildContext context,
     required String customerName,
@@ -214,6 +196,9 @@ class DenominationReceiptGenerator {
     required Map<int, int> totalExchangeCounts,
   }) async {
     try {
+      // ✅ Ensure WebView is initialized and ready (no startup delay on subsequent calls)
+      await _ensureWebViewReady();
+
       final logoBase64 = await _getLogoBase64();
       final fontBase64 = await _getFontBase64();
 
@@ -246,96 +231,130 @@ class DenominationReceiptGenerator {
 
       File? generatedFile;
       Uint8List? screenshotBytes;
-      bool pdfGenerated = false;
 
-      HeadlessInAppWebView? headlessWebView;
+      // ✅ Use reusable WebView instance
+      if (_webViewInstance == null) {
+        throw Exception('WebView not initialized');
+      }
 
-      headlessWebView = HeadlessInAppWebView(
-        initialData: InAppWebViewInitialData(data: htmlContent),
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: true,
-          useHybridComposition: true,
-        ),
-        initialSize: Size(302, 800),
-        onLoadStop: (controller, url) async {
-          try {
-            await Future.delayed(const Duration(milliseconds: 1500));
+      final controller = await _webViewInstance!.webViewController;
+      if (controller == null) {
+        throw Exception('WebView controller not available');
+      }
 
-            final contentHeight = await controller.evaluateJavascript(
-                source: "document.body.scrollHeight"
-            );
-
-            int height = 800;
-            if (contentHeight != null) {
-              height = int.tryParse(contentHeight.toString()) ?? 800;
-            }
-
-            await headlessWebView?.setSize(Size(302, height.toDouble()));
-            await Future.delayed(const Duration(milliseconds: 500));
-
-            final screenshot = await controller.takeScreenshot();
-
-            if (screenshot != null) {
-              // ✅ Save screenshot bytes for thermal printer
-              screenshotBytes = screenshot;
-
-              final pdf = pw.Document();
-              final image = pw.MemoryImage(screenshot);
-
-              final pdfWidth = 80 * PdfPageFormat.mm;
-              final pdfHeight = (height / 302) * pdfWidth;
-
-              pdf.addPage(
-                pw.Page(
-                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
-                  build: (pw.Context context) {
-                    return pw.Image(image, fit: pw.BoxFit.fill);
-                  },
-                ),
-              );
-
-              final file = File(filePath);
-              await file.writeAsBytes(await pdf.save());
-              generatedFile = file;
-              pdfGenerated = true;
-              print('Denomination receipt generated: PDF + Image');
-            }
-          } catch (e) {
-            print('Error generating denomination receipt: $e');
-          } finally {
-            if (headlessWebView != null) {
-              await headlessWebView.dispose();
-            }
-          }
-        },
+      // ✅ Load new content into existing WebView
+      // ✅ CORRECT
+      await controller.loadData(
+        data: htmlContent,
+        mimeType: 'text/html',
+        encoding: 'utf-8',
       );
 
-      await headlessWebView.run();
+      // ✅ Wait for load to complete with deterministic checks (NO time-based delays)
+      bool loadComplete = false;
+      int loadAttempts = 0;
 
-      int attempts = 0;
-      while (attempts < 30 && !pdfGenerated) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (pdfGenerated) {
-          final file = File(filePath);
-          if (await file.exists() && await file.length() > 0) {
-            generatedFile = file;
-            break;
+      while (!loadComplete && loadAttempts < 30) {
+        try {
+          // Check if document is ready
+          final readyState = await controller.evaluateJavascript(
+              source: "document.readyState"
+          );
+
+          if (readyState == "complete") {
+            loadComplete = true;
+          } else {
+            await Future.delayed(const Duration(milliseconds: 100));
+            loadAttempts++;
           }
+        } catch (e) {
+          await Future.delayed(const Duration(milliseconds: 100));
+          loadAttempts++;
         }
-        attempts++;
       }
+
+      if (!loadComplete) {
+        throw Exception('WebView load timeout');
+      }
+
+      // ✅ CRITICAL: Wait for fonts to be fully loaded (replaces arbitrary delays)
+      print('⏳ Waiting for fonts to load...');
+      try {
+        await controller.evaluateJavascript(source: "document.fonts.ready");
+        print('✅ Fonts loaded');
+      } catch (e) {
+        print('⚠️ Font readiness check failed: $e');
+        // Fallback short delay if fonts.ready not supported
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      // ✅ Wait for layout to stabilize (ensures rendering is complete)
+      print('⏳ Waiting for layout to stabilize...');
+      await controller.evaluateJavascript(
+          source: "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
+      );
+      print('✅ Layout stabilized');
+
+      // ✅ Get actual content height (no arbitrary defaults)
+      final contentHeight = await controller.evaluateJavascript(
+          source: "document.body.scrollHeight"
+      );
+
+      int height = 800; // fallback
+      if (contentHeight != null) {
+        height = int.tryParse(contentHeight.toString()) ?? 800;
+      }
+
+      print('📏 Content height: $height px');
+
+      // ✅ Resize to actual content
+      await _webViewInstance!.setSize(Size(302, height.toDouble()));
+
+      // ✅ One more frame wait after resize to ensure paint is complete
+      await controller.evaluateJavascript(
+          source: "new Promise(resolve => requestAnimationFrame(resolve))"
+      );
+
+      // ✅ Take screenshot
+      print('📸 Taking screenshot...');
+      final screenshot = await controller.takeScreenshot();
+
+      if (screenshot == null) {
+        throw Exception('Failed to capture screenshot');
+      }
+
+      screenshotBytes = screenshot;
+
+      // ✅ Generate PDF from screenshot
+      final pdf = pw.Document();
+      final image = pw.MemoryImage(screenshot);
+
+      final pdfWidth = 80 * PdfPageFormat.mm;
+      final pdfHeight = (height / 302) * pdfWidth; // Maintain aspect ratio
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+          build: (pw.Context context) {
+            return pw.Image(image, fit: pw.BoxFit.fill);
+          },
+        ),
+      );
+
+      final file = File(filePath);
+      await file.writeAsBytes(await pdf.save());
+      generatedFile = file;
+
+      print('✅ Receipt generated: PDF + Image');
 
       // ✅ Return both PDF file and screenshot bytes
-      if (generatedFile != null && screenshotBytes != null) {
-        return {
-          'pdf': generatedFile,
-          'imageBytes': screenshotBytes,
-        };
-      }
+      return {
+        'pdf': generatedFile,
+        'imageBytes': screenshotBytes,
+      };
 
-      return null;
     } catch (e) {
-      print('Error in generateDenominationReceiptWithImage: $e');
+      print('❌ Error in generateDenominationReceiptWithImage: $e');
       return null;
     }
   }
