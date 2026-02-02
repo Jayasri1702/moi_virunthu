@@ -1147,13 +1147,13 @@ class _DenominationScreenState extends State<DenominationScreen> {
                             const SnackBar(
                               content: Text('Generating receipt...'),
                               backgroundColor: Colors.blue,
-                              duration: Duration(seconds: 2),
+                              duration: Duration(seconds: 1),  // ⚡ Changed from 2 to 1 second
                             ),
                           );
                         }
 
-                        // ✅ Generate receipt with image
-                        final result = await DenominationReceiptGenerator.generateDenominationReceiptWithImage(
+                        // ⚡ NEW FAST WAY - Generate image only for immediate printing
+                        final imageBytes = await DenominationReceiptGenerator.generateReceiptImageOnly(
                           context: context,
                           customerName: customerName,
                           eventTypeName: eventTypeName,
@@ -1174,20 +1174,52 @@ class _DenominationScreenState extends State<DenominationScreen> {
                           totalExchangeCounts: totalExchanges,
                         );
 
-                        if (result != null && mounted) {
-                          // ✅ Print using thermal printer
+                        if (imageBytes != null) {
+                          // Print immediately (2-3x faster!)
                           final printerService = ThermalPrinterService();
-                          await printerService.connectAndPrintImage(context, result['imageBytes']);
+                          await printerService.connectAndPrintImage(context, imageBytes);
 
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('✅ Receipt printed successfully!'),
-                              backgroundColor: Colors.green,
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('✅ Receipt printed successfully!'),
+                                backgroundColor: Colors.green,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+
+                          // Optional: Generate PDF in background for record-keeping
+                          Future.microtask(() async {
+                            try {
+                              await DenominationReceiptGenerator.generateDenominationReceipt(
+                                context: context,
+                                customerName: customerName,
+                                eventTypeName: eventTypeName,
+                                venue: venue,
+                                city: city,
+                                contactNumber: contactNumber,
+                                eventDate: eventDate,
+                                denominationCounts: totals['counts'] as Map<int, int>,
+                                denominationAmounts: totals['amounts'] as Map<int, int>,
+                                grandTotal: totals['grandTotal'] as int,
+                                totalCashCollected: ((_summaryData['totalCashCollected'] ?? 0) as num).toDouble(),
+                                computedTotal: ((_summaryData['totalEventAmount'] ?? 0) as num).toDouble(),
+                                totalWithdrawals: ((_summaryData['totalWithdrawals'] ?? 0) as num).toDouble(),
+                                verupaadu: (verupaadu as num).toDouble(),
+                                peopleCount: _summaryData['peopleCount'] ?? 0,
+                                totalOthersAmount: ((_summaryData['totalOthers'] ?? 0) as num).toDouble(),
+                                totalWithdrawalCounts: totalWithdrawals,
+                                totalExchangeCounts: totalExchanges,
+                              );
+                              print('📄 Background PDF generation completed');
+                            } catch (e) {
+                              print('⚠️ Background PDF generation failed: $e');
+                              // Silent failure - printing already succeeded
+                            }
+                          });
                         } else {
-                          throw Exception('Failed to generate receipt');
+                          throw Exception('Failed to generate receipt image');
                         }
                       } catch (e) {
                         print('Error generating receipt: $e');

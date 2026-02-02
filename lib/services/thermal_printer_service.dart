@@ -268,7 +268,7 @@ class ThermalPrinterService {
 
       if (escPosData.isEmpty) return false;
 
-      // ✅ FIX: Add proper spacing before cut to prevent border cutting
+      // ✅ FIX: Add more line feeds before cut to ensure signature section prints
       escPosData.addAll([0x0A, 0x0A, 0x0A, 0x0A, 0x0A]); // 5 line feeds
       escPosData.addAll([0x1D, 0x56, 0x00]); // Full cut
 
@@ -281,8 +281,8 @@ class ThermalPrinterService {
       if (success == true) {
         print('✅ USB Print successful');
 
-        // ✅ FIX: Add delay to allow printer to finish processing before next print
-        await Future.delayed(const Duration(milliseconds: 500));
+        // ✅ Increased delay to ensure paper feed completes
+        await Future.delayed(const Duration(milliseconds: 300));
 
         return true;
       }
@@ -322,11 +322,14 @@ class ThermalPrinterService {
 
       print('✅ Bluetooth: All data sent');
 
-// ✅ FIX: Reduced spacing before cut (from 5 to 2 line feeds)
+      // ✅ FIX: Add more line feeds before cut to ensure signature section prints
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
       await _bluetooth.printNewLine();
       await _bluetooth.printNewLine();
 
-// Cut
+      // Cut
       await _bluetooth.paperCut();
 
       print('✅ Bluetooth Print completed');

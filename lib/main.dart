@@ -22,6 +22,7 @@ import 'screens/admin/correct_person_data_screen.dart';
 import 'screens/admin/cover_image_manager.dart';
 import 'screens/admin/splash_screen.dart'; // Add this import
 import 'screens/admin/profit_dashboard_screen.dart';
+import 'services/session_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,14 +33,54 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // ✅ Update last active when app comes to foreground
+      SessionManager.updateLastActive();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Auth Starter',
       theme: ThemeData(primarySwatch: Colors.blue),
+      // ✅ Add gesture detector to track user interaction
+      builder: (context, child) {
+        return GestureDetector(
+          onTap: () {
+            // Update session on any tap
+            SessionManager.updateLastActive();
+          },
+          onPanDown: (_) {
+            // Update session on any scroll/drag
+            SessionManager.updateLastActive();
+          },
+          behavior: HitTestBehavior.translucent,
+          child: child,
+        );
+      },
       initialRoute: '/',
       routes: {
         '/': (context) => const SplashScreen(), // ✅ Changed

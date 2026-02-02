@@ -18,14 +18,14 @@ class DenominationReceiptGenerator {
   static String? _cachedFontBase64;
 
   // ✅ Reusable WebView instance - initialized once and kept alive
-  static HeadlessInAppWebView? _webViewInstance;
+  static HeadlessInAppWebView? _cachedWebView;
   static bool _isWebViewReady = false;
   static bool _isInitializing = false;
 
   // ✅ Initialize and warm up WebView once
   static Future<void> _ensureWebViewReady() async {
     // If already ready, return immediately
-    if (_isWebViewReady && _webViewInstance != null) {
+    if (_isWebViewReady && _cachedWebView != null) {
       return;
     }
 
@@ -52,7 +52,7 @@ class DenominationReceiptGenerator {
 </html>
 ''';
 
-      _webViewInstance = HeadlessInAppWebView(
+      _cachedWebView = HeadlessInAppWebView(
         initialData: InAppWebViewInitialData(data: warmupHtml),
         initialSettings: InAppWebViewSettings(
           javaScriptEnabled: true,
@@ -65,7 +65,7 @@ class DenominationReceiptGenerator {
         },
       );
 
-      await _webViewInstance!.run();
+      await _cachedWebView!.run();
 
       // Wait for initial warmup to complete
       int attempts = 0;
@@ -84,9 +84,9 @@ class DenominationReceiptGenerator {
 
   // ✅ Dispose WebView when no longer needed (call this on app dispose if needed)
   static Future<void> disposeWebView() async {
-    if (_webViewInstance != null) {
-      await _webViewInstance!.dispose();
-      _webViewInstance = null;
+    if (_cachedWebView != null) {
+      await _cachedWebView!.dispose();
+      _cachedWebView = null;
       _isWebViewReady = false;
     }
   }
@@ -233,11 +233,11 @@ class DenominationReceiptGenerator {
       Uint8List? screenshotBytes;
 
       // ✅ Use reusable WebView instance
-      if (_webViewInstance == null) {
+      if (_cachedWebView == null) {
         throw Exception('WebView not initialized');
       }
 
-      final controller = await _webViewInstance!.webViewController;
+      final controller = await _cachedWebView!.webViewController;
       if (controller == null) {
         throw Exception('WebView controller not available');
       }
@@ -250,50 +250,14 @@ class DenominationReceiptGenerator {
         encoding: 'utf-8',
       );
 
-      // ✅ Wait for load to complete with deterministic checks (NO time-based delays)
-      bool loadComplete = false;
-      int loadAttempts = 0;
+      // ✅ OPTIMIZED: Minimal wait with efficient checks (NO time-based delays)
+      print('⏳ Waiting for document and fonts...');
+      await controller.evaluateJavascript(source: "document.fonts.ready");
 
-      while (!loadComplete && loadAttempts < 30) {
-        try {
-          // Check if document is ready
-          final readyState = await controller.evaluateJavascript(
-              source: "document.readyState"
-          );
+      print('⏳ Waiting for layout...');
+      await controller.evaluateJavascript(source: "requestAnimationFrame(() => true)");
 
-          if (readyState == "complete") {
-            loadComplete = true;
-          } else {
-            await Future.delayed(const Duration(milliseconds: 100));
-            loadAttempts++;
-          }
-        } catch (e) {
-          await Future.delayed(const Duration(milliseconds: 100));
-          loadAttempts++;
-        }
-      }
-
-      if (!loadComplete) {
-        throw Exception('WebView load timeout');
-      }
-
-      // ✅ CRITICAL: Wait for fonts to be fully loaded (replaces arbitrary delays)
-      print('⏳ Waiting for fonts to load...');
-      try {
-        await controller.evaluateJavascript(source: "document.fonts.ready");
-        print('✅ Fonts loaded');
-      } catch (e) {
-        print('⚠️ Font readiness check failed: $e');
-        // Fallback short delay if fonts.ready not supported
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-
-      // ✅ Wait for layout to stabilize (ensures rendering is complete)
-      print('⏳ Waiting for layout to stabilize...');
-      await controller.evaluateJavascript(
-          source: "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))"
-      );
-      print('✅ Layout stabilized');
+      print('✅ Render complete');
 
       // ✅ Get actual content height (no arbitrary defaults)
       final contentHeight = await controller.evaluateJavascript(
@@ -308,16 +272,16 @@ class DenominationReceiptGenerator {
       print('📏 Content height: $height px');
 
       // ✅ Resize to actual content
-      await _webViewInstance!.setSize(Size(302, height.toDouble()));
+      await _cachedWebView!.setSize(Size(302, height.toDouble()));
 
-      // ✅ One more frame wait after resize to ensure paint is complete
-      await controller.evaluateJavascript(
-          source: "new Promise(resolve => requestAnimationFrame(resolve))"
-      );
-
-      // ✅ Take screenshot
+      // ✅ OPTIMIZED: Take screenshot immediately with optimized quality
       print('📸 Taking screenshot...');
-      final screenshot = await controller.takeScreenshot();
+      final screenshot = await controller.takeScreenshot(
+        screenshotConfiguration: ScreenshotConfiguration(
+          compressFormat: CompressFormat.JPEG,
+          quality: 85, // Optimized for thermal printers
+        ),
+      );
 
       if (screenshot == null) {
         throw Exception('Failed to capture screenshot');
@@ -358,6 +322,113 @@ class DenominationReceiptGenerator {
       return null;
     }
   }
+
+  // ✅ OPTIMIZED: Separate method for instant printing (image only, PDF in background)
+  static Future<Uint8List?> generateReceiptImageOnly({
+    required BuildContext context,
+    required String customerName,
+    required String eventTypeName,
+    required String venue,
+    required String city,
+    required String contactNumber,
+    required DateTime eventDate,
+    required Map<int, int> denominationCounts,
+    required Map<int, int> denominationAmounts,
+    required int grandTotal,
+    required double totalCashCollected,
+    required double computedTotal,
+    required double totalWithdrawals,
+    required double verupaadu,
+    required int peopleCount,
+    required double totalOthersAmount,
+    required Map<int, int> totalWithdrawalCounts,
+    required Map<int, int> totalExchangeCounts,
+  }) async {
+    try {
+      // ✅ Ensure WebView is initialized and ready
+      await _ensureWebViewReady();
+
+      final logoBase64 = await _getLogoBase64();
+      final fontBase64 = await _getFontBase64();
+
+      final htmlContent = _generateDenominationHtml(
+        customerName: customerName,
+        eventTypeName: eventTypeName,
+        venue: venue,
+        city: city,
+        contactNumber: contactNumber,
+        eventDate: eventDate,
+        denominationCounts: denominationCounts,
+        denominationAmounts: denominationAmounts,
+        grandTotal: grandTotal,
+        totalCashCollected: totalCashCollected,
+        computedTotal: computedTotal,
+        totalWithdrawals: totalWithdrawals,
+        verupaadu: verupaadu,
+        peopleCount: peopleCount,
+        totalOthersAmount: totalOthersAmount,
+        totalWithdrawalCounts: totalWithdrawalCounts,
+        totalExchangeCounts: totalExchangeCounts,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+      );
+
+      // ✅ Use reusable WebView instance
+      if (_cachedWebView == null) {
+        throw Exception('WebView not initialized');
+      }
+
+      final controller = await _cachedWebView!.webViewController;
+      if (controller == null) {
+        throw Exception('WebView controller not available');
+      }
+
+      // ✅ Load new content into existing WebView
+      await controller.loadData(
+        data: htmlContent,
+        mimeType: 'text/html',
+        encoding: 'utf-8',
+      );
+
+      // ✅ OPTIMIZED: Minimal wait with efficient checks
+      await controller.evaluateJavascript(source: "document.fonts.ready");
+      await controller.evaluateJavascript(source: "requestAnimationFrame(() => true)");
+
+      // ✅ Get actual content height
+      final contentHeight = await controller.evaluateJavascript(
+          source: "document.body.scrollHeight"
+      );
+
+      int height = 800;
+      if (contentHeight != null) {
+        height = int.tryParse(contentHeight.toString()) ?? 800;
+      }
+
+      // ✅ Resize to actual content
+      await _cachedWebView!.setSize(Size(302, height.toDouble()));
+
+      // ✅ OPTIMIZED: Take screenshot immediately with reduced quality for thermal printer
+      print('📸 Taking screenshot...');
+      final screenshot = await controller.takeScreenshot(
+        screenshotConfiguration: ScreenshotConfiguration(
+          compressFormat: CompressFormat.JPEG,
+          quality: 85, // Reduced quality - thermal printers don't need ultra-high res
+        ),
+      );
+
+      if (screenshot == null) {
+        throw Exception('Failed to capture screenshot');
+      }
+
+      print('✅ Receipt image generated (optimized for printing)');
+      return screenshot;
+
+    } catch (e) {
+      print('❌ Error in generateReceiptImageOnly: $e');
+      return null;
+    }
+  }
+
 
   // Show share dialog
   static void _showShareDialog(BuildContext context, File pdfFile) {
