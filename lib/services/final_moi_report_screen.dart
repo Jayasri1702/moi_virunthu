@@ -614,7 +614,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
     final canvas = Canvas(recorder);
     canvas.drawImage(background, Offset.zero, Paint());
 
-    void drawText(String text,
+    double drawText(String text,
         double x,
         double y,
         double fontSize, {
@@ -650,18 +650,22 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       }
 
       textPainter.paint(canvas, Offset(xPos, y));
+      return textPainter.height;
     }
 
     final titleFontSize = (width / 8).clamp(55.0, 110.0);
     final textFontSize = (width / 10).clamp(45.0, 95.0);
-    final lineHeight = (height * 0.10).clamp(90.0, 170.0);
 
-    double cursorY = height * 0.24;
+// Start position - adjusted to be higher
+    double cursorY = height * 0.28;
+
+// Reduced spacing to fit within bounds
+    final spacing = (height * 0.06).clamp(45.0, 80.0);
 
 // 1. TITLE (FIRST)
     final title = fields['Title'] ?? '';
     if (title.isNotEmpty) {
-      drawText(
+      final titleHeight = drawText(
         title,
         0,
         cursorY,
@@ -669,14 +673,14 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF0B4206),
-        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+        maxWidth: width * 0.9,
       );
-      cursorY += lineHeight * 2.7;
+      cursorY += titleHeight + spacing;
     }
 
 // 2. EVENT TYPE (SECOND)
     final eventType = fields['Event Type'] ?? 'MOI EVENT';
-    drawText(
+    final eventTypeHeight = drawText(
       eventType,
       0,
       cursorY,
@@ -684,14 +688,14 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
       align: TextAlign.center,
       fontWeight: FontWeight.bold,
       color: const Color(0xFF8B0000),
-      maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+      maxWidth: width * 0.9,
     );
-    cursorY += lineHeight * 2.7;
+    cursorY += eventTypeHeight + spacing;
 
 // 3. EVENT FOR (THIRD)
     final eventFor = fields['Event For'] ?? '';
     if (eventFor.isNotEmpty) {
-      drawText(
+      final eventForHeight = drawText(
         eventFor,
         0,
         cursorY,
@@ -699,9 +703,9 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF000C8C),
-        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+        maxWidth: width * 0.9,
       );
-      cursorY += lineHeight * 3.2;
+      cursorY += eventForHeight + spacing;
     }
 
 // 4. VENUE (FOURTH)
@@ -713,7 +717,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           ? 'இடம் : $venue, $city'
           : 'இடம் : ${venue.isNotEmpty ? venue : city}';
 
-      drawText(
+      final venueHeight = drawText(
         place,
         0,
         cursorY,
@@ -721,24 +725,29 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         align: TextAlign.center,
         fontWeight: FontWeight.bold,
         color: const Color(0xFF0000FF),
-        maxWidth: width * 0.9, // ADD: 90% of width for wrapping
+        maxWidth: width * 0.9,
       );
-      cursorY += lineHeight * 1.6;
+      cursorY += venueHeight + spacing;
     }
 
 // 5. EVENT DATE (FIFTH)
+    // 5. EVENT DATE (FIFTH) - Check boundary before drawing
     final eventDate = fields['Event Date'] ?? '';
     if (eventDate.isNotEmpty) {
-      drawText(
-        'நாள் : $eventDate',
-        0,
-        cursorY,
-        textFontSize * 0.9,
-        align: TextAlign.center,
-        fontWeight: FontWeight.w600,
-        color: const Color(0xFF0B4206),
-        maxWidth: width * 0.9,
-      );
+      // Ensure we don't go past 85% of height (stay within safe area)
+      final maxY = height * 0.85;
+      if (cursorY < maxY) {
+        drawText(
+          'நாள் : $eventDate',
+          0,
+          cursorY,
+          textFontSize * 0.85,
+          align: TextAlign.center,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF0B4206),
+          maxWidth: width * 0.9,
+        );
+      }
     }
 
     final picture = recorder.endRecording();
