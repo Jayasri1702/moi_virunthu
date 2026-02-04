@@ -37,6 +37,7 @@ class SessionManager {
   }
 
   /// Check if session is valid (not expired)
+  /// Check if session is valid (not expired)
   static Future<bool> isSessionValid() async {
     final prefs = await SharedPreferences.getInstance();
     final lastActive = prefs.getInt(_lastActiveKey);
@@ -54,7 +55,7 @@ class SessionManager {
 
     if (isValid) {
       print('✅ Session valid (${difference.inMinutes} mins old)');
-      await updateLastActive(); // Refresh session
+      // ✅ DON'T auto-refresh here - let the app control when to refresh
     } else {
       print('❌ Session expired (${difference.inMinutes} mins old)');
     }
