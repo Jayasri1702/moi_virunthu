@@ -11,7 +11,7 @@ import 'dart:convert';
 class MoiReceiptGenerator {
 
   // Format number with commas (Indian numbering system)
-  static String _formatAmount(num amount) {
+  static String formatAmount(num amount) {
     final roundedAmount = amount.round();
     final str = roundedAmount.toString();
 
@@ -39,7 +39,7 @@ class MoiReceiptGenerator {
   static String? _cachedLogoBase64;
 
   // Load and cache logo as base64
-  static Future<String> _getLogoBase64() async {
+  static Future<String> getLogoBase64() async {
     if (_cachedLogoBase64 != null) {
       return _cachedLogoBase64!;
     }
@@ -59,7 +59,7 @@ class MoiReceiptGenerator {
   static String? _cachedFontBase64;
 
 // Load and cache font as base64
-  static Future<String> _getFontBase64() async {
+  static Future<String> getFontBase64() async {
     if (_cachedFontBase64 != null) {
       return _cachedFontBase64!;
     }
@@ -103,12 +103,12 @@ class MoiReceiptGenerator {
     String? venue,
   }) async {
     try {
-      final logoBase64 = await _getLogoBase64();
-      final fontBase64 = await _getFontBase64();
+      final logoBase64 = await getLogoBase64();
+      final fontBase64 = await getFontBase64();
 
       // Use different template based on payment method
       final htmlContent = paymentMethod == 'CASH'
-          ? _generateSingleMoiHtml(
+          ? generateSingleMoiHtml(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -134,7 +134,7 @@ class MoiReceiptGenerator {
         eventTypeName: eventTypeName,
         venue: venue,
       )
-          : _generateSingleMoiHtmlOthers(
+          : generateSingleMoiHtmlOthers(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -364,13 +364,13 @@ class MoiReceiptGenerator {
     String? notes,
   }) async {
     try {
-      final logoBase64 = await _getLogoBase64();
-      final fontBase64 = await _getFontBase64();
+      final logoBase64 = await getLogoBase64();
+      final fontBase64 = await getFontBase64();
 
       bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
 
       final htmlContent = hasOthersPayment
-          ? _generateGroupMoiHtmlOthers(
+          ? generateGroupMoiHtmlOthers(
         groupId: groupId,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -388,7 +388,7 @@ class MoiReceiptGenerator {
         venue: venue,
         notes: notes,
       )
-          : _generateGroupMoiHtml(
+          : generateGroupMoiHtml(
         groupId: groupId,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -538,12 +538,12 @@ class MoiReceiptGenerator {
   }) async {
     try {
 
-      final logoBase64 = await _getLogoBase64();
-      final fontBase64 = await _getFontBase64();
+      final logoBase64 = await getLogoBase64();
+      final fontBase64 = await getFontBase64();
 
       // Use different template based on payment method
       final htmlContent = paymentMethod == 'CASH'
-          ? _generateSingleMoiHtml(
+          ? generateSingleMoiHtml(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -569,7 +569,7 @@ class MoiReceiptGenerator {
         venue: venue,
           notes: notes,
       )
-          : _generateSingleMoiHtmlOthers(
+          : generateSingleMoiHtmlOthers(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -688,7 +688,7 @@ class MoiReceiptGenerator {
   }
 
   // HTML template for single MOI receipt (CASH)
-  static String _generateSingleMoiHtml({
+  static String generateSingleMoiHtml({
     required int serialNo,
     required String operatorName,
     required DateTime eventDate,
@@ -1077,7 +1077,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 
 <div class="amount-label">தொகை</div>
 
-<div class="amount">₹${_formatAmount(amount)}</div>
+<div class="amount">₹${formatAmount(amount)}</div>
   
   ${denomTable.isNotEmpty ? '<div class="table-title">நோட்டு விபரம்</div>' : ''}
   ${denomTable.isNotEmpty ? '<table>$denomTable</table>' : ''}
@@ -1100,7 +1100,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
   }
 
   // HTML template for single MOI receipt (OTHERS - Cheque/Advance/UPI)
-  static String _generateSingleMoiHtmlOthers({
+  static String generateSingleMoiHtmlOthers({
     required int serialNo,
     required String operatorName,
     required DateTime eventDate,
@@ -1413,7 +1413,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 
 <div class="amount-label">தொகை</div>
 
-<div class="amount">₹${_formatAmount(amount)}</div>
+<div class="amount">₹${formatAmount(amount)}</div>
   
   <div class="payment-method-box">Cheque / Advance / UPI</div>
   
@@ -1515,6 +1515,220 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     return generatedFiles;
   }
 
+  // Add this NEW method to MoiReceiptGenerator class
+  static Future<Uint8List?> generateReceiptImageOnly({
+    required String htmlContent,
+  }) async {
+    try {
+      Uint8List? imageBytes;
+      bool imageGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1000)); // Reduced from 1500ms
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 300)); // Reduced from 500ms
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              imageBytes = screenshot;
+              imageGenerated = true;
+              print('✅ Image generated: ${imageBytes!.length} bytes');
+            }
+          } catch (e) {
+            print('❌ Error generating image: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // Wait for image generation (max 15 seconds)
+      int attempts = 0;
+      while (attempts < 30 && !imageGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (imageGenerated) break;
+        attempts++;
+      }
+
+      return imageBytes;
+    } catch (e) {
+      print('❌ Error in generateReceiptImageOnly: $e');
+      return null;
+    }
+  }
+
+  // Add this method after generateReceiptImageOnly()
+
+  static Future<Uint8List?> generateGroupReceiptImageOnly({
+    required String htmlContent,
+  }) async {
+    try {
+      print('🖨️ Generating GROUP receipt image (no PDF) for thermal printer...');
+
+      Uint8List? imageBytes;
+      bool imageGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            // ✅ Optimized timing for group receipts: 1000ms (reduced from 1500ms)
+            await Future.delayed(const Duration(milliseconds: 1000));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+
+            // ✅ Optimized resize delay: 300ms (reduced from 500ms)
+            await Future.delayed(const Duration(milliseconds: 300));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              imageBytes = screenshot;
+              imageGenerated = true;
+              print('✅ GROUP receipt image generated successfully (${screenshot.length} bytes)');
+            }
+          } catch (e) {
+            print('❌ Error generating GROUP receipt image: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // Wait for image generation (max 15 seconds)
+      int attempts = 0;
+      while (attempts < 30 && !imageGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (imageGenerated) break;
+        attempts++;
+      }
+
+      if (!imageGenerated) {
+        print('❌ GROUP receipt image generation timeout');
+        return null;
+      }
+
+      return imageBytes;
+    } catch (e) {
+      print('❌ Error in generateGroupReceiptImageOnly: $e');
+      return null;
+    }
+  }
+
+// Add this method after generateGroupReceiptImageOnly()
+
+  static Future<Uint8List?> generateSplitReceiptImageOnly({
+    required String htmlContent,
+  }) async {
+    try {
+      print('🖨️ Generating SPLIT receipt image (no PDF) for thermal printer...');
+
+      Uint8List? imageBytes;
+      bool imageGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1000));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 300));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              imageBytes = screenshot;
+              imageGenerated = true;
+              print('✅ SPLIT receipt image generated successfully');
+            }
+          } catch (e) {
+            print('❌ Error generating SPLIT receipt image: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !imageGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (imageGenerated) break;
+        attempts++;
+      }
+
+      return imageBytes;
+    } catch (e) {
+      print('❌ Error in generateSplitReceiptImageOnly: $e');
+      return null;
+    }
+  }
+
   // Generate consolidated group MOI receipt
   static Future<File?> generateGroupMoiReceipt({
     required BuildContext context,
@@ -1536,13 +1750,13 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
   }) async {
     try {
 
-      final logoBase64 = await _getLogoBase64();
-      final fontBase64 = await _getFontBase64();
+      final logoBase64 = await getLogoBase64();
+      final fontBase64 = await getFontBase64();
 
       bool hasOthersPayment = groupEntries.any((entry) => entry['payment_method'] != 'CASH');
 
       final htmlContent = hasOthersPayment
-          ? _generateGroupMoiHtmlOthers(
+          ? generateGroupMoiHtmlOthers(
         groupId: groupId,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -1560,7 +1774,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
         venue: venue,
         notes: notes,
       )
-          : _generateGroupMoiHtml(
+          : generateGroupMoiHtml(
         groupId: groupId,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -1673,7 +1887,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
     }
   }
 
-  static String _generateGroupMoiHtml({
+  static String generateGroupMoiHtml({
     required int groupId,
     required String operatorName,
     required DateTime eventDate,
@@ -1751,7 +1965,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
 
 <div class="amount-label">தொகை</div>
-      <div class="entry-amount">₹${_formatAmount(amount)}</div>
+      <div class="entry-amount">₹${formatAmount(amount)}</div>
     </div>
     <div class="divider"></div>
   ''';
@@ -2105,7 +2319,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
   
   <div class="total-section">
     <div class="total-label">மொத்த தொகை</div>
-    <div class="total-amount">₹${_formatAmount(totalAmount)}</div>
+    <div class="total-amount">₹${formatAmount(totalAmount)}</div>
   </div>
   
   ${denomTable.isNotEmpty ? '<div class="table-title">நோட்டு விபரம்</div>' : ''}
@@ -2128,7 +2342,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
 ''';
   }
 
-  static String _generateGroupMoiHtmlOthers({
+  static String generateGroupMoiHtmlOthers({
     required int groupId,
     required String operatorName,
     required DateTime eventDate,
@@ -2205,7 +2419,7 @@ ${phone != null && phone.isNotEmpty ? '<div class="phone">($phone)</div>' : ''}
 ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="notes-label">குறிப்பு:</div><div class="notes-text">$notes</div></div>' : ''}
 
 <div class="amount-label">தொகை</div>
-      <div class="entry-amount">₹${_formatAmount(amount)}</div>
+      <div class="entry-amount">₹${formatAmount(amount)}</div>
     </div>
     <div class="divider"></div>
   ''';
@@ -2487,7 +2701,7 @@ ${notes != null && notes.isNotEmpty ? '<div class="notes-section"><div class="no
   
   <div class="total-section">
     <div class="total-label">மொத்த தொகை</div>
-   <div class="total-amount">₹${_formatAmount(totalAmount)}</div>
+   <div class="total-amount">₹${formatAmount(totalAmount)}</div>
   </div>
   
   <div class="payment-method-box">Cheque / Advance / UPI</div>

@@ -7,6 +7,11 @@ import 'package:http/http.dart' as http;
 import 'dart:io';
 import '../../services/thermal_printer_service.dart';
 import 'package:flutter/foundation.dart';  // ✅ Add this for compute()
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'dart:async' show unawaited;
 
 class CollectMoiScreen extends StatefulWidget {
   const CollectMoiScreen({super.key});
@@ -3634,16 +3639,19 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🖨️ Generating receipt in background...'),
+            content: Text('🖨️ Printing...'),
             backgroundColor: Colors.blue,
             duration: Duration(seconds: 1),
           ),
         );
       }
 
-      // Generate receipt (heavy operation)
-      final result = await MoiReceiptGenerator.generateSingleMoiReceiptWithImage(
-        context: mounted ? context : null,
+      // ✅ STEP 1: Generate HTML once
+      final logoBase64 = await MoiReceiptGenerator.getLogoBase64();
+      final fontBase64 = await MoiReceiptGenerator.getFontBase64();
+
+      final htmlContent = paymentMethod == 'CASH'
+          ? MoiReceiptGenerator.generateSingleMoiHtml(
         serialNo: serialNo,
         operatorName: operatorName,
         eventDate: eventDate,
@@ -3654,13 +3662,40 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         person1Job: person1Job,
         person2Details: person2Details,
         phone: phone,
-        notes: notes,
         amount: amount,
         paymentMethod: paymentMethod,
         denominations: denominations,
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
+        isUncle: isUncle,
+        eventTitle: eventTitle,
+        eventFor: eventFor,
+        eventTypeName: eventTypeName,
+        venue: venue,
+        notes: notes,
+      )
+          : MoiReceiptGenerator.generateSingleMoiHtmlOthers(
+        serialNo: serialNo,
+        operatorName: operatorName,
+        eventDate: eventDate,
+        eventTime: eventTime,
+        villageName: villageName,
+        livingPlace: livingPlace,
+        person1Name: person1Name,
+        person1Job: person1Job,
+        notes: notes,
+        person2Details: person2Details,
+        phone: phone,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        customerName: customerName,
+        city: city,
+        customerPhone: customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
         isUncle: isUncle,
         eventTitle: eventTitle,
         eventFor: eventFor,
@@ -3668,27 +3703,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         venue: venue,
       );
 
-      if (result != null && mounted) {
-        // Print
+      // ✅ STEP 2: Generate image for printing (FAST)
+      print('🖨️ Generating image for thermal printer...');
+      final imageBytes = await MoiReceiptGenerator.generateReceiptImageOnly(
+        htmlContent: htmlContent,
+      );
+
+      if (imageBytes != null && mounted) {
+        // ✅ STEP 3: Print immediately (NO PDF conversion)
+        print('🖨️ Sending to thermal printer...');
         final printerService = ThermalPrinterService();
-        await printerService.connectAndPrintImage(context, result['imageBytes']);
-        // await printerService.connectAndPrintImage(context, result['imageBytes']);
+        await printerService.connectAndPrintImage(context, imageBytes);
 
+        print('✅ Print job sent to thermal printer');
 
-
-        // Send WhatsApp (fire and forget)
-        // ✅ ALWAYS send to backend (fire and forget)
-        _sendReceiptToWhatsApp(
-          result['pdf'],
-          'mois',
-          phoneNumbers: phone != null && phone.isNotEmpty ? [phone] : [],
-          receiptNo: serialNo,
+// ✅ STEP 4: Generate PDF in background (NO DELAY before this)
+        unawaited(_generatePdfForCloud(
+          htmlContent: htmlContent,
+          serialNo: serialNo,
+          phone: phone,
         ).catchError((e) {
-          print('Backend/WhatsApp send error: $e');
-        });
+          print('❌ Background PDF generation error: $e');
+        }));
+      } else {
+        throw Exception('Failed to generate receipt image');
       }
     } catch (e) {
-      print('Error in background receipt generation: $e');
+      print('❌ Error in _generateAndPrintReceipt: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -3702,14 +3743,116 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
 
+
+
+// ✅ NEW: Background PDF generation for cloud storage
+  Future<void> _generatePdfForCloud({
+    required String htmlContent,
+    required int serialNo,
+    String? phone,
+  }) async {
+    try {
+      print('☁️ Generating PDF for cloud storage in background...');
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_single_${serialNo}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? pdfFile;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              pdfFile = file;
+              pdfGenerated = true;
+              print('✅ PDF generated for cloud: $filePath');
+            }
+          } catch (e) {
+            print('❌ Error generating PDF: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // Wait for PDF generation
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) break;
+        attempts++;
+      }
+
+      // ✅ Send to cloud if PDF was generated
+      if (pdfFile != null) {
+        await _sendReceiptToWhatsApp(
+          pdfFile!,
+          'mois',
+          phoneNumbers: phone != null && phone.isNotEmpty ? [phone] : [],
+          receiptNo: serialNo,
+        );
+        print('✅ PDF sent to cloud storage');
+      }
+    } catch (e) {
+      print('❌ Error in background PDF generation: $e');
+    }
+  }
+
   Future<void> _generateSplitGroupReceipts() async {
     setState(() => _isLoading = true);
 
     try {
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();  // Already exists
+      final eventDetails = await _getEventDetails();
 
-// ADD THIS - fetch event title, type name, venue
       final eventResponse = await _supabase
           .from('events')
           .select('title, venue, event_types(name)')
@@ -3726,11 +3869,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           SnackBar(
             content: Text('Generating ${_groupedMois.length} receipts...'),
             backgroundColor: Colors.blue,
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
 
+      // Prepare entries with denominations
       List<Map<String, dynamic>> entriesWithDenoms = [];
       for (var entry in _groupedMois) {
         Map<String, dynamic> entryData = Map.from(entry);
@@ -3740,44 +3884,124 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         entriesWithDenoms.add(entryData);
       }
 
-      final files = await MoiReceiptGenerator.generateSplitGroupReceipts(
-        context: context,
-        operatorName: operatorName,
-        eventDate: eventDetails['event_date'],
-        eventTime: eventDetails['event_time'],
-        groupEntries: entriesWithDenoms,
-        customerName: _customerName, //
-        city: _city, //
-        customerPhone: _customerPhone,
-        eventTitle: eventTitle,
-        eventFor: eventFor,
-        eventTypeName: eventTypeName,
-        venue: venue,
-      );
+      final logoBase64 = await MoiReceiptGenerator.getLogoBase64();
+      final fontBase64 = await MoiReceiptGenerator.getFontBase64();
 
-      if (files.isNotEmpty && mounted) {
-        final printerService = ThermalPrinterService();
+      // ✅ Generate and print each receipt (FAST path)
+      final printerService = ThermalPrinterService();
 
-        // Print each receipt
-        for (int i = 0; i < files.length; i++) {
-          await printerService.connectAndPrint(context, files[i]);
-          // await printerService.connectAndPrint(context, files[i]);
+      for (int i = 0; i < entriesWithDenoms.length; i++) {
+        final entry = entriesWithDenoms[i];
 
-          // Send to WhatsApp
-          if (i < entriesWithDenoms.length) {
-            String? phone = entriesWithDenoms[i]['phone'];
-            if (phone != null && phone.isNotEmpty) {
-              await _sendReceiptToWhatsApp(
-                  files[i],
-                  'mois',
-                  phoneNumbers: [phone],
-                  receiptNo: entriesWithDenoms[i]['serial_no']
-              );
-            }
+        // Parse persons data
+        String? person1Name;
+        String? person1Job;
+        String? person2Details;
+        if (entry['persons'] != null) {
+          List<dynamic> personsList = entry['persons'] as List;
+          if (personsList.isNotEmpty) {
+            person1Name = personsList[0]['name'];
+            person1Job = personsList[0]['job'];
+          }
+          if (personsList.length > 1) {
+            person2Details = personsList[1]['details'];
           }
         }
-      }else {
-        throw Exception('Failed to generate receipts');
+
+        int entryAmount = 0;
+        var amountValue = entry['amount'];
+        if (amountValue is int) {
+          entryAmount = amountValue;
+        } else if (amountValue is double) {
+          entryAmount = amountValue.toInt();
+        } else if (amountValue != null) {
+          entryAmount = int.tryParse(amountValue.toString()) ?? 0;
+        }
+
+        // ✅ STEP 1: Generate HTML for this entry
+        final htmlContent = entry['payment_method'] == 'CASH'
+            ? MoiReceiptGenerator.generateSingleMoiHtml(
+          serialNo: entry['serial_no'],
+          operatorName: operatorName,
+          eventDate: eventDetails['event_date'],
+          eventTime: eventDetails['event_time'],
+          villageName: entry['village_name'],
+          livingPlace: entry['living_place'],
+          person1Name: person1Name,
+          person1Job: person1Job,
+          person2Details: person2Details,
+          phone: entry['phone'],
+          amount: entryAmount,
+          paymentMethod: entry['payment_method'],
+          denominations: entry['denominations'],
+          customerName: _customerName,
+          city: _city,
+          customerPhone: _customerPhone,
+          logoBase64: logoBase64,
+          fontBase64: fontBase64,
+          isUncle: entry['is_uncle'] ?? false,
+          eventTitle: eventTitle,
+          eventFor: eventFor,
+          eventTypeName: eventTypeName,
+          venue: venue,
+          notes: entry['notes'],
+        )
+            : MoiReceiptGenerator.generateSingleMoiHtmlOthers(
+          serialNo: entry['serial_no'],
+          operatorName: operatorName,
+          eventDate: eventDetails['event_date'],
+          eventTime: eventDetails['event_time'],
+          villageName: entry['village_name'],
+          livingPlace: entry['living_place'],
+          person1Name: person1Name,
+          person1Job: person1Job,
+          person2Details: person2Details,
+          phone: entry['phone'],
+          amount: entryAmount,
+          paymentMethod: entry['payment_method'],
+          customerName: _customerName,
+          city: _city,
+          customerPhone: _customerPhone,
+          logoBase64: logoBase64,
+          fontBase64: fontBase64,
+          isUncle: entry['is_uncle'] ?? false,
+          eventTitle: eventTitle,
+          eventFor: eventFor,
+          eventTypeName: eventTypeName,
+          venue: venue,
+          notes: entry['notes'],
+        );
+
+        // ✅ STEP 2: Generate image for printing (FAST)
+        print('🖨️ Generating SPLIT receipt ${i + 1}/${entriesWithDenoms.length}...');
+        final imageBytes = await MoiReceiptGenerator.generateSplitReceiptImageOnly(
+          htmlContent: htmlContent,
+        );
+
+        if (imageBytes != null && mounted) {
+          // ✅ STEP 3: Print immediately
+          await printerService.connectAndPrintImage(context, imageBytes);
+          print('✅ SPLIT receipt ${i + 1} printed');
+
+          // ✅ STEP 4: Generate PDF in background (PARALLEL)
+          _generateSplitPdfForCloud(
+            htmlContent: htmlContent,
+            serialNo: entry['serial_no'],
+            phone: entry['phone'],
+          ).catchError((e) {
+            print('❌ Background SPLIT PDF ${i + 1} error: $e');
+          });
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${entriesWithDenoms.length} receipts printed'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       print('Error generating split receipts: $e');
@@ -3791,6 +4015,106 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ NEW: Background PDF generation for SPLIT receipts
+  Future<void> _generateSplitPdfForCloud({
+    required String htmlContent,
+    required int serialNo,
+    String? phone,
+  }) async {
+    try {
+      print('☁️ Generating SPLIT PDF for serial $serialNo in background...');
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_split_${serialNo}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? pdfFile;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              pdfFile = file;
+              pdfGenerated = true;
+              print('✅ SPLIT PDF generated for serial $serialNo');
+            }
+          } catch (e) {
+            print('❌ Error generating SPLIT PDF for serial $serialNo: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) break;
+        attempts++;
+      }
+
+      // ✅ Send to cloud if PDF was generated
+      if (pdfFile != null) {
+        await _sendReceiptToWhatsApp(
+          pdfFile!,
+          'mois',
+          phoneNumbers: phone != null && phone.isNotEmpty ? [phone] : [],
+          receiptNo: serialNo,
+        );
+        print('✅ SPLIT PDF for serial $serialNo sent to cloud');
+      }
+    } catch (e) {
+      print('❌ Error in background SPLIT PDF generation for serial $serialNo: $e');
     }
   }
 
@@ -4125,15 +4449,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-// ✅ NEW: Generate consolidated group receipt
   Future<void> _generateConsolidatedGroupReceipt() async {
     setState(() => _isLoading = true);
 
     try {
       final operatorName = await _getOperatorName();
-      final eventDetails = await _getEventDetails();  // Already exists
+      final eventDetails = await _getEventDetails();
 
-// ADD THIS - fetch event title, type name, venue
       final eventResponse = await _supabase
           .from('events')
           .select('title, venue, event_types(name)')
@@ -4147,14 +4469,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       double totalAmount = 0.0;
       Map<int, int> totalDenominations = {
-        500: 0,
-        200: 0,
-        100: 0,
-        50: 0,
-        20: 0,
-        10: 0,
-        5: 0,
-        1: 0,
+        500: 0, 200: 0, 100: 0, 50: 0, 20: 0, 10: 0, 5: 0, 1: 0,
       };
 
       for (var entry in _groupedMois) {
@@ -4171,8 +4486,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           final denoms = await _getDenominations(entry['id']);
           if (denoms != null) {
             denoms.forEach((denom, count) {
-              totalDenominations[denom] =
-                  (totalDenominations[denom] ?? 0) + count;
+              totalDenominations[denom] = (totalDenominations[denom] ?? 0) + count;
             });
           }
         }
@@ -4183,75 +4497,56 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SnackBar(
             content: Text('Generating group receipt...'),
             backgroundColor: Colors.blue,
-            duration: Duration(seconds: 2),
+            duration: Duration(seconds: 1),
           ),
         );
       }
 
-      // ✅ STEP 4: Update _generateConsolidatedGroupReceipt method (around line 1420)
+      // ✅ STEP 1: Generate HTML once (reused for both paths)
+      final logoBase64 = await MoiReceiptGenerator.getLogoBase64();
+      final fontBase64 = await MoiReceiptGenerator.getFontBase64();
 
-      final file = await MoiReceiptGenerator.generateGroupMoiReceipt(
-        context: context,
+      final htmlContent = MoiReceiptGenerator.generateGroupMoiHtml(
         groupId: _currentGroupId!,
         operatorName: operatorName,
         eventDate: eventDetails['event_date'],
         eventTime: eventDetails['event_time'],
         groupEntries: _groupedMois,
         totalAmount: totalAmount,
-        totalDenominations: totalDenominations.values.any((v) => v > 0)
-            ? totalDenominations
-            : null,
+        totalDenominations: totalDenominations.values.any((v) => v > 0) ? totalDenominations : null,
         customerName: _customerName,
         city: _city,
         customerPhone: _customerPhone,
+        logoBase64: logoBase64,
+        fontBase64: fontBase64,
         eventTitle: eventTitle,
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
       );
 
-      if (file != null && mounted) {
-        // ✅ Print to thermal printer
-        // This should actually be generateGroupMoiReceiptWithImage
-        final result = await MoiReceiptGenerator.generateGroupMoiReceiptWithImage(
-          context: context,
+      // ✅ STEP 2: Generate image for printing (FAST)
+      print('🖨️ Generating GROUP image for thermal printer...');
+      final imageBytes = await MoiReceiptGenerator.generateGroupReceiptImageOnly(
+        htmlContent: htmlContent,
+      );
+
+      if (imageBytes != null && mounted) {
+        // ✅ STEP 3: Print immediately (NO PDF conversion)
+        print('🖨️ Sending GROUP receipt to thermal printer...');
+        final printerService = ThermalPrinterService();
+        await printerService.connectAndPrintImage(context, imageBytes);
+        print('✅ GROUP print job sent to thermal printer');
+
+        // ✅ STEP 4: Generate PDF in background for cloud storage (PARALLEL)
+        _generateGroupPdfForCloud(
+          htmlContent: htmlContent,
           groupId: _currentGroupId!,
-          operatorName: operatorName,
-          eventDate: eventDetails['event_date'],
-          eventTime: eventDetails['event_time'],
-          groupEntries: _groupedMois,
-          totalAmount: totalAmount,
-          totalDenominations: totalDenominations.values.any((v) => v > 0)
-              ? totalDenominations
-              : null,
-          customerName: _customerName,
-          city: _city,
-          customerPhone: _customerPhone,
-          eventTitle: eventTitle,
-          eventFor: eventFor,
-          eventTypeName: eventTypeName,
-          venue: venue,
-        );
-        if (result != null) {
-          final printerService = ThermalPrinterService();
-          await printerService.connectAndPrintImage(context, result['imageBytes']);
-          // await printerService.connectAndPrintImage(context, result['imageBytes']);
-        }
-
-        // Send to all WhatsApp numbers
-        List<String> phoneNumbers = [];
-        for (var entry in _groupedMois) {
-          String? phone = entry['phone'];
-          if (phone != null && phone.isNotEmpty) {
-            phoneNumbers.add(phone);
-          }
-        }
-
-        if (phoneNumbers.isNotEmpty) {
-          await _sendReceiptToWhatsApp(file, 'mois', phoneNumbers: phoneNumbers, receiptNo: _currentGroupId);
-        }
+        ).catchError((e) {
+          print('❌ Background GROUP PDF generation error: $e');
+        });
       } else {
-        throw Exception('Failed to generate group receipt');
+        throw Exception('Failed to generate group receipt image');
       }
     } catch (e) {
       print('Error generating group receipt: $e');
@@ -4265,6 +4560,114 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // ✅ NEW: Background PDF generation for GROUP receipts
+  Future<void> _generateGroupPdfForCloud({
+    required String htmlContent,
+    required int groupId,
+  }) async {
+    try {
+      print('☁️ Generating GROUP PDF for cloud storage in background...');
+
+      final output = await getTemporaryDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'moi_group_${groupId}_$timestamp.pdf';
+      final filePath = '${output.path}/$fileName';
+
+      File? pdfFile;
+      bool pdfGenerated = false;
+
+      HeadlessInAppWebView? headlessWebView;
+
+      headlessWebView = HeadlessInAppWebView(
+        initialData: InAppWebViewInitialData(data: htmlContent),
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: true,
+          useHybridComposition: true,
+        ),
+        initialSize: Size(302, 800),
+        onLoadStop: (controller, url) async {
+          try {
+            await Future.delayed(const Duration(milliseconds: 1500));
+
+            final contentHeight = await controller.evaluateJavascript(
+                source: "document.body.scrollHeight"
+            );
+
+            int height = 800;
+            if (contentHeight != null) {
+              height = int.tryParse(contentHeight.toString()) ?? 800;
+            }
+
+            await headlessWebView?.setSize(Size(302, height.toDouble()));
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            final screenshot = await controller.takeScreenshot();
+
+            if (screenshot != null) {
+              final pdf = pw.Document();
+              final image = pw.MemoryImage(screenshot);
+
+              final pdfWidth = 80 * PdfPageFormat.mm;
+              final pdfHeight = (height / 302) * pdfWidth;
+
+              pdf.addPage(
+                pw.Page(
+                  pageFormat: PdfPageFormat(pdfWidth, pdfHeight, marginAll: 0),
+                  build: (pw.Context context) {
+                    return pw.Image(image, fit: pw.BoxFit.fill);
+                  },
+                ),
+              );
+
+              final file = File(filePath);
+              await file.writeAsBytes(await pdf.save());
+              pdfFile = file;
+              pdfGenerated = true;
+              print('✅ GROUP PDF generated for cloud: $filePath');
+            }
+          } catch (e) {
+            print('❌ Error generating GROUP PDF: $e');
+          } finally {
+            if (headlessWebView != null) {
+              await headlessWebView.dispose();
+            }
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      int attempts = 0;
+      while (attempts < 30 && !pdfGenerated) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (pdfGenerated) break;
+        attempts++;
+      }
+
+      // ✅ Send to cloud if PDF was generated
+      if (pdfFile != null) {
+        // Collect all phone numbers from group
+        List<String> phoneNumbers = [];
+        for (var entry in _groupedMois) {
+          String? phone = entry['phone'];
+          if (phone != null && phone.isNotEmpty) {
+            phoneNumbers.add(phone);
+          }
+        }
+
+        await _sendReceiptToWhatsApp(
+          pdfFile!,
+          'mois',
+          phoneNumbers: phoneNumbers,
+          receiptNo: groupId,
+        );
+        print('✅ GROUP PDF sent to cloud storage');
+      }
+    } catch (e) {
+      print('❌ Error in background GROUP PDF generation: $e');
     }
   }
 
