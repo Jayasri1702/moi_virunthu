@@ -23,6 +23,18 @@ class CollectMoiScreen extends StatefulWidget {
 class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _supabase = Supabase.instance.client;
 
+  // Job autocomplete state variables
+  List<String> _jobHistory = [];
+  int _selectedJobIndex = -1;
+  bool _showingJobHistory = false;
+  String _currentJobInput = '';
+
+  // Autocomplete state variables
+  List<String> _villageHistory = [];
+  int _selectedHistoryIndex = -1;
+  bool _showingHistory = false;
+  String _currentVillageInput = '';
+
   // Controllers
   final _phoneController = TextEditingController();
   final _phoneFocusNode = FocusNode(); // ✅ ADD THIS
@@ -243,6 +255,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // ✅ Load event details for receipt footer
       await _loadEventDetails();
 
+      await _loadVillageHistory();
+
+      await _loadJobHistory();
+
       if (args['edit_mode'] == true && args['moi_data'] != null) {
         _isEditMode = true;
         final moiData = args['moi_data'] as Map<String, dynamic>;
@@ -284,6 +300,108 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  Future<void> _loadVillageHistory() async {
+    if (_eventId == null) return;
+
+    try {
+      final response = await _supabase
+          .from('mois')
+          .select('village_name')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false)
+          .not('village_name', 'is', null);
+
+      // Extract unique village names and sort alphabetically
+      Set<String> uniqueVillages = {};
+      for (var row in response) {
+        String? villageName = row['village_name'];
+        if (villageName != null && villageName.trim().isNotEmpty) {
+          uniqueVillages.add(villageName.trim());
+        }
+      }
+
+      setState(() {
+        _villageHistory = uniqueVillages.toList()..sort((a, b) {
+          // Sort both Tamil and English alphabetically
+          return a.toLowerCase().compareTo(b.toLowerCase());
+        });
+      });
+
+      print('✅ Loaded ${_villageHistory.length} village names from history');
+    } catch (e) {
+      print('❌ Error loading village history: $e');
+    }
+  }
+
+  Future<void> _loadJobHistory() async {
+    try {
+      final response = await _supabase
+          .from('jobs')
+          .select('job')
+          .order('job', ascending: true);
+
+      // Extract job names and sort alphabetically
+      List<String> jobs = [];
+      for (var row in response) {
+        String? jobName = row['job'];
+        if (jobName != null && jobName.trim().isNotEmpty) {
+          jobs.add(jobName.trim());
+        }
+      }
+
+      setState(() {
+        _jobHistory = jobs;
+      });
+
+      print('✅ Loaded ${_jobHistory.length} job names from database');
+    } catch (e) {
+      print('❌ Error loading job history: $e');
+    }
+  }
+
+  List<String> _getFilteredVillageHistory(String input) {
+    if (input.isEmpty) return [];
+
+    String searchLower = input.toLowerCase();
+
+    return _villageHistory
+        .where((village) => village.toLowerCase().startsWith(searchLower))
+        .toList();
+  }
+
+  List<String> _getFilteredJobHistory(String input) {
+    if (input.isEmpty) return [];
+
+    String searchLower = input.toLowerCase();
+
+    return _jobHistory
+        .where((job) => job.toLowerCase().startsWith(searchLower))
+        .toList();
+  }
+
+  void _selectVillageFromHistory(String village) {
+    setState(() {
+      _villageController.text = village;
+      _showingHistory = false;
+      _selectedHistoryIndex = -1;
+      _currentVillageInput = village;
+    });
+
+    // Move focus to next field (Living Place)
+    FocusScope.of(context).nextFocus();
+  }
+
+  void _selectJobFromHistory(String job) {
+    setState(() {
+      _person1Field2Controller.text = job;
+      _showingJobHistory = false;
+      _selectedJobIndex = -1;
+      _currentJobInput = job;
+    });
+
+    // Move focus to next field
+    FocusScope.of(context).nextFocus();
+  }
 
   Future<void> _loadEditData(Map<String, dynamic> moiData) async {
     _originalData = Map<String, dynamic>.from(moiData);
@@ -4964,6 +5082,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   Future<void> _clearFormForNextEntry() async {
 
+    setState(() {
+      // Clear village autocomplete
+      _showingHistory = false;
+      _selectedHistoryIndex = -1;
+      _currentVillageInput = '';
+
+      // ✅ ADD: Clear job autocomplete
+      _showingJobHistory = false;
+      _selectedJobIndex = -1;
+      _currentJobInput = '';
+    });
+
     _phoneController.clear();
     _villageController.clear();
     _livingPlaceController.clear();
@@ -6240,20 +6370,120 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     style:
                     TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                TextFormField(
-                  controller: _villageController,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Village name is required';
+                Focus(
+                  onKeyEvent: (node, event) {
+                    if (event is KeyDownEvent) {
+                      List<String> filtered = _getFilteredVillageHistory(_currentVillageInput);
+
+                      // Tab key - accept current highlighted suggestion
+                      if (event.logicalKey == LogicalKeyboardKey.tab && filtered.isNotEmpty) {
+                        if (_selectedHistoryIndex >= 0 && _selectedHistoryIndex < filtered.length) {
+                          _selectVillageFromHistory(filtered[_selectedHistoryIndex]);
+                        } else if (filtered.isNotEmpty) {
+                          _selectVillageFromHistory(filtered[0]);
+                        }
+                        return KeyEventResult.handled;
+                      }
+
+                      // Down arrow - next suggestion
+                      if (event.logicalKey == LogicalKeyboardKey.arrowDown && filtered.isNotEmpty) {
+                        setState(() {
+                          _selectedHistoryIndex = (_selectedHistoryIndex + 1) % filtered.length;
+                          _villageController.text = filtered[_selectedHistoryIndex];
+                          _villageController.selection = TextSelection(
+                            baseOffset: _currentVillageInput.length,
+                            extentOffset: filtered[_selectedHistoryIndex].length,
+                          );
+                        });
+                        return KeyEventResult.handled;
+                      }
+
+                      // Up arrow - previous suggestion
+                      if (event.logicalKey == LogicalKeyboardKey.arrowUp && filtered.isNotEmpty) {
+                        setState(() {
+                          _selectedHistoryIndex = _selectedHistoryIndex <= 0
+                              ? filtered.length - 1
+                              : _selectedHistoryIndex - 1;
+                          _villageController.text = filtered[_selectedHistoryIndex];
+                          _villageController.selection = TextSelection(
+                            baseOffset: _currentVillageInput.length,
+                            extentOffset: filtered[_selectedHistoryIndex].length,
+                          );
+                        });
+                        return KeyEventResult.handled;
+                      }
+
+                      // Escape - clear autocomplete
+                      if (event.logicalKey == LogicalKeyboardKey.escape) {
+                        setState(() {
+                          _villageController.text = _currentVillageInput;
+                          _showingHistory = false;
+                          _selectedHistoryIndex = -1;
+                        });
+                        return KeyEventResult.handled;
+                      }
                     }
-                    return null;
+                    return KeyEventResult.ignored;
                   },
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    isDense: true,
+                  child: TextFormField(
+                    controller: _villageController,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Village name is required';
+                      }
+                      return null;
+                    },
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        // ✅ Check if user is deleting (value is shorter than current input)
+                        bool isDeleting = value.length < _currentVillageInput.length;
+
+                        _currentVillageInput = value;
+
+                        // ✅ Don't autocomplete when deleting
+                        if (isDeleting) {
+                          _showingHistory = false;
+                          _selectedHistoryIndex = -1;
+                          return;
+                        }
+
+                        // Only show autocomplete if there are matches
+                        List<String> filtered = _getFilteredVillageHistory(value);
+
+                        if (filtered.isNotEmpty && value.isNotEmpty) {
+                          _showingHistory = true;
+                          _selectedHistoryIndex = 0;
+
+                          // ✅ CRITICAL: Only auto-complete if cursor is at the end
+                          // This allows users to edit in the middle without interference
+                          if (_villageController.selection.baseOffset == value.length) {
+                            String suggestion = filtered[0];
+
+                            // ✅ Only autocomplete if suggestion is different and longer
+                            if (suggestion.toLowerCase().startsWith(value.toLowerCase()) &&
+                                suggestion.length > value.length) {
+                              _villageController.text = suggestion;
+
+                              // Highlight the auto-completed part
+                              _villageController.selection = TextSelection(
+                                baseOffset: value.length,
+                                extentOffset: suggestion.length,
+                              );
+                            }
+                          }
+                        } else {
+                          // No matches or empty input - just show what user typed
+                          _showingHistory = false;
+                          _selectedHistoryIndex = -1;
+                        }
+                      });
+                    },
                   ),
                 ),
               ],
@@ -6316,14 +6546,113 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
-            controller: _person1Field2Controller,
-            style: const TextStyle(fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'e.g., education, job',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              isDense: true,
+          Focus(
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent) {
+                List<String> filtered = _getFilteredJobHistory(_currentJobInput);
+
+                // Tab key - accept current highlighted suggestion
+                if (event.logicalKey == LogicalKeyboardKey.tab && filtered.isNotEmpty) {
+                  if (_selectedJobIndex >= 0 && _selectedJobIndex < filtered.length) {
+                    _selectJobFromHistory(filtered[_selectedJobIndex]);
+                  } else if (filtered.isNotEmpty) {
+                    _selectJobFromHistory(filtered[0]);
+                  }
+                  return KeyEventResult.handled;
+                }
+
+                // Down arrow - next suggestion
+                if (event.logicalKey == LogicalKeyboardKey.arrowDown && filtered.isNotEmpty) {
+                  setState(() {
+                    _selectedJobIndex = (_selectedJobIndex + 1) % filtered.length;
+                    _person1Field2Controller.text = filtered[_selectedJobIndex];
+                    _person1Field2Controller.selection = TextSelection(
+                      baseOffset: _currentJobInput.length,
+                      extentOffset: filtered[_selectedJobIndex].length,
+                    );
+                  });
+                  return KeyEventResult.handled;
+                }
+
+                // Up arrow - previous suggestion
+                if (event.logicalKey == LogicalKeyboardKey.arrowUp && filtered.isNotEmpty) {
+                  setState(() {
+                    _selectedJobIndex = _selectedJobIndex <= 0
+                        ? filtered.length - 1
+                        : _selectedJobIndex - 1;
+                    _person1Field2Controller.text = filtered[_selectedJobIndex];
+                    _person1Field2Controller.selection = TextSelection(
+                      baseOffset: _currentJobInput.length,
+                      extentOffset: filtered[_selectedJobIndex].length,
+                    );
+                  });
+                  return KeyEventResult.handled;
+                }
+
+                // Escape - clear autocomplete
+                if (event.logicalKey == LogicalKeyboardKey.escape) {
+                  setState(() {
+                    _person1Field2Controller.text = _currentJobInput;
+                    _showingJobHistory = false;
+                    _selectedJobIndex = -1;
+                  });
+                  return KeyEventResult.handled;
+                }
+              }
+              return KeyEventResult.ignored;
+            },
+            child: TextField(
+              controller: _person1Field2Controller,
+              style: const TextStyle(fontSize: 13),
+              decoration: const InputDecoration(
+                labelText: 'e.g., education, job',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                isDense: true,
+              ),
+              onChanged: (value) {
+                setState(() {
+                  // ✅ Check if user is deleting
+                  bool isDeleting = value.length < _currentJobInput.length;
+
+                  _currentJobInput = value;
+
+                  // ✅ Don't autocomplete when deleting
+                  if (isDeleting) {
+                    _showingJobHistory = false;
+                    _selectedJobIndex = -1;
+                    return;
+                  }
+
+                  // Only show autocomplete if there are matches
+                  List<String> filtered = _getFilteredJobHistory(value);
+
+                  if (filtered.isNotEmpty && value.isNotEmpty) {
+                    _showingJobHistory = true;
+                    _selectedJobIndex = 0;
+
+                    // Only auto-complete if cursor is at the end
+                    if (_person1Field2Controller.selection.baseOffset == value.length) {
+                      String suggestion = filtered[0];
+
+                      // Only autocomplete if suggestion is different and longer
+                      if (suggestion.toLowerCase().startsWith(value.toLowerCase()) &&
+                          suggestion.length > value.length) {
+                        _person1Field2Controller.text = suggestion;
+
+                        // Highlight the auto-completed part
+                        _person1Field2Controller.selection = TextSelection(
+                          baseOffset: value.length,
+                          extentOffset: suggestion.length,
+                        );
+                      }
+                    }
+                  } else {
+                    _showingJobHistory = false;
+                    _selectedJobIndex = -1;
+                  }
+                });
+              },
             ),
           ),
         ],
