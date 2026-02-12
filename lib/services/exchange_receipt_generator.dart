@@ -74,7 +74,7 @@ class ExchangeReceiptGenerator {
 
       final output = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'exchange_receipt_$timestamp.pdf';
+      final fileName = 'exchange_receipt.pdf';
       final filePath = '${output.path}/$fileName';
 
       File? generatedFile;

@@ -92,6 +92,7 @@ class BookingReceiptGenerator {
 
       HeadlessInAppWebView? headlessWebView;
 
+
       headlessWebView = HeadlessInAppWebView(
         initialData: InAppWebViewInitialData(data: htmlContent),
         initialSettings: InAppWebViewSettings(

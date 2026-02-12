@@ -81,7 +81,7 @@ class ReceiptGenerator {
 
       final output = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'receipt_${customerName.replaceAll(' ', '_')}_with_image_$timestamp.pdf';
+      final fileName = 'event_receipt.pdf';
       final filePath = '${output.path}/$fileName';
 
       File? generatedFile;
@@ -209,7 +209,7 @@ class ReceiptGenerator {
 
       final output = await getTemporaryDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'receipt_${customerName.replaceAll(' ', '_')}_$timestamp.pdf';
+      final fileName = 'event_receipt.pdf';
       final filePath = '${output.path}/$fileName';
 
       File? generatedFile;
