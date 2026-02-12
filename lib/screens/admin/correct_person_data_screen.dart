@@ -329,6 +329,9 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
               onChanged: (value) {
                 _modifiedIds.add(moiId);
               },
+              autofocus: false,
+              enableInteractiveSelection: true,
+              textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
@@ -405,11 +408,9 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
                           ),
                         ),
 
-                        // Table
-                        // ListView for better performance
                         ListView.builder(
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
+                          physics: const ClampingScrollPhysics(),
                           itemCount: _mois.length,
                           itemBuilder: (context, index) {
                             final moi = _mois[index];
