@@ -36,26 +36,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   String _currentVillageInput = '';
 
   // Controllers
+  // Controllers
   final _phoneController = TextEditingController();
-  final _phoneFocusNode = FocusNode(); // ✅ ADD THIS
+  final _phoneFocusNode = FocusNode();
   final _villageController = TextEditingController();
+  final _villageFocusNode = FocusNode();
   final _livingPlaceController = TextEditingController();
+  final _livingPlaceFocusNode = FocusNode();
   final _notesController = TextEditingController();
+  final _notesFocusNode = FocusNode();
   final _amountController = TextEditingController();
+  final _amountFocusNode = FocusNode();
 
   // Person 1 controllers (2 fields now)
   final _person1Field1Controller = TextEditingController(); // Init + Name
+  final _person1Field1FocusNode = FocusNode();
   final _person1Field2Controller = TextEditingController(); // Education + Job
+  final _person1Field2FocusNode = FocusNode();
 
-  // Person 2 controller (combined)
+// Person 2 controller (combined)
   final _person2Controller = TextEditingController();
+  final _person2FocusNode = FocusNode();
 
   // Denomination controllers with dropdown support
   final List<Map<String, dynamic>> _denomRows = [];
   final _formKey = GlobalKey<FormState>();
 
   // In state variables section, add:
-  final _amountFocusNode = FocusNode();
   final _firstDenomFocusNode = FocusNode(); // For Ctrl+D shortcut
   // State variables
   String? _eventId;
@@ -5671,7 +5678,36 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     const SizedBox(height: 12),
                     _buildPerson2Field(),
                     const SizedBox(height: 12),
-                    _buildTextField('Notes', _notesController, maxLines: 2),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.black, width: 2),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Notes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: _notesController,
+                            focusNode: _notesFocusNode,
+                            maxLines: 2,
+                            textInputAction: TextInputAction.next,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              hintText: 'Notes',
+                              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              isDense: true,
+                            ),
+                            onEditingComplete: () {
+                              _amountFocusNode.requestFocus();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _buildAmountField(),
                     const SizedBox(height: 12),
@@ -5822,7 +5858,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Widget _buildTextField(String label, TextEditingController controller,
-      {int maxLines = 1}) {
+      {int maxLines = 1, FocusNode? focusNode, VoidCallback? onEditingComplete}) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -5832,21 +5868,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
           TextField(
             controller: controller,
+            focusNode: focusNode,
             maxLines: maxLines,
+            textInputAction: TextInputAction.next,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
               hintText: label,
-              contentPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
+            onEditingComplete: onEditingComplete,
           ),
         ],
       ),
@@ -5927,6 +5963,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   },
                   child: TextFormField(
                     controller: _villageController,
+                    focusNode: _villageFocusNode,
+                    textInputAction: TextInputAction.next,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
                         return 'Village name is required';
@@ -5984,6 +6022,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                         }
                       });
                     },
+                    onEditingComplete: () {
+                      _livingPlaceFocusNode.requestFocus();
+                    },
                   ),
                 ),
               ],
@@ -6000,6 +6041,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
+                  focusNode: _livingPlaceFocusNode,
+                  textInputAction: TextInputAction.next,
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -6007,6 +6050,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
+                  onEditingComplete: () {
+                    _person1Field1FocusNode.requestFocus();
+                  },
                 ),
               ],
             ),
@@ -6031,6 +6077,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           TextFormField(
             controller: _person1Field1Controller,
+            focusNode: _person1Field1FocusNode,
+            textInputAction: TextInputAction.next,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Name is required';
@@ -6044,116 +6092,60 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
+            onEditingComplete: () {
+              _person1Field2FocusNode.requestFocus();
+            },
           ),
           const SizedBox(height: 10),
-          Focus(
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent) {
-                List<String> filtered = _getFilteredJobHistory(_currentJobInput);
-
-                // Tab key - accept current highlighted suggestion
-                if (event.logicalKey == LogicalKeyboardKey.tab && filtered.isNotEmpty) {
-                  if (_selectedJobIndex >= 0 && _selectedJobIndex < filtered.length) {
-                    _selectJobFromHistory(filtered[_selectedJobIndex]);
-                  } else if (filtered.isNotEmpty) {
-                    _selectJobFromHistory(filtered[0]);
-                  }
-                  return KeyEventResult.handled;
-                }
-
-                // Down arrow - next suggestion
-                if (event.logicalKey == LogicalKeyboardKey.arrowDown && filtered.isNotEmpty) {
-                  setState(() {
-                    _selectedJobIndex = (_selectedJobIndex + 1) % filtered.length;
-                    _person1Field2Controller.text = filtered[_selectedJobIndex];
-                    _person1Field2Controller.selection = TextSelection(
-                      baseOffset: _currentJobInput.length,
-                      extentOffset: filtered[_selectedJobIndex].length,
-                    );
-                  });
-                  return KeyEventResult.handled;
-                }
-
-                // Up arrow - previous suggestion
-                if (event.logicalKey == LogicalKeyboardKey.arrowUp && filtered.isNotEmpty) {
-                  setState(() {
-                    _selectedJobIndex = _selectedJobIndex <= 0
-                        ? filtered.length - 1
-                        : _selectedJobIndex - 1;
-                    _person1Field2Controller.text = filtered[_selectedJobIndex];
-                    _person1Field2Controller.selection = TextSelection(
-                      baseOffset: _currentJobInput.length,
-                      extentOffset: filtered[_selectedJobIndex].length,
-                    );
-                  });
-                  return KeyEventResult.handled;
-                }
-
-                // Escape - clear autocomplete
-                if (event.logicalKey == LogicalKeyboardKey.escape) {
-                  setState(() {
-                    _person1Field2Controller.text = _currentJobInput;
-                    _showingJobHistory = false;
-                    _selectedJobIndex = -1;
-                  });
-                  return KeyEventResult.handled;
-                }
-              }
-              return KeyEventResult.ignored;
-            },
-            child: TextField(
-              controller: _person1Field2Controller,
-              style: const TextStyle(fontSize: 13),
-              decoration: const InputDecoration(
-                labelText: 'e.g., education, job',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                isDense: true,
-              ),
-              onChanged: (value) {
-                setState(() {
-                  // ✅ Check if user is deleting
-                  bool isDeleting = value.length < _currentJobInput.length;
-
-                  _currentJobInput = value;
-
-                  // ✅ Don't autocomplete when deleting
-                  if (isDeleting) {
-                    _showingJobHistory = false;
-                    _selectedJobIndex = -1;
-                    return;
-                  }
-
-                  // Only show autocomplete if there are matches
-                  List<String> filtered = _getFilteredJobHistory(value);
-
-                  if (filtered.isNotEmpty && value.isNotEmpty) {
-                    _showingJobHistory = true;
-                    _selectedJobIndex = 0;
-
-                    // Only auto-complete if cursor is at the end
-                    if (_person1Field2Controller.selection.baseOffset == value.length) {
-                      String suggestion = filtered[0];
-
-                      // Only autocomplete if suggestion is different and longer
-                      if (suggestion.toLowerCase().startsWith(value.toLowerCase()) &&
-                          suggestion.length > value.length) {
-                        _person1Field2Controller.text = suggestion;
-
-                        // Highlight the auto-completed part
-                        _person1Field2Controller.selection = TextSelection(
-                          baseOffset: value.length,
-                          extentOffset: suggestion.length,
-                        );
-                      }
-                    }
-                  } else {
-                    _showingJobHistory = false;
-                    _selectedJobIndex = -1;
-                  }
-                });
-              },
+          TextField(
+            controller: _person1Field2Controller,
+            focusNode: _person1Field2FocusNode,
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(fontSize: 13),
+            decoration: const InputDecoration(
+              labelText: 'e.g., education, job',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              isDense: true,
             ),
+            onChanged: (value) {
+              setState(() {
+                // Check if user is deleting
+                bool isDeleting = value.length < _currentJobInput.length;
+                _currentJobInput = value;
+
+                if (isDeleting) {
+                  _showingJobHistory = false;
+                  _selectedJobIndex = -1;
+                  return;
+                }
+
+                List<String> filtered = _getFilteredJobHistory(value);
+
+                if (filtered.isNotEmpty && value.isNotEmpty) {
+                  _showingJobHistory = true;
+                  _selectedJobIndex = 0;
+
+                  if (_person1Field2Controller.selection.baseOffset == value.length) {
+                    String suggestion = filtered[0];
+                    if (suggestion.toLowerCase().startsWith(value.toLowerCase()) &&
+                        suggestion.length > value.length) {
+                      _person1Field2Controller.text = suggestion;
+                      _person1Field2Controller.selection = TextSelection(
+                        baseOffset: value.length,
+                        extentOffset: suggestion.length,
+                      );
+                    }
+                  }
+                } else {
+                  _showingJobHistory = false;
+                  _selectedJobIndex = -1;
+                }
+              });
+            },
+            onEditingComplete: () {
+              _person2FocusNode.requestFocus();
+            },
           ),
         ],
       ),
@@ -6175,6 +6167,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: _person2Controller,
+            focusNode: _person2FocusNode,
+            textInputAction: TextInputAction.next,
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
@@ -6183,13 +6177,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               isDense: true,
             ),
             maxLines: 2,
+            onEditingComplete: () {
+              _notesFocusNode.requestFocus();
+            },
           ),
         ],
       ),
     );
   }
 
-  // Update the _buildAmountField() widget
   Widget _buildAmountField() {
     int amount = int.tryParse(_amountController.text) ?? 0;
     String amountInWords = amount > 0 ? _numberToWords(amount) : '';
@@ -6213,17 +6209,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 border: Border.all(color: Colors.black, width: 2)),
             child: TextFormField(
               controller: _amountController,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Amount is required';
-                }
-                if (int.tryParse(value) == 0) {
-                  return 'Amount cannot be zero';
-                }
-                return null;
-              },
-              focusNode: _amountFocusNode,
+              focusNode: _amountFocusNode,  // ✅ Keep this one
               keyboardType: TextInputType.number,
+              textInputAction: _paymentMethod == 'CASH' && !_skipDenomination
+                  ? TextInputAction.next
+                  : TextInputAction.done,  // ✅ Keep this one
               textAlign: TextAlign.center,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^-?\d*')), // Only digits and optional minus at start
@@ -6234,8 +6224,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 contentPadding: EdgeInsets.zero,
                 isDense: true,
               ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Amount is required';
+                }
+                if (int.tryParse(value) == 0) {
+                  return 'Amount cannot be zero';
+                }
+                return null;
+              },
               onChanged: (value) {
                 setState(() {}); // Rebuild to update amount in words
+              },
+              onEditingComplete: () {
+                if (_paymentMethod == 'CASH' && !_skipDenomination && _denomRows.isNotEmpty) {
+                  _firstDenomFocusNode.requestFocus();
+                } else {
+                  // Move to next focusable widget or unfocus
+                  FocusScope.of(context).nextFocus();
+                }
               },
             ),
           ),
@@ -6324,6 +6331,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 controller: denomController,
                 focusNode: index == 0 ? _firstDenomFocusNode : null,
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
                 textAlign: TextAlign.center,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly, // Only digits (no minus for denomination)
@@ -6398,6 +6406,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   controller: controller,
                   // focusNode: index == 0 ? _firstDenomFocusNode : null,
                   keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'-?\d*')),
                   ],
@@ -7124,9 +7133,22 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   @override
   void dispose() {
     _phoneController.dispose();
-    _phoneFocusNode.dispose(); // ✅ ADD THIS
-    _amountFocusNode.dispose(); // ✅ ADD
-    _firstDenomFocusNode.dispose(); // ✅ ADD
+    _phoneFocusNode.dispose();
+    _villageController.dispose();
+    _villageFocusNode.dispose();
+    _livingPlaceController.dispose();
+    _livingPlaceFocusNode.dispose();
+    _person1Field1Controller.dispose();
+    _person1Field1FocusNode.dispose();
+    _person1Field2Controller.dispose();
+    _person1Field2FocusNode.dispose();
+    _person2Controller.dispose();
+    _person2FocusNode.dispose();
+    _notesController.dispose();
+    _notesFocusNode.dispose();
+    _amountController.dispose();
+    _amountFocusNode.dispose();
+    _firstDenomFocusNode.dispose();
     _villageController.dispose();
     _livingPlaceController.dispose();
     _notesController.dispose();

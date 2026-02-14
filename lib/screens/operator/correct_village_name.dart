@@ -499,7 +499,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
                 child: Row(
                   children: [
                     _buildTableHeader('City', flex: 3),
-                    _buildTableHeader('Rel', flex: 2),
+                    _buildTableHeader('Rel', flex: 1),
                     _buildTableHeader('Rename', flex: 4),
                   ],
                 ),
@@ -765,7 +765,7 @@ class _CorrectVillageNamesScreenState extends State<CorrectVillageNamesScreen> {
             ),
             // Relations
             Expanded(
-              flex: 2,
+              flex: 1,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 decoration: BoxDecoration(

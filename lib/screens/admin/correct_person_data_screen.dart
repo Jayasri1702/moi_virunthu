@@ -306,7 +306,7 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     return Row(
       children: [
         SizedBox(
-          width: 140,
+          width: 100,
           child: Text(
             label,
             style: TextStyle(
