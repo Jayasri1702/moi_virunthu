@@ -54,12 +54,25 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
         final personName = _getPersonName(entry['persons']).toLowerCase();
         final serialNo = entry['serial_no']?.toString().toLowerCase() ?? '';
         final village = entry['village_name']?.toString().toLowerCase() ?? '';
+        final operatorName = _getOperatorName(entry).toLowerCase();
 
         return personName.contains(_searchQuery) ||
             serialNo.contains(_searchQuery) ||
-            village.contains(_searchQuery);
+            village.contains(_searchQuery) ||
+            operatorName.contains(_searchQuery);
       }).toList();
     }
+  }
+
+  String _getOperatorName(Map<String, dynamic> entry) {
+    try {
+      if (entry['users'] != null && entry['users'] is Map) {
+        return entry['users']['full_name']?.toString() ?? 'Unknown';
+      }
+    } catch (e) {
+      print('Error getting operator name: $e');
+    }
+    return 'Unknown';
   }
 
   Future<void> _loadModifiedEntries() async {
@@ -71,18 +84,22 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
       final response = await _supabase
           .from('mois')
           .select('''
-          id,
-          serial_no,
-          amount,
-          village_name,
-          living_place,
-          phone,
-          notes,
-          payment_method,
-          is_uncle,
-          persons,
-          old_data
-        ''')
+      id,
+      serial_no,
+      amount,
+      village_name,
+      living_place,
+      phone,
+      notes,
+      payment_method,
+      is_uncle,
+      persons,
+      old_data,
+      updated_at,
+      users!mois_operator_id_fkey (
+        full_name
+      )
+    ''')
           .eq('event_id', widget.eventId)
           .not('old_data', 'is', null)
           .order('serial_no', ascending: true);
@@ -198,6 +215,16 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
     } catch (e) {
       print('Error parsing change history: $e');
       return [];
+    }
+  }
+
+  String _formatDateTime(String? timestamp) {
+    if (timestamp == null) return '';
+    try {
+      final dt = DateTime.parse(timestamp);
+      return '${dt.day}/${dt.month}/${dt.year} ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return '';
     }
   }
 
@@ -611,6 +638,8 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
   Widget _buildModernCard(Map<String, dynamic> entry, bool isExpanded, String entryId) {
     final serialNo = entry['serial_no']?.toString() ?? 'N/A';
     final personName = _getPersonName(entry['persons']);
+    final operatorName = _getOperatorName(entry);
+    final updatedAt = entry['updated_at'];
     final changeHistory = _getChangeHistory(entry['old_data']);
 
     final currentValues = {
@@ -695,6 +724,40 @@ class _ModifiedReportScreenState extends State<ModifiedReportScreen> {
                             : Icons.keyboard_arrow_down,
                         color: Colors.grey[600],
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline, size: 14, color: Colors.grey[600]),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Modified by: ',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      Text(
+                        operatorName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF4CAF50),
+                        ),
+                      ),
+                      if (updatedAt != null) ...[
+                        const SizedBox(width: 12),
+                        Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDateTime(updatedAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 12),

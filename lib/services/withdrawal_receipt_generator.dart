@@ -91,15 +91,15 @@ class WithdrawalReceiptGenerator {
         customerName: customerName,
         city: city,
         customerPhone: customerPhone,
-logoBase64: logoBase64,  // ADD THIS
-fontBase64: fontBase64,  // ADD THIS
+        logoBase64: logoBase64,  // ADD THIS
+        fontBase64: fontBase64,  // ADD THIS
       );
 
       final output = await getTemporaryDirectory();
       final timestamp = DateTime
           .now()
           .millisecondsSinceEpoch;
-      final fileName = 'withdrawal_receipt_$timestamp.pdf';
+      final fileName = 'withdrawal_receipt.pdf';
       final filePath = '${output.path}/$fileName';
 
       File? generatedFile;

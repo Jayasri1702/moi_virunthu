@@ -78,7 +78,7 @@ class MoiReceiptGenerator {
   // Add this method to MoiReceiptGenerator class (after generateSingleMoiReceipt)
 
   static Future<Map<String, dynamic>?> generateSingleMoiReceiptWithImage({
-     BuildContext? context,
+    BuildContext? context,
     required int serialNo,
     required String operatorName,
     required DateTime eventDate,
@@ -346,7 +346,7 @@ class MoiReceiptGenerator {
 
   // ✅ NEW: Generate group receipt with image for thermal printing
   static Future<Map<String, dynamic>?> generateGroupMoiReceiptWithImage({
-     BuildContext? context,
+    BuildContext? context,
     required int groupId,
     required String operatorName,
     required DateTime eventDate,
@@ -567,7 +567,7 @@ class MoiReceiptGenerator {
         eventFor: eventFor,
         eventTypeName: eventTypeName,
         venue: venue,
-          notes: notes,
+        notes: notes,
       )
           : generateSingleMoiHtmlOthers(
         serialNo: serialNo,

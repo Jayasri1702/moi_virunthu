@@ -313,7 +313,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       await _showProgressNotification('Saving PDF...', 0.9);
 
-      final fileName = 'cover_page_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final fileName = 'front_page.pdf';
       String? savedFilePath;
 
       if (Platform.isAndroid) {
@@ -400,7 +400,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
 
       if (_selectedFormat == 'excel' || _selectedFormat == 'csv') {
         if (_generatedFile != null) {
-          final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.csv';
+          final fileName = 'moi_report.csv';
           if (Platform.isAndroid) {
             final downloadsDir = Directory('/storage/emulated/0/Download');
             if (!await downloadsDir.exists()) {
@@ -426,7 +426,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
         await _showProgressNotification('Saving PDF...', 0.7);
 
         final serverPdfBytes = base64Decode(_generatedContent!);
-        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+        final fileName = 'moi_report.pdf';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');
@@ -447,7 +447,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           savedFilePath = outFile.path;
         }
       } else if (_selectedFormat == 'html' && _generatedContent != null) {
-        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.html';
+        final fileName = 'moi_report.html';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');
@@ -468,7 +468,7 @@ class _FinalMoiReportScreenState extends State<FinalMoiReportScreen> {
           savedFilePath = file.path;
         }
       } else if (_selectedFormat == 'txt' && _generatedContent != null) {
-        final fileName = 'final_moi_report_${DateTime.now().millisecondsSinceEpoch}.txt';
+        final fileName = 'moi_report.txt';
 
         if (Platform.isAndroid) {
           final downloadsDir = Directory('/storage/emulated/0/Download');

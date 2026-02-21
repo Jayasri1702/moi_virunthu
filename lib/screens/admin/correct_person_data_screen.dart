@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../utils/network_utils.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CorrectPersonDataScreen extends StatefulWidget {
   const CorrectPersonDataScreen({super.key});
@@ -17,12 +18,25 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
   bool _saving = false;
   String? _eventId;
 
+  // Pagination
+  static const int _pageSize = 100; // Load 100 records at a time
+  int _currentPage = 0;
+  bool _hasMore = true;
+  int _totalCount = 0;
+  bool _loadingMore = false;
+
+// Track modified records
+  Set<String> _modifiedIds = {};
+
+  final ScrollController _scrollController = ScrollController();
+
   // Controllers for editing - Map<moiId, Map<fieldName, controller>>
   Map<String, Map<String, TextEditingController>> _controllers = {};
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
   }
 
   @override
@@ -32,13 +46,14 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     if (args != null && args is Map<String, dynamic>) {
       _eventId = args['event_id'];
       if (_eventId != null) {
-        _loadMois();
+        _loadInitialData();
       }
     }
   }
 
   @override
   void dispose() {
+    _scrollController.dispose();
     // Dispose all controllers
     _controllers.forEach((key, controllers) {
       controllers.forEach((field, controller) {
@@ -48,107 +63,119 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     super.dispose();
   }
 
-  Future<void> _loadMois() async {
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (!_loadingMore && _hasMore) {
+        _loadMoreData();
+      }
+    }
+  }
+
+  Future<void> _loadInitialData() async {
     if (_eventId == null) return;
 
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _currentPage = 0;
+      _mois.clear();
+      _hasMore = true;
+    });
 
     try {
-      // Fetch all mois with pagination
-      List<dynamic> data = [];
-      int pageSize = 1000;
-      int currentPage = 0;
-      bool hasMore = true;
+      // Get total count first
+      final countResponse = await _auth.client
+          .from('mois')
+          .select('*')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false)
+          .count(CountOption.exact);
 
-      while (hasMore) {
-        final pageResponse = await _auth.client
-            .from('mois')
-            .select('*')
-            .eq('event_id', _eventId!)
-            .eq('is_deleted', false)
-            .order('serial_no', ascending: true)
-            .range(currentPage * pageSize, (currentPage + 1) * pageSize - 1);
+      _totalCount = countResponse.count;
 
-        data.addAll(pageResponse);
+      // Load first page
+      await _loadPage(0);
 
-        if (pageResponse.length < pageSize) {
-          hasMore = false;
-        } else {
-          currentPage++;
-        }
-      }
-
-      setState(() {
-        _mois = List<Map<String, dynamic>>.from(data);
-        _initializeControllers();
-        _loading = false;
-      });
+      setState(() => _loading = false);
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
         NetworkUtils.handleError(
           context,
           e,
-          onRetry: _loadMois,
+          onRetry: _loadInitialData,
           customMessage: 'Error loading data',
         );
       }
     }
   }
 
-  void _initializeControllers() {
-    final newControllers = <String, Map<String, TextEditingController>>{};
+  Future<void> _loadPage(int page) async {
+    if (_eventId == null) return;
 
-    for (var moi in _mois) {
+    final pageResponse = await _auth.client
+        .from('mois')
+        .select('*')
+        .eq('event_id', _eventId!)
+        .eq('is_deleted', false)
+        .order('serial_no', ascending: true)
+        .range(page * _pageSize, (page + 1) * _pageSize - 1);
+
+    final newMois = List<Map<String, dynamic>>.from(pageResponse);
+
+    setState(() {
+      _mois.addAll(newMois);
+      _hasMore = newMois.length == _pageSize;
+      _currentPage = page;
+    });
+
+    _initializeControllersForPage(newMois);
+  }
+
+  void _initializeControllersForPage(List<Map<String, dynamic>> newMois) {
+    for (var moi in newMois) {
       final moiId = moi['id'];
 
-      if (_controllers.containsKey(moiId)) {
-        _controllers[moiId]!['village_name']!.text = moi['village_name'] ?? '';
-        _controllers[moiId]!['living_place']!.text = moi['living_place'] ?? '';
+      // Skip if already initialized
+      if (_controllers.containsKey(moiId)) continue;
 
-        final persons = moi['persons'] as List<dynamic>?;
-        if (persons != null && persons.isNotEmpty) {
-          // Person 1
-          final person1 = persons[0] as Map<String, dynamic>;
-          _controllers[moiId]!['person_0_name']!.text = person1['name'] ?? '';
-          _controllers[moiId]!['person_0_job']!.text = person1['job'] ?? '';
+      _controllers[moiId] = {
+        'village_name': TextEditingController(text: moi['village_name'] ?? ''),
+        'living_place': TextEditingController(text: moi['living_place'] ?? ''),
+      };
 
-          // Person 2
-          if (persons.length > 1) {
-            final person2 = persons[1] as Map<String, dynamic>;
-            _controllers[moiId]!['person_1_details']!.text = person2['details'] ?? '';
-          }
-        }
+      final persons = moi['persons'] as List<dynamic>?;
+      if (persons != null && persons.isNotEmpty) {
+        // Person 1
+        final person1 = persons[0] as Map<String, dynamic>;
+        _controllers[moiId]!['person_0_name'] =
+            TextEditingController(text: person1['name'] ?? '');
+        _controllers[moiId]!['person_0_job'] =
+            TextEditingController(text: person1['job'] ?? '');
 
-        newControllers[moiId] = _controllers[moiId]!;
-      } else {
-        newControllers[moiId] = {
-          'village_name': TextEditingController(text: moi['village_name'] ?? ''),
-          'living_place': TextEditingController(text: moi['living_place'] ?? ''),
-        };
-
-        final persons = moi['persons'] as List<dynamic>?;
-        if (persons != null && persons.isNotEmpty) {
-          // Person 1
-          final person1 = persons[0] as Map<String, dynamic>;
-          newControllers[moiId]!['person_0_name'] =
-              TextEditingController(text: person1['name'] ?? '');
-          newControllers[moiId]!['person_0_job'] =
-              TextEditingController(text: person1['job'] ?? '');
-
-          // Person 2
-          if (persons.length > 1) {
-            final person2 = persons[1] as Map<String, dynamic>;
-            newControllers[moiId]!['person_1_details'] =
-                TextEditingController(text: person2['details'] ?? '');
-          } else {
-            newControllers[moiId]!['person_1_details'] = TextEditingController();
-          }
+        // Person 2
+        if (persons.length > 1) {
+          final person2 = persons[1] as Map<String, dynamic>;
+          _controllers[moiId]!['person_1_details'] =
+              TextEditingController(text: person2['details'] ?? '');
+        } else {
+          _controllers[moiId]!['person_1_details'] = TextEditingController();
         }
       }
     }
+  }
 
-    _controllers = newControllers;
+  Future<void> _loadMoreData() async {
+    if (_loadingMore || !_hasMore) return;
+
+    setState(() => _loadingMore = true);
+
+    try {
+      await _loadPage(_currentPage + 1);
+    } catch (e) {
+      print('Error loading more data: $e');
+    } finally {
+      setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _saveAllChanges() async {
@@ -157,10 +184,25 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
     int successCount = 0;
     int errorCount = 0;
 
-    for (var moi in _mois) {
+    // Only save modified records
+    final modifiedMois = _mois.where((moi) => _modifiedIds.contains(moi['id'])).toList();
+
+    if (modifiedMois.isEmpty) {
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No changes to save'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    for (var moi in modifiedMois) {
       try {
         await _saveSingleMoi(moi);
         successCount++;
+        _modifiedIds.remove(moi['id']); // Remove from modified set after saving
       } catch (e) {
         errorCount++;
         print(' Error saving moi ${moi['serial_no']}: $e');
@@ -192,7 +234,7 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
-        await _loadMois();
+        await _loadInitialData();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -245,15 +287,61 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
         .eq('id', moiId);
   }
 
-  Widget _buildEditableCell(TextEditingController controller) {
+  Widget _buildEditableCell(TextEditingController controller, String moiId) {
     return TextField(
       controller: controller,
+      onChanged: (value) {
+        _modifiedIds.add(moiId);
+      },
       decoration: const InputDecoration(
         border: InputBorder.none,
         contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         isDense: true,
       ),
       style: const TextStyle(fontSize: 13),
+    );
+  }
+
+  Widget _buildFieldRow(String label, TextEditingController controller, String moiId) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: TextField(
+              controller: controller,
+              onChanged: (value) {
+                _modifiedIds.add(moiId);
+              },
+              autofocus: false,
+              enableInteractiveSelection: true,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+              ),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -290,6 +378,7 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              controller: _scrollController,
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
@@ -319,120 +408,114 @@ class _CorrectPersonDataScreenState extends State<CorrectPersonDataScreen> {
                           ),
                         ),
 
-                        // Table
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: DataTable(
-                            headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
-                            border: TableBorder.all(color: Colors.grey[300]!),
-                            columnSpacing: 8,
-                            dataRowMinHeight: 48,
-                            dataRowMaxHeight: 80,
-                            columns: const [
-                              DataColumn(
-                                label: Text(
-                                  'S.No',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Person 1 Name',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Person 1 Job',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Person 2 Details',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Village Name',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                              DataColumn(
-                                label: Text(
-                                  'Living City',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                ),
-                              ),
-                            ],
-                            rows: _mois.map((moi) {
-                              final moiId = moi['id'];
-                              final persons = moi['persons'] as List<dynamic>?;
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const ClampingScrollPhysics(),
+                          itemCount: _mois.length,
+                          itemBuilder: (context, index) {
+                            final moi = _mois[index];
+                            final moiId = moi['id'];
+                            final persons = moi['persons'] as List<dynamic>?;
 
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 1),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: index % 2 == 0 ? Colors.white : Colors.grey[50],
+                                border: Border(
+                                  bottom: BorderSide(color: Colors.grey[300]!),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Serial Number Header
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF7B3A99),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
                                       'O${moi['serial_no']?.toString() ?? ''}',
-                                      style: const TextStyle(fontWeight: FontWeight.w500),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                      ),
                                     ),
                                   ),
+                                  const SizedBox(height: 12),
+
                                   // Person 1 Name
-                                  DataCell(
-                                    SizedBox(
-                                      width: 150,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['person_0_name']!,
-                                      ),
-                                    ),
+                                  _buildFieldRow(
+                                    'Person 1 Name',
+                                    _controllers[moiId]!['person_0_name']!,
+                                    moiId,
                                   ),
+                                  const SizedBox(height: 8),
+
                                   // Person 1 Job
-                                  DataCell(
-                                    SizedBox(
-                                      width: 150,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['person_0_job']!,
-                                      ),
-                                    ),
+                                  _buildFieldRow(
+                                    'Person 1 Job',
+                                    _controllers[moiId]!['person_0_job']!,
+                                    moiId,
                                   ),
-                                  // Person 2 Details
-                                  DataCell(
-                                    SizedBox(
-                                      width: 200,
-                                      child: persons != null && persons.length > 1
-                                          ? _buildEditableCell(
-                                        _controllers[moiId]!['person_1_details']!,
-                                      )
-                                          : const SizedBox(),
+                                  const SizedBox(height: 8),
+
+                                  // Person 2 Details (if exists)
+                                  if (persons != null && persons.length > 1)
+                                    _buildFieldRow(
+                                      'Person 2 Details',
+                                      _controllers[moiId]!['person_1_details']!,
+                                      moiId,
                                     ),
-                                  ),
+                                  if (persons != null && persons.length > 1)
+                                    const SizedBox(height: 8),
+
                                   // Village Name
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['village_name']!,
-                                      ),
-                                    ),
+                                  _buildFieldRow(
+                                    'Village Name',
+                                    _controllers[moiId]!['village_name']!,
+                                    moiId,
                                   ),
+                                  const SizedBox(height: 8),
+
                                   // Living City
-                                  DataCell(
-                                    SizedBox(
-                                      width: 120,
-                                      child: _buildEditableCell(
-                                        _controllers[moiId]!['living_place']!,
-                                      ),
-                                    ),
+                                  _buildFieldRow(
+                                    'Living City',
+                                    _controllers[moiId]!['living_place']!,
+                                    moiId,
                                   ),
                                 ],
-                              );
-                            }).toList(),
-                          ),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
+                  // Loading indicator for pagination
+                  if (_loadingMore)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  if (!_hasMore && _mois.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Center(
+                        child: Text(
+                          'All ${_mois.length} of $_totalCount records loaded',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
