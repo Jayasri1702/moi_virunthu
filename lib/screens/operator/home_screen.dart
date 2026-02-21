@@ -96,12 +96,12 @@ class _OperatorHomeScreenState extends State<OperatorHomeScreen> {
       final events = await _auth.client
           .from('events')
           .select('''
-            *,
-            event_types!inner(id, name)
-          ''')
+      *,
+      event_types!inner(id, name)
+    ''')
           .inFilter('id', eventIds)
-          .gte('event_date', todayStr)
-          .eq('status', 'upcoming')  // ⭐ NEW: Only show upcoming status
+          .lte('event_date', todayStr)   // ← event date must be TODAY or earlier
+          .eq('status', 'upcoming')      // ← only upcoming (not completed/cancelled)
           .order('event_date', ascending: true)
           .order('event_time', ascending: true);
 
