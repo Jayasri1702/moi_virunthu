@@ -22,6 +22,14 @@ class CollectMoiScreen extends StatefulWidget {
 
 class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _supabase = Supabase.instance.client;
+  // Add this state variable at the top of your state class:
+  List<String> _villageSuggestions = [];
+  bool _showVillageSuggestions = false;
+
+  // Add these state variables:
+  List<String> _jobSuggestions = [];
+  bool _showJobSuggestions = false;
+
 
   // Controllers
   final _phoneController = TextEditingController();
@@ -133,6 +141,33 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  Future<void> _loadJobSuggestions(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() { _jobSuggestions = []; _showJobSuggestions = false; });
+      return;
+    }
+    try {
+      final response = await _supabase
+          .from('jobs')
+          .select('job')
+          .not('job', 'is', null)
+          .ilike('job', '%${query.trim()}%')
+          .limit(10);
+
+      List<String> suggestions = [];
+      for (var row in response) {
+        String job = (row['job'] ?? '').trim();
+        if (job.isNotEmpty) suggestions.add(job);
+      }
+      setState(() {
+        _jobSuggestions = suggestions;
+        _showJobSuggestions = suggestions.isNotEmpty;
+      });
+    } catch (e) {
+      print('Error loading job suggestions: $e');
+    }
+  }
+
   Future<void> _loadEventDetails() async {
     if (_eventId == null) return;
 
@@ -158,6 +193,36 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customMessage: 'Error loading event details',
         );
       }
+    }
+  }
+
+  // Add this method:
+  Future<void> _loadVillageSuggestions(String query) async {
+    if (query.trim().isEmpty || _eventId == null) {
+      setState(() { _villageSuggestions = []; _showVillageSuggestions = false; });
+      return;
+    }
+    try {
+      final response = await _supabase
+          .from('mois')
+          .select('village_name')
+          .eq('event_id', _eventId!)
+          .eq('is_deleted', false)
+          .not('village_name', 'is', null);
+
+      Set<String> uniqueVillages = {};
+      for (var row in response) {
+        String village = (row['village_name'] ?? '').trim();
+        if (village.toLowerCase().startsWith(query.toLowerCase())) {
+          uniqueVillages.add(village);
+        }
+      }
+      setState(() {
+        _villageSuggestions = uniqueVillages.toList()..sort();
+        _showVillageSuggestions = _villageSuggestions.isNotEmpty;
+      });
+    } catch (e) {
+      print('Error loading village suggestions: $e');
     }
   }
 
@@ -5981,11 +6046,21 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
             ),
           ),
-          body:Stack(
+          body: Stack(
             children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: Column(
+              GestureDetector(              // ← ADD THIS
+                  onTap: () {
+                    setState(() {
+                      _villageSuggestions = [];
+                      _showVillageSuggestions = false;
+                      _jobSuggestions = [];
+                      _showJobSuggestions = false;
+                    });
+                    FocusScope.of(context).unfocus();
+                  },
+                  child: SingleChildScrollView(   // ← SAME LINE, now wrapped
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
                   children: [
                     _buildSerialAndPaymentHeader(),
                     const SizedBox(height: 12),
@@ -6059,6 +6134,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     _buildActionButtons(),
                   ],
                 ),
+              ),
               ),
               // ✅ NEW: Loading overlay
               if (_isLoading)
@@ -6223,6 +6299,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
+  // Replace _buildVillageAndLivingPlace():
   Widget _buildVillageAndLivingPlace() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -6231,14 +6308,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         border: Border.all(color: Colors.black, width: 2),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Village Name',
-                    style:
-                    TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _villageController,
@@ -6251,11 +6328,53 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
+                  onChanged: (value) {
+                    _loadVillageSuggestions(value);
+                  },
+                  onTap: () {
+                    if (_villageController.text.isNotEmpty) {
+                      _loadVillageSuggestions(_villageController.text);
+                    }
+                  },
                 ),
+                if (_showVillageSuggestions)
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 150),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.blue, width: 1.5),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                    ),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _villageSuggestions.length,
+                      itemBuilder: (context, index) {
+                        return InkWell(
+                          onTap: () {
+                            _villageController.text = _villageSuggestions[index];
+                            setState(() {
+                              _villageSuggestions = [];
+                              _showVillageSuggestions = false;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
+                            ),
+                            child: Text(
+                              _villageSuggestions[index],
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
               ],
             ),
           ),
@@ -6265,16 +6384,14 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Living City',
-                    style:
-                    TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                 ),
@@ -6286,6 +6403,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
+  // Replace _buildPerson1Fields():
   Widget _buildPerson1Fields() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -6316,7 +6434,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(
+          // Job field with autocomplete
+          TextFormField(
             controller: _person1Field2Controller,
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
@@ -6325,7 +6444,50 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               isDense: true,
             ),
+            onChanged: (value) {
+              _loadJobSuggestions(value);
+            },
+            onTap: () {
+              if (_person1Field2Controller.text.isNotEmpty) {
+                _loadJobSuggestions(_person1Field2Controller.text);
+              }
+            },
           ),
+          if (_showJobSuggestions)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 150),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.blue, width: 1.5),
+                borderRadius: BorderRadius.circular(4),
+                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _jobSuggestions.length,
+                itemBuilder: (context, index) {
+                  return InkWell(
+                    onTap: () {
+                      _person1Field2Controller.text = _jobSuggestions[index];
+                      setState(() {
+                        _jobSuggestions = [];
+                        _showJobSuggestions = false;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
+                      ),
+                      child: Text(
+                        _jobSuggestions[index],
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );
