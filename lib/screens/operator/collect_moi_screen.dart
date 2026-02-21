@@ -38,6 +38,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   final _livingPlaceController = TextEditingController();
   final _notesController = TextEditingController();
   final _amountController = TextEditingController();
+  final _villageFocusNode = FocusNode();
+  final _livingPlaceFocusNode = FocusNode();
+  final _person1NameFocusNode = FocusNode();
+  final _person1JobFocusNode = FocusNode();
+  final _person2FocusNode = FocusNode();
+  final _notesFocusNode = FocusNode();
 
   // Person 1 controllers (2 fields now)
   final _person1Field1Controller = TextEditingController(); // Init + Name
@@ -6083,6 +6089,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                           TextField(
                             controller: _phoneController,
                             focusNode: _phoneFocusNode,
+                            textInputAction: TextInputAction.next,   // ADD
+                            onSubmitted: (_) => FocusScope.of(context).requestFocus(_villageFocusNode), // ADD
                             keyboardType:
                             TextInputType.number, // ✅ CHANGE from phone to number
                             maxLength: 10,
@@ -6284,6 +6292,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: controller,
+            focusNode: _notesFocusNode,                      // ADD
+            textInputAction: TextInputAction.next,            // ADD
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_amountFocusNode), // ADD
             maxLines: maxLines,
             style: const TextStyle(fontSize: 13),
             decoration: InputDecoration(
@@ -6319,6 +6330,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _villageController,
+                  focusNode: _villageFocusNode,                    // ADD
+                  textInputAction: TextInputAction.next,            // ADD
+                  onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_livingPlaceFocusNode), // ADD
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Village name is required';
@@ -6388,6 +6402,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
+                  focusNode: _livingPlaceFocusNode,                // ADD
+                  textInputAction: TextInputAction.next,            // ADD
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_person1NameFocusNode), // ADD
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -6419,6 +6436,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           TextFormField(
             controller: _person1Field1Controller,
+            focusNode: _person1NameFocusNode,                // ADD
+            textInputAction: TextInputAction.next,            // ADD
+            onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_person1JobFocusNode), // ADD
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'Name is required';
@@ -6437,6 +6457,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           // Job field with autocomplete
           TextFormField(
             controller: _person1Field2Controller,
+            focusNode: _person1JobFocusNode,                 // ADD
+            textInputAction: TextInputAction.next,            // ADD
+            onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_person2FocusNode), // ADD
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'e.g., education, job',
@@ -6508,6 +6531,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           const SizedBox(height: 6),
           TextField(
             controller: _person2Controller,
+            focusNode: _person2FocusNode,                    // ADD
+            textInputAction: TextInputAction.next,            // ADD
+            onSubmitted: (_) => FocusScope.of(context).requestFocus(_notesFocusNode), // ADD
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
@@ -6556,6 +6582,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 return null;
               },
               focusNode: _amountFocusNode,
+              textInputAction: TextInputAction.next,            // ADD
+              onFieldSubmitted: (_) {                           // ADD
+                if (_paymentMethod == 'CASH' && !_skipDenomination) {
+                  FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+                }
+              },
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               inputFormatters: [
@@ -7458,6 +7490,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   void dispose() {
     _phoneController.dispose();
     _phoneFocusNode.dispose(); // ✅ ADD THIS
+    _villageFocusNode.dispose();        // ADD
+    _livingPlaceFocusNode.dispose();    // ADD
+    _person1NameFocusNode.dispose();    // ADD
+    _person1JobFocusNode.dispose();     // ADD
+    _person2FocusNode.dispose();        // ADD
+    _notesFocusNode.dispose();          // ADD
     _amountFocusNode.dispose(); // ✅ ADD
     _firstDenomFocusNode.dispose(); // ✅ ADD
     _villageController.dispose();
