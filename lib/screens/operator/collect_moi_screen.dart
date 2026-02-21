@@ -792,7 +792,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (phoneNumber.trim().isEmpty || phoneNumber.length != 10) return;
 
     try {
-      // Search for the most recent entry with this phone number from ANY event
       final response = await _supabase
           .from('mois')
           .select('*')
@@ -803,7 +802,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .maybeSingle();
 
       if (response != null) {
-        // Store the auto-filled data for comparison later
         _autoFilledData = {
           'living_place': response['living_place'],
           'village_name': response['village_name'],
@@ -811,7 +809,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         };
 
         setState(() {
-          // Fill living place and village
           if (response['living_place'] != null) {
             _livingPlaceController.text = response['living_place'];
           }
@@ -819,7 +816,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             _villageController.text = response['village_name'];
           }
 
-          // Fill person 1 details
           if (response['persons'] != null) {
             List<dynamic> personsList = response['persons'] as List;
 
@@ -834,6 +830,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               _person2Controller.text = person2['details'] ?? '';
             }
           }
+        });
+
+        // ✅ NEW: Jump cursor to amount field after auto-fill
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          FocusScope.of(context).requestFocus(_amountFocusNode);
         });
       }
     } catch (e) {
@@ -5988,6 +5989,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (event.logicalKey == LogicalKeyboardKey.enter &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleGroup();
+            // After grouping, move focus to denomination (or village for next entry)
+            if (_paymentMethod == 'CASH' && !_skipDenomination) {
+              FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+            }
+            return KeyEventResult.handled;
+          }
+
+          // Ctrl+Z → Move to village for next entry (after filling denomination)
+          if (event.logicalKey == LogicalKeyboardKey.keyZ &&
+              HardwareKeyboard.instance.isControlPressed) {
+            FocusScope.of(context).requestFocus(_villageFocusNode);
             return KeyEventResult.handled;
           }
 
