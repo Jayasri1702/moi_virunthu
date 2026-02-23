@@ -103,27 +103,44 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _villageFocusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
       final key = event.logicalKey;
+      final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-      // ARROW DOWN
-      if (key == LogicalKeyboardKey.arrowDown && _showVillageSuggestions) {
+      // TAB → if dropdown open, move highlight DOWN through suggestions
+      if (key == LogicalKeyboardKey.tab && !isShift && _showVillageSuggestions) {
+        // If we just reached the last item, close dropdown and go to next field
+        if (_villageHighlightIndex >= _villageSuggestions.length - 1) {
+          setState(() {
+            _villageSuggestions = [];
+            _showVillageSuggestions = false;
+            _villageHighlightIndex = -1;
+          });
+          FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+          return KeyEventResult.handled;
+        }
+        // Otherwise highlight next item
         setState(() {
-          _villageHighlightIndex =
-              (_villageHighlightIndex + 1) % _villageSuggestions.length;
+          _villageHighlightIndex = _villageHighlightIndex + 1;
         });
         return KeyEventResult.handled;
       }
 
-      // ARROW UP
-      if (key == LogicalKeyboardKey.arrowUp && _showVillageSuggestions) {
+      // SHIFT+TAB → move highlight UP through suggestions
+      if (key == LogicalKeyboardKey.tab && isShift && _showVillageSuggestions) {
+        if (_villageHighlightIndex <= 0) {
+          setState(() {
+            _villageSuggestions = [];
+            _showVillageSuggestions = false;
+            _villageHighlightIndex = -1;
+          });
+          return KeyEventResult.handled;
+        }
         setState(() {
-          _villageHighlightIndex =
-              (_villageHighlightIndex - 1 + _villageSuggestions.length) %
-                  _villageSuggestions.length;
+          _villageHighlightIndex = _villageHighlightIndex - 1;
         });
         return KeyEventResult.handled;
       }
 
-      // ENTER or SPACE → select highlighted suggestion
+      // ENTER or SPACE → select highlighted suggestion and go to next field
       if ((key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.space) &&
           _showVillageSuggestions &&
@@ -137,29 +154,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _showVillageSuggestions = false;
           _villageHighlightIndex = -1;
         });
-        return KeyEventResult.handled;
-      }
-
-      // TAB when suggestions are showing → close dropdown, stay on village field
-      if (key == LogicalKeyboardKey.tab && _showVillageSuggestions) {
-        if (_villageHighlightIndex >= 0 &&
-            _villageHighlightIndex < _villageSuggestions.length) {
-          setState(() {
-            _villageController.text = _villageSuggestions[_villageHighlightIndex];
-            _villageController.selection = TextSelection.fromPosition(
-                TextPosition(offset: _villageController.text.length));
-            _villageSuggestions = [];
-            _showVillageSuggestions = false;
-            _villageHighlightIndex = -1;
-          });
-        } else {
-          setState(() {
-            _villageSuggestions = [];
-            _showVillageSuggestions = false;
-            _villageHighlightIndex = -1;
-          });
-        }
-        // Stay on village field — next Tab will move to living city
+        FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
         return KeyEventResult.handled;
       }
 
@@ -170,24 +165,42 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _person1JobFocusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
       final key = event.logicalKey;
+      final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-      if (key == LogicalKeyboardKey.arrowDown && _showJobSuggestions) {
+      // TAB → move highlight DOWN, or exit dropdown and go to next field
+      if (key == LogicalKeyboardKey.tab && !isShift && _showJobSuggestions) {
+        if (_jobHighlightIndex >= _jobSuggestions.length - 1) {
+          setState(() {
+            _jobSuggestions = [];
+            _showJobSuggestions = false;
+            _jobHighlightIndex = -1;
+          });
+          FocusScope.of(context).requestFocus(_person2FocusNode);
+          return KeyEventResult.handled;
+        }
         setState(() {
-          _jobHighlightIndex =
-              (_jobHighlightIndex + 1) % _jobSuggestions.length;
+          _jobHighlightIndex = _jobHighlightIndex + 1;
         });
         return KeyEventResult.handled;
       }
 
-      if (key == LogicalKeyboardKey.arrowUp && _showJobSuggestions) {
+      // SHIFT+TAB → move highlight UP
+      if (key == LogicalKeyboardKey.tab && isShift && _showJobSuggestions) {
+        if (_jobHighlightIndex <= 0) {
+          setState(() {
+            _jobSuggestions = [];
+            _showJobSuggestions = false;
+            _jobHighlightIndex = -1;
+          });
+          return KeyEventResult.handled;
+        }
         setState(() {
-          _jobHighlightIndex =
-              (_jobHighlightIndex - 1 + _jobSuggestions.length) %
-                  _jobSuggestions.length;
+          _jobHighlightIndex = _jobHighlightIndex - 1;
         });
         return KeyEventResult.handled;
       }
 
+      // ENTER or SPACE → select highlighted and go to next field
       if ((key == LogicalKeyboardKey.enter ||
           key == LogicalKeyboardKey.space) &&
           _showJobSuggestions &&
@@ -201,27 +214,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _showJobSuggestions = false;
           _jobHighlightIndex = -1;
         });
-        return KeyEventResult.handled;
-      }
-
-      if (key == LogicalKeyboardKey.tab && _showJobSuggestions) {
-        if (_jobHighlightIndex >= 0 &&
-            _jobHighlightIndex < _jobSuggestions.length) {
-          setState(() {
-            _person1Field2Controller.text = _jobSuggestions[_jobHighlightIndex];
-            _person1Field2Controller.selection = TextSelection.fromPosition(
-                TextPosition(offset: _person1Field2Controller.text.length));
-            _jobSuggestions = [];
-            _showJobSuggestions = false;
-            _jobHighlightIndex = -1;
-          });
-        } else {
-          setState(() {
-            _jobSuggestions = [];
-            _showJobSuggestions = false;
-            _jobHighlightIndex = -1;
-          });
-        }
+        FocusScope.of(context).requestFocus(_person2FocusNode);
         return KeyEventResult.handled;
       }
 
