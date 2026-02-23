@@ -250,12 +250,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           if (!await downloadFolder.exists()) {
             await downloadFolder.create(recursive: true);
           }
-
-          // Create filename with timestamp and sanitize
-          final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-// Sanitize filename: replace spaces with underscore and remove dots
-          final sanitizedTitle = eventTitle.replaceAll(' ', '_').replaceAll('.', '_');
-          final fileName = 'receipts_${sanitizedTitle}_$timestamp.zip';
+          final fileName = 'all_receipts.zip';
 
           // Save file
           final file = File('${downloadFolder.path}/$fileName');
@@ -272,10 +267,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
           // iOS: Save to app documents directory
           final appDir = await getApplicationDocumentsDirectory();
-          final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-// Sanitize filename: replace spaces with underscore and remove dots
-          final sanitizedTitle = eventTitle.replaceAll(' ', '_').replaceAll('.', '_');
-          final fileName = 'receipts_${sanitizedTitle}_$timestamp.zip';
+          final fileName = 'all_receipts.zip';
 
           final file = File('${appDir.path}/$fileName');
           await file.writeAsBytes(bytes);

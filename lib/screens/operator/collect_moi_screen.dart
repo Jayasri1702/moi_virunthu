@@ -25,6 +25,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Add this state variable at the top of your state class:
   List<String> _villageSuggestions = [];
   bool _showVillageSuggestions = false;
+  int _villageHighlightIndex = -1;
+  int _jobHighlightIndex = -1;
 
   // Add these state variables:
   List<String> _jobSuggestions = [];
@@ -97,6 +99,72 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   void initState() {
     super.initState();
     _initializeDenominations();
+
+    _villageFocusNode.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent) return KeyEventResult.ignored;
+      final key = event.logicalKey;
+
+      // ARROW DOWN
+      if (key == LogicalKeyboardKey.arrowDown && _showVillageSuggestions) {
+        setState(() {
+          _villageHighlightIndex =
+              (_villageHighlightIndex + 1) % _villageSuggestions.length;
+        });
+        return KeyEventResult.handled;
+      }
+
+      // ARROW UP
+      if (key == LogicalKeyboardKey.arrowUp && _showVillageSuggestions) {
+        setState(() {
+          _villageHighlightIndex =
+              (_villageHighlightIndex - 1 + _villageSuggestions.length) %
+                  _villageSuggestions.length;
+        });
+        return KeyEventResult.handled;
+      }
+
+      // ENTER or SPACE → select highlighted suggestion
+      if ((key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.space) &&
+          _showVillageSuggestions &&
+          _villageHighlightIndex >= 0 &&
+          _villageHighlightIndex < _villageSuggestions.length) {
+        setState(() {
+          _villageController.text = _villageSuggestions[_villageHighlightIndex];
+          _villageController.selection = TextSelection.fromPosition(
+              TextPosition(offset: _villageController.text.length));
+          _villageSuggestions = [];
+          _showVillageSuggestions = false;
+          _villageHighlightIndex = -1;
+        });
+        return KeyEventResult.handled;
+      }
+
+      // TAB when suggestions are showing → close dropdown, stay on village field
+      if (key == LogicalKeyboardKey.tab && _showVillageSuggestions) {
+        if (_villageHighlightIndex >= 0 &&
+            _villageHighlightIndex < _villageSuggestions.length) {
+          setState(() {
+            _villageController.text = _villageSuggestions[_villageHighlightIndex];
+            _villageController.selection = TextSelection.fromPosition(
+                TextPosition(offset: _villageController.text.length));
+            _villageSuggestions = [];
+            _showVillageSuggestions = false;
+            _villageHighlightIndex = -1;
+          });
+        } else {
+          setState(() {
+            _villageSuggestions = [];
+            _showVillageSuggestions = false;
+            _villageHighlightIndex = -1;
+          });
+        }
+        // Stay on village field — next Tab will move to living city
+        return KeyEventResult.handled;
+      }
+
+      return KeyEventResult.ignored;
+    };
   }
 
   @override
@@ -1326,7 +1394,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       await _clearFormForNextEntry();
       await _loadPreviewSerialNo();  // ✅ Update preview for next entry
-      _phoneFocusNode.requestFocus();
+
+// Move focus to denomination after grouping
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_paymentMethod == 'CASH' && !_skipDenomination) {
+            FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+          } else {
+            FocusScope.of(context).requestFocus(_villageFocusNode);
+          }
+        });
+      }
 
     } catch (e) {
       print('Error in group operation: $e');
@@ -5989,10 +6067,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           if (event.logicalKey == LogicalKeyboardKey.enter &&
               HardwareKeyboard.instance.isControlPressed) {
             _handleGroup();
-            // After grouping, move focus to denomination (or village for next entry)
-            if (_paymentMethod == 'CASH' && !_skipDenomination) {
-              FocusScope.of(context).requestFocus(_firstDenomFocusNode);
-            }
             return KeyEventResult.handled;
           }
 
@@ -6322,7 +6396,6 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     );
   }
 
-  // Replace _buildVillageAndLivingPlace():
   Widget _buildVillageAndLivingPlace() {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -6342,9 +6415,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _villageController,
-                  focusNode: _villageFocusNode,                    // ADD
-                  textInputAction: TextInputAction.next,            // ADD
-                  onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_livingPlaceFocusNode), // ADD
+                  focusNode: _villageFocusNode,
+                  textInputAction: TextInputAction.next,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Village name is required';
@@ -6354,11 +6426,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
+                  onFieldSubmitted: (_) {
+                    if (!_showVillageSuggestions) {
+                      FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                    }
+                  },
                   onChanged: (value) {
-                    _loadVillageSuggestions(value);
+                    if (value.trim().isEmpty) {
+                      setState(() {
+                        _villageSuggestions = [];
+                        _showVillageSuggestions = false;
+                        _villageHighlightIndex = -1;
+                      });
+                    } else {
+                      _loadVillageSuggestions(value);
+                    }
                   },
                   onTap: () {
                     if (_villageController.text.isNotEmpty) {
@@ -6373,28 +6459,62 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                       color: Colors.white,
                       border: Border.all(color: Colors.blue, width: 1.5),
                       borderRadius: BorderRadius.circular(4),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 4)
+                      ],
                     ),
                     child: ListView.builder(
                       shrinkWrap: true,
                       itemCount: _villageSuggestions.length,
                       itemBuilder: (context, index) {
+                        final isHighlighted = index == _villageHighlightIndex;
                         return InkWell(
                           onTap: () {
-                            _villageController.text = _villageSuggestions[index];
                             setState(() {
+                              _villageController.text = _villageSuggestions[index];
+                              _villageController.selection =
+                                  TextSelection.fromPosition(TextPosition(
+                                      offset: _villageController.text.length));
                               _villageSuggestions = [];
                               _showVillageSuggestions = false;
+                              _villageHighlightIndex = -1;
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
                             decoration: BoxDecoration(
-                              border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
+                              color: isHighlighted
+                                  ? Colors.blue[100]
+                                  : Colors.transparent,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.grey[200]!, width: 1),
+                              ),
                             ),
-                            child: Text(
-                              _villageSuggestions[index],
-                              style: const TextStyle(fontSize: 13),
+                            child: Row(
+                              children: [
+                                if (isHighlighted)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: Icon(Icons.chevron_right,
+                                        size: 14, color: Colors.blue),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    _villageSuggestions[index],
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isHighlighted
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isHighlighted
+                                          ? Colors.blue[900]
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -6414,13 +6534,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _livingPlaceController,
-                  focusNode: _livingPlaceFocusNode,                // ADD
-                  textInputAction: TextInputAction.next,            // ADD
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_person1NameFocusNode), // ADD
+                  focusNode: _livingPlaceFocusNode,
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_person1NameFocusNode),
                   style: const TextStyle(fontSize: 13),
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     isDense: true,
                   ),
                 ),
@@ -6480,7 +6602,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               isDense: true,
             ),
             onChanged: (value) {
-              _loadJobSuggestions(value);
+              if (value.trim().isEmpty) {
+                setState(() {
+                  _jobSuggestions = [];
+                  _showJobSuggestions = false;
+                  _jobHighlightIndex = -1;
+                });
+              } else {
+                _loadJobSuggestions(value);
+              }
             },
             onTap: () {
               if (_person1Field2Controller.text.isNotEmpty) {
@@ -6497,30 +6627,56 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 borderRadius: BorderRadius.circular(4),
                 boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
               ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _jobSuggestions.length,
-                itemBuilder: (context, index) {
-                  return InkWell(
-                    onTap: () {
-                      _person1Field2Controller.text = _jobSuggestions[index];
+              child: RawKeyboardListener(
+                focusNode: FocusNode(),
+                onKey: (event) {
+                  if (event is RawKeyDownEvent) {
+                    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+                      setState(() {
+                        _jobHighlightIndex = (_jobHighlightIndex + 1) % _jobSuggestions.length;
+                      });
+                    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                      setState(() {
+                        _jobHighlightIndex = (_jobHighlightIndex - 1 + _jobSuggestions.length) % _jobSuggestions.length;
+                      });
+                    } else if (event.logicalKey == LogicalKeyboardKey.enter && _jobHighlightIndex >= 0) {
+                      _person1Field2Controller.text = _jobSuggestions[_jobHighlightIndex];
                       setState(() {
                         _jobSuggestions = [];
                         _showJobSuggestions = false;
+                        _jobHighlightIndex = -1;
                       });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
-                      ),
-                      child: Text(
-                        _jobSuggestions[index],
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                    ),
-                  );
+                    }
+                  }
                 },
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _jobSuggestions.length,
+                  itemBuilder: (context, index) {
+                    final isHighlighted = index == _jobHighlightIndex;
+                    return InkWell(
+                      onTap: () {
+                        _person1Field2Controller.text = _jobSuggestions[index];
+                        setState(() {
+                          _jobSuggestions = [];
+                          _showJobSuggestions = false;
+                          _jobHighlightIndex = -1;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        color: isHighlighted ? Colors.blue[100] : null,
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
+                        ),
+                        child: Text(
+                          _jobSuggestions[index],
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
         ],
