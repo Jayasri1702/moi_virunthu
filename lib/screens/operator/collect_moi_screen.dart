@@ -165,7 +165,71 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
       return KeyEventResult.ignored;
     };
-  }
+
+    // ── ADD HERE ──────────────────────────────────────────
+    _person1JobFocusNode.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent) return KeyEventResult.ignored;
+      final key = event.logicalKey;
+
+      if (key == LogicalKeyboardKey.arrowDown && _showJobSuggestions) {
+        setState(() {
+          _jobHighlightIndex =
+              (_jobHighlightIndex + 1) % _jobSuggestions.length;
+        });
+        return KeyEventResult.handled;
+      }
+
+      if (key == LogicalKeyboardKey.arrowUp && _showJobSuggestions) {
+        setState(() {
+          _jobHighlightIndex =
+              (_jobHighlightIndex - 1 + _jobSuggestions.length) %
+                  _jobSuggestions.length;
+        });
+        return KeyEventResult.handled;
+      }
+
+      if ((key == LogicalKeyboardKey.enter ||
+          key == LogicalKeyboardKey.space) &&
+          _showJobSuggestions &&
+          _jobHighlightIndex >= 0 &&
+          _jobHighlightIndex < _jobSuggestions.length) {
+        setState(() {
+          _person1Field2Controller.text = _jobSuggestions[_jobHighlightIndex];
+          _person1Field2Controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: _person1Field2Controller.text.length));
+          _jobSuggestions = [];
+          _showJobSuggestions = false;
+          _jobHighlightIndex = -1;
+        });
+        return KeyEventResult.handled;
+      }
+
+      if (key == LogicalKeyboardKey.tab && _showJobSuggestions) {
+        if (_jobHighlightIndex >= 0 &&
+            _jobHighlightIndex < _jobSuggestions.length) {
+          setState(() {
+            _person1Field2Controller.text = _jobSuggestions[_jobHighlightIndex];
+            _person1Field2Controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: _person1Field2Controller.text.length));
+            _jobSuggestions = [];
+            _showJobSuggestions = false;
+            _jobHighlightIndex = -1;
+          });
+        } else {
+          setState(() {
+            _jobSuggestions = [];
+            _showJobSuggestions = false;
+            _jobHighlightIndex = -1;
+          });
+        }
+        return KeyEventResult.handled;
+      }
+
+      return KeyEventResult.ignored;
+    };
+    // ── END ADD ───────────────────────────────────────────
+
+  } // ← this is the closing } of initState()
 
   @override
   void didChangeDependencies() {
@@ -6625,58 +6689,66 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 color: Colors.white,
                 border: Border.all(color: Colors.blue, width: 1.5),
                 borderRadius: BorderRadius.circular(4),
-                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4)
+                ],
               ),
-              child: RawKeyboardListener(
-                focusNode: FocusNode(),
-                onKey: (event) {
-                  if (event is RawKeyDownEvent) {
-                    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _jobSuggestions.length,
+                itemBuilder: (context, index) {
+                  final isHighlighted = index == _jobHighlightIndex;
+                  return InkWell(
+                    onTap: () {
                       setState(() {
-                        _jobHighlightIndex = (_jobHighlightIndex + 1) % _jobSuggestions.length;
-                      });
-                    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-                      setState(() {
-                        _jobHighlightIndex = (_jobHighlightIndex - 1 + _jobSuggestions.length) % _jobSuggestions.length;
-                      });
-                    } else if (event.logicalKey == LogicalKeyboardKey.enter && _jobHighlightIndex >= 0) {
-                      _person1Field2Controller.text = _jobSuggestions[_jobHighlightIndex];
-                      setState(() {
+                        _person1Field2Controller.text = _jobSuggestions[index];
+                        _person1Field2Controller.selection =
+                            TextSelection.fromPosition(TextPosition(
+                                offset: _person1Field2Controller.text.length));
                         _jobSuggestions = [];
                         _showJobSuggestions = false;
                         _jobHighlightIndex = -1;
                       });
-                    }
-                  }
-                },
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _jobSuggestions.length,
-                  itemBuilder: (context, index) {
-                    final isHighlighted = index == _jobHighlightIndex;
-                    return InkWell(
-                      onTap: () {
-                        _person1Field2Controller.text = _jobSuggestions[index];
-                        setState(() {
-                          _jobSuggestions = [];
-                          _showJobSuggestions = false;
-                          _jobHighlightIndex = -1;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                        color: isHighlighted ? Colors.blue[100] : null,
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.grey[200]!, width: 1)),
-                        ),
-                        child: Text(
-                          _jobSuggestions[index],
-                          style: const TextStyle(fontSize: 13),
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isHighlighted
+                            ? Colors.blue[100]
+                            : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                              color: Colors.grey[200]!, width: 1),
                         ),
                       ),
-                    );
-                  },
-                ),
+                      child: Row(
+                        children: [
+                          if (isHighlighted)
+                            const Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(Icons.chevron_right,
+                                  size: 14, color: Colors.blue),
+                            ),
+                          Expanded(
+                            child: Text(
+                              _jobSuggestions[index],
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isHighlighted
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: isHighlighted
+                                    ? Colors.blue[900]
+                                    : Colors.black,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
         ],
