@@ -272,8 +272,8 @@ class ThermalPrinterService {
       if (escPosData.isEmpty) return false;
 
       // ✅ OPTIMIZED: Reduced line feeds from 5 to 2 (saves ~300-600ms)
-      escPosData.addAll([0x0A, 0x0A]); // 2 line feeds
-      escPosData.addAll([0x1D, 0x56, 0x00]); // Full cut
+      escPosData.addAll([0x0A, 0x0A, 0x0A, 0x0A, 0x0A]);
+      escPosData.addAll([0x1D, 0x56, 0x00]);
 
       print('🖨️ USB: Sending ${escPosData.length} bytes in single write...');
 
@@ -366,11 +366,12 @@ class ThermalPrinterService {
 
       print('✅ Bluetooth: All data sent');
 
-// ✅ FIX: Reduced spacing before cut (from 5 to 2 line feeds)
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
+      await _bluetooth.printNewLine();
       await _bluetooth.printNewLine();
       await _bluetooth.printNewLine();
 
-// Cut
       await _bluetooth.paperCut();
 
       print('✅ Bluetooth Print completed');
