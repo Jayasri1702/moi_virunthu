@@ -959,6 +959,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 12),
+                  // Sample Receipt Button - Always visible
                   Row(
                     children: [
                       Expanded(
@@ -967,35 +968,43 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         }),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildGridButton('Final Moi Report', Icons.assessment, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => FinalMoiReportScreen(
-                                eventId: eventData!['id'],
+                      // Final Moi Report Button - Only for Admin
+                      if (_isAdminView)
+                        Expanded(
+                          child: _buildGridButton('Final Moi Report', Icons.assessment, () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => FinalMoiReportScreen(
+                                  eventId: eventData!['id'],
+                                ),
                               ),
-                            ),
-                          );
-                        }),
-                      ),
+                            );
+                          }),
+                        )
+                      else
+                        Expanded(
+                          child: Container(),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Export Receipts Button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildGridButton('Export Receipts', Icons.file_download, () {
-                          _showExportReceiptsDialog();
-                        }),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Container(),
-                      ),
-                    ],
-                  ),
+                  // Export Receipts Button - Only for Admin
+                  if (_isAdminView) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildGridButton('Export Receipts', Icons.file_download, () {
+                            _showExportReceiptsDialog();
+                          }),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(),
+                        ),
+                      ],
+                    ),
+                  ],
 
                   const SizedBox(height: 20),
                 ],
