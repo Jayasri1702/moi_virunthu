@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:io';
 
 class NetworkUtils {
-  // Check if device has internet connection
+  // Check if device has actual internet connection (not just network interface)
   static Future<bool> hasConnection() async {
-    var connectivityResult = await Connectivity().checkConnectivity();
-    return connectivityResult != ConnectivityResult.none;
+    try {
+      // First check if network interface exists
+      var connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult == ConnectivityResult.none) {
+        return false;
+      }
+
+      // Then verify actual internet connectivity by doing a DNS lookup
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } on SocketException catch (_) {
+      return false;
+    } catch (e) {
+      return false;
+    }
   }
 
   // Check if error is network-related
@@ -17,7 +31,8 @@ class NetworkUtils {
         errorString.contains('network is unreachable') ||
         errorString.contains('connection refused') ||
         errorString.contains('connection timed out') ||
-        errorString.contains('no address associated with hostname');
+        errorString.contains('no address associated with hostname') ||
+        errorString.contains('unable to resolve host');
   }
 
   // Show connection error dialog with retry option
@@ -48,12 +63,12 @@ class NetworkUtils {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Please check your internet connection and try again.',
+                'Unable to connect to the internet. Please check your connection.',
                 style: TextStyle(fontSize: 16),
               ),
               SizedBox(height: 8),
               Text(
-                '• Check if WiFi or mobile data is enabled\n• Check if you have network coverage',
+                '• Move closer to your WiFi router\n• Try switching to mobile data\n• Restart your WiFi/mobile connection\n• Try again in a moment',
                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
             ],

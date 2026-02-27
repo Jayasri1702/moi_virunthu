@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:argon2/argon2.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
-import '../utils/network_utils.dart'; // ✅ ADD THIS IMPORT
+import '../utils/network_utils.dart';
 import 'session_manager.dart';
 
 class AuthService {
@@ -79,7 +79,28 @@ class AuthService {
     }
   }
 
-  // ✅ UPDATED: Now returns Map<String, dynamic> instead of UserModel?
+  /// ✅ Generate auth token (NO external package needed!)
+  /// Simple but effective token generation using base64
+  String _generateAuthToken(String userId, String userName) {
+    try {
+      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Create token with user info and timestamp
+      final tokenData = '$userId:$userName:$timestamp';
+
+      // Encode to base64
+      final token = base64Encode(utf8.encode(tokenData));
+
+      print('✅ Generated auth token: ${token.substring(0, 50)}...');
+      return token;
+    } catch (e) {
+      print('❌ Error generating token: $e');
+      // Fallback: return a simple UUID-like token
+      return '${DateTime.now().millisecondsSinceEpoch}-$userId';
+    }
+  }
+
+  /// ✅ UPDATED: Now returns Map<String, dynamic> with auth token
   Future<Map<String, dynamic>> login(String fullName, String password) async {
     try {
       print('Attempting login for full_name: $fullName');
@@ -123,9 +144,15 @@ class AuthService {
       }
 
       print('Login successful');
+      final user = UserModel.fromMap(row);
+
+      // ✅ Generate auth token
+      final authToken = _generateAuthToken(user.id, user.fullName);
+
       return {
         'success': true,
-        'user': UserModel.fromMap(row),
+        'user': user,
+        'token': authToken, // ✅ Return auth token
       };
     } catch (e) {
       print('Login error: $e');

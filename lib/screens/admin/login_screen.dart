@@ -18,7 +18,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   bool _obscurePassword = true;
 
-  void _showMessage(String m) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  void _showMessage(String m) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m))
+  );
 
   Future<void> _login() async {
     // Basic validation first (no internet needed)
@@ -58,7 +60,20 @@ class _LoginScreenState extends State<LoginScreen> {
       if (result['success'] == true) {
         final user = result['user'] as UserModel;
 
-        await SessionManager.saveSession(user);
+        // ✅ NEW: Get auth token from login result
+        final authToken = result['token'] as String?;
+
+        if (authToken != null) {
+          print('✅ Using auth token from backend: ${authToken.substring(0, 30)}...');
+        } else {
+          print('⚠️ No auth token in login response');
+        }
+
+        // ✅ Save session WITH auth token
+        await SessionManager.saveSession(
+          user,
+          authToken: authToken,
+        );
 
         // Navigate based on role
         if (user.role == 'admin') {
@@ -167,8 +182,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       hintText: 'User ID',
                       hintStyle: TextStyle(color: Colors.grey[400]),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                      suffixIcon: const Icon(Icons.person, color: Colors.black, size: 28),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      suffixIcon: const Icon(
+                        Icons.person,
+                        color: Colors.black,
+                        size: 28,
+                      ),
                     ),
                   ),
                 ),
@@ -188,7 +210,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       hintText: 'Password',
                       hintStyle: TextStyle(color: Colors.grey[400]),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.lock : Icons.lock_open,

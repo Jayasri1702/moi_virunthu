@@ -13,6 +13,7 @@ import '../../services/receipt_generator.dart';
 import 'package:printing/printing.dart';
 import '../../services/final_moi_report_screen.dart';
 import '../../utils/network_utils.dart';
+import '../../services/session_manager.dart'; // ✅ ADD THIS
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -21,13 +22,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:open_file/open_file.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 import '../../services/thermal_printer_service.dart';
-
+import 'dart:async';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({super.key});
@@ -55,6 +52,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         _isAdminView = args['_is_admin_view'] == true;
         _noOfDownloads = args['no_of_downloads'] ?? 0;
       });
+
+      // ✅ DEBUG: Print session info
+      _debugPrintSessionInfo();
     }
   }
 
@@ -68,8 +68,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 
-// Add these as class-level variables at the top of your State class:
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+  FlutterLocalNotificationsPlugin();
 
   @override
   void initState() {
@@ -102,7 +102,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     // Request notification permission for Android 13+
     if (Platform.isAndroid) {
       await _notificationsPlugin
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
           ?.requestNotificationsPermission();
     }
   }
@@ -136,7 +137,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return true;
   }
 
-  Future<void> _showDownloadNotification(String fileName, String filePath) async {
+  Future<void> _showDownloadNotification(String fileName, String folderPath) async {
     final androidDetails = AndroidNotificationDetails(
       'download_channel',
       'Downloads',
@@ -146,7 +147,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       showWhen: true,
       icon: '@mipmap/ic_launcher',
       styleInformation: BigTextStyleInformation(
-        'Tap to open the file',
+        'Tap to open the folder',
         contentTitle: 'Download Complete',
       ),
     );
@@ -167,11 +168,237 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       'Download Complete',
       fileName,
       notificationDetails,
-      payload: filePath,
+      payload: folderPath,
     );
   }
 
+  /// ✅ UPDATED: Check authentication from SharedPreferences too
+  Future<bool> _ensureAuthenticated() async {
+    var session = Supabase.instance.client.auth.currentSession;
+    var authToken = session?.accessToken;
+
+    // If no Supabase session, try SharedPreferences
+    if (authToken == null || authToken.isEmpty) {
+      print('⚠️ No Supabase session, checking SharedPreferences...');
+      authToken = await SessionManager.getStoredAuthToken();
+    }
+
+    if (authToken == null || authToken.isEmpty) {
+      print('❌ NO AUTH TOKEN FOUND - User not authenticated');
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Session Expired'),
+            content: const Text('Your session has expired. Please login again.'),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pushNamedAndRemoveUntil(
+                    context,
+                    '/login',
+                        (route) => false,
+                  );
+                },
+                child: const Text('Login Again'),
+              ),
+            ],
+          ),
+        );
+      }
+      return false;
+    }
+
+    print('✅ SESSION VALID - Token present');
+    return true;
+  }
+
+  /// ✅ NEW: Debug method to print session info
+  void _debugPrintSessionInfo() {
+    final session = Supabase.instance.client.auth.currentSession;
+    print('📱 ===== SESSION DEBUG INFO =====');
+    print('📱 Session exists: ${session != null}');
+    if (session != null) {
+      print('📱 User ID: ${session.user.id}');
+      print('📱 Email: ${session.user.email}');
+      print('📱 Token exists: ${session.accessToken != null}');
+      print('📱 Token length: ${session.accessToken?.length ?? 0}');
+      print('📱 Expires at: ${session.expiresAt}');
+    }
+    print('📱 ===============================');
+  }
+
+  /// ✅ UPDATED: Get auth headers with token AND event_id
+  /// First tries Supabase session, then falls back to SharedPreferences
+  Future<Map<String, String>> _getAuthHeaders() async {
+    // First, try to get token from Supabase session
+    var authToken = Supabase.instance.client.auth.currentSession?.accessToken;
+
+    // If no Supabase session, get from SharedPreferences
+    if (authToken == null || authToken.isEmpty) {
+      print('⚠️ No Supabase session, trying SharedPreferences...');
+      authToken = await SessionManager.getStoredAuthToken();
+
+      if (authToken != null) {
+        print('✅ Auth token restored from SharedPreferences');
+      }
+    }
+
+    final eventId = eventData?['id'];
+
+    final headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // ✅ ADD EVENT_ID TO HEADERS
+    if (eventId != null) {
+      headers['X-Event-ID'] = eventId.toString();
+      print('✅ Added Event ID to header: $eventId');
+    }
+
+    // ✅ ADD AUTHORIZATION TOKEN
+    if (authToken != null && authToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $authToken';
+      print('✅ Added Auth token to header');
+    } else {
+      print('❌ WARNING: No auth token available!');
+    }
+
+    print('📋 Headers being sent: ${headers.keys.toList()}');
+    return headers;
+  }
+
+  /// Fetches the file tree structure from the cloud endpoint (receipts_list only)
+  Future<Map<String, dynamic>> _fetchFileTree() async {
+    final eventId = eventData!['id'];
+
+    print('🌳 Fetching file tree for event: $eventId');
+
+    // ✅ Get auth headers (includes token AND event_id)
+    final headers = await _getAuthHeaders();
+
+    // Only call receipts_list endpoint
+    final response = await http.post(
+      Uri.parse(
+          'https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts_list'),
+      headers: headers,
+      body: json.encode({'event_id': eventId}),
+    );
+
+    print('🌳 Response status: ${response.statusCode}');
+    print('🌳 Response body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      print('🌳 File tree fetched successfully');
+      return data['tree'] ?? {};
+    } else {
+      print('🌳 Error: ${response.body}');
+      throw Exception(
+          'Failed to fetch file tree: ${response.statusCode} - ${response.body}');
+    }
+  }
+
+  /// ✅ Downloads a single file with auth headers
+  Future<void> _downloadFile(
+      String fileUrl,
+      String destinationPath,
+      Map<String, String> authHeaders,
+      ) async {
+    try {
+      final response = await http.get(
+        Uri.parse(fileUrl),
+        headers: authHeaders,
+      );
+
+      if (response.statusCode == 200) {
+        final file = File(destinationPath);
+        await file.writeAsBytes(response.bodyBytes);
+        print('✅ Downloaded: $destinationPath');
+      } else {
+        throw Exception(
+            'Failed to download file: ${response.statusCode} - $fileUrl');
+      }
+    } catch (e) {
+      print('❌ Error downloading file: $e');
+      rethrow;
+    }
+  }
+
+  /// Recursively processes the file tree and downloads all files
+  Future<void> _processFileTree(
+      Map<String, dynamic> tree,
+      String baseDir,
+      List<Map<String, dynamic>> downloadTasks,
+      ) async {
+    for (final key in tree.keys) {
+      final item = tree[key];
+
+      if (item['type'] == 'folder') {
+        // Create folder directory
+        final folderPath = '$baseDir/$key';
+        final folder = Directory(folderPath);
+
+        if (!await folder.exists()) {
+          await folder.create(recursive: true);
+          print('📁 Created folder: $folderPath');
+        }
+
+        // Recursively process children
+        if (item['children'] != null) {
+          await _processFileTree(item['children'], folderPath, downloadTasks);
+        }
+      } else if (item['type'] == 'file') {
+        // Add file to download queue
+        downloadTasks.add({
+          'url': item['url'],
+          'path': '$baseDir/$key',
+          'name': key,
+        });
+      }
+    }
+  }
+
+  /// ✅ Downloads multiple files concurrently with auth
+  Future<void> _downloadFilesParallel(
+      List<Map<String, dynamic>> downloadTasks,
+      Map<String, String> authHeaders,
+      {
+        int maxConcurrent = 5,
+      }) async {
+    print('📥 Starting parallel downloads: ${downloadTasks.length} files');
+
+    // Create chunks of tasks to download concurrently
+    for (int i = 0; i < downloadTasks.length; i += maxConcurrent) {
+      final chunk = downloadTasks.sublist(
+        i,
+        (i + maxConcurrent > downloadTasks.length)
+            ? downloadTasks.length
+            : i + maxConcurrent,
+      );
+
+      // Download all files in this chunk in parallel
+      await Future.wait(
+        chunk.map((task) => _downloadFile(
+          task['url'],
+          task['path'],
+          authHeaders,
+        )),
+        eagerError: true,
+      );
+
+      print('📥 Completed chunk ${(i ~/ maxConcurrent) + 1}');
+    }
+
+    print('📥 All files downloaded successfully');
+  }
+
   Future<void> _downloadReceipts() async {
+    // ✅ STEP 0: Check if user is authenticated
+    if (!await _ensureAuthenticated()) {
+      return; // User will be redirected to login
+    }
+
     // Step 1: Request storage permission
     if (!await _requestStoragePermission()) {
       if (mounted) {
@@ -202,165 +429,142 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       print('📥 Event ID: $eventId');
       print('📥 Event Title: $eventTitle');
 
-      // Step 3: Get auth token
-      final session = Supabase.instance.client.auth.currentSession;
-      final authToken = session?.accessToken;
+      // ✅ Get auth headers (which now includes event_id)
+      final authHeaders = await _getAuthHeaders();
+      print('📥 Auth Headers: $authHeaders');
 
-      print('📥 Auth token present: ${authToken != null}');
+      // Step 3: Fetch file tree structure
+      final fileTree = await _fetchFileTree();
 
-      // Step 4: Make POST request to download receipts
-      final response = await http.post(
-        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/receipts-download'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (authToken != null) 'Authorization': 'Bearer $authToken',
-        },
-        body: json.encode({
-          'event_id': eventId,
-          'event_title': eventTitle,
-        }),
+      // Step 4: Prepare download directory
+      String? saveDirPath;
+
+      if (Platform.isAndroid) {
+        final downloadsDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadsDir.exists()) {
+          await downloadsDir.create(recursive: true);
+        }
+        if (downloadsDir == null) {
+          throw Exception('Cannot access storage directory');
+        }
+
+        final eventFolder = Directory('${downloadsDir.path}/$eventTitle');
+        if (!await eventFolder.exists()) {
+          await eventFolder.create(recursive: true);
+        }
+
+        saveDirPath = eventFolder.path;
+
+        print('✅ Save directory: $saveDirPath');
+      } else if (Platform.isIOS) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final eventFolder = Directory('${appDir.path}/$eventTitle');
+        if (!await eventFolder.exists()) {
+          await eventFolder.create(recursive: true);
+        }
+
+        saveDirPath = eventFolder.path;
+
+        print('✅ Save directory: $saveDirPath');
+      }
+
+      // Step 5: Build list of download tasks
+      final List<Map<String, dynamic>> downloadTasks = [];
+      await _processFileTree(fileTree, saveDirPath!, downloadTasks);
+
+      if (downloadTasks.isEmpty) {
+        if (mounted) Navigator.pop(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ℹ️ No files to download'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      print('📥 Total files to download: ${downloadTasks.length}');
+
+      // Step 6: Download all files with parallel execution and auth headers
+      await _downloadFilesParallel(
+        downloadTasks,
+        authHeaders,
+        maxConcurrent: 5,
       );
 
-      print('📥 Response status: ${response.statusCode}');
-      print('📥 Response headers: ${response.headers}');
-      print('📥 =====================================');
-
-      // Step 5: Close loading dialog
+      // Step 7: Close loading dialog
       if (mounted) Navigator.pop(context);
 
-      // Step 6: Check for success
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Get the ZIP file bytes
-        final bytes = response.bodyBytes;
-        print('📥 Downloaded ${bytes.length} bytes');
+      // Step 8: Update download count in database
+      await Supabase.instance.client
+          .from('events')
+          .update({
+        'no_of_downloads': _noOfDownloads + 1,
+      }).eq('id', eventId);
 
-        // Step 7: Save file to Downloads directory
-        String? savedFilePath;
-        String? savedFileName;
-
-        if (Platform.isAndroid) {
-          // Use app's external directory which doesn't need special permissions
-          final downloadsDir = await getExternalStorageDirectory();
-          if (downloadsDir == null) {
-            throw Exception('Cannot access storage directory');
-          }
-
-          // Create a Downloads subfolder in the app's directory
-          final downloadFolder = Directory('${downloadsDir.path}/Downloads');
-          if (!await downloadFolder.exists()) {
-            await downloadFolder.create(recursive: true);
-          }
-          final fileName = 'all_receipts.zip';
-
-          // Save file
-          final file = File('${downloadFolder.path}/$fileName');
-          await file.writeAsBytes(bytes);
-
-          savedFilePath = file.path;
-          savedFileName = fileName;
-
-          // Debug logs
-          print('✅ File saved to: ${file.path}');
-          print('📁 File exists: ${await file.exists()}');
-          print('📁 File size: ${await file.length()} bytes');
-        } else if (Platform.isIOS) {
-
-          // iOS: Save to app documents directory
-          final appDir = await getApplicationDocumentsDirectory();
-          final fileName = 'all_receipts.zip';
-
-          final file = File('${appDir.path}/$fileName');
-          await file.writeAsBytes(bytes);
-
-          savedFilePath = file.path;
-          savedFileName = fileName;
-
-          print('✅ File saved to: ${file.path}');
+      // Step 9: Update local state
+      setState(() {
+        _noOfDownloads += 1;
+        if (eventData != null) {
+          eventData!['no_of_downloads'] = _noOfDownloads;
         }
+      });
 
-        // Step 8: Update download count in database
-        await Supabase.instance.client
-            .from('events')
-            .update({
-          'no_of_downloads': _noOfDownloads + 1,
-        })
-            .eq('id', eventId);
+      // Step 10: Show notification and success message
+      if (saveDirPath != null) {
+        await _showDownloadNotification('All receipts', saveDirPath);
 
-        // Step 9: Update local state
-        setState(() {
-          _noOfDownloads += 1;
-          if (eventData != null) {
-            eventData!['no_of_downloads'] = _noOfDownloads;
-          }
-        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  '✅ ${downloadTasks.length} files downloaded successfully\nLocation: $eventTitle'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'OPEN',
+                textColor: Colors.white,
+                onPressed: () async {
+                  final result = await OpenFile.open(saveDirPath);
+                  print('Open folder result: ${result.message}');
 
-        // Step 10: Show notification
-        if (savedFileName != null && savedFilePath != null) {
-          await _showDownloadNotification(savedFileName, savedFilePath);
-
-          // Step 11: Show success message with open action
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('✅ Receipts saved to Downloads/$savedFileName\nTap notification to open'),
-                backgroundColor: Colors.green,
-                duration: const Duration(seconds: 5),
-                action: SnackBarAction(
-                  label: 'OPEN',
-                  textColor: Colors.white,
-                  onPressed: () async {
-                    final result = await OpenFile.open(savedFilePath);
-                    print('Open file result: ${result.message}');
-
-                    // If no app found, show instructions
-                    if (result.type == ResultType.noAppToOpen) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Please install a ZIP file manager app to open this file.\n\nFile location: $savedFilePath'),
-                            backgroundColor: Colors.orange,
-                            duration: const Duration(seconds: 7),
-                            action: SnackBarAction(
-                              label: 'COPY PATH',
-                              textColor: Colors.white,
-                              onPressed: () {
-                                // FIXED: Added null check for clipboard
-                                if (savedFilePath != null) {
-                                  Clipboard.setData(ClipboardData(text: savedFilePath));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Path copied to clipboard')),
-                                  );
-                                }
-                              },
-                            ),
+                  if (result.type == ResultType.noAppToOpen) {
+                    if (mounted && saveDirPath != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                              'Folder location: $saveDirPath'),
+                          backgroundColor: Colors.orange,
+                          duration: const Duration(seconds: 7),
+                          action: SnackBarAction(
+                            label: 'COPY PATH',
+                            textColor: Colors.white,
+                            onPressed: () {
+                              if (saveDirPath != null) {
+                                Clipboard.setData(
+                                    ClipboardData(text: saveDirPath));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Path copied to clipboard')),
+                                );
+                              }
+                            },
                           ),
-                        );
-                      }
+                        ),
+                      );
                     }
-                  },
-                ),
+                  }
+                },
               ),
-            );
-          }
+            ),
+          );
         }
-      } else {
-        // Parse error message from response
-        String errorMessage = 'Failed to download receipts (Status: ${response.statusCode})';
-        try {
-          final errorBody = json.decode(response.body);
-          if (errorBody['error'] != null) {
-            errorMessage = errorBody['error'];
-          } else if (errorBody['message'] != null) {
-            errorMessage = errorBody['message'];
-          }
-        } catch (e) {
-          if (response.body.isNotEmpty) {
-            errorMessage = response.body;
-          }
-        }
-
-        throw Exception(errorMessage);
       }
+
+      print('📥 =====================================');
     } catch (e) {
       print('❌ Error downloading receipts: $e');
 
@@ -370,7 +574,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       }
 
       if (mounted) {
-        // Show detailed error message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error downloading receipts: ${e.toString()}'),
@@ -388,6 +591,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   }
 
   Future<void> _deleteReceipts() async {
+    // ✅ Check authentication first
+    if (!await _ensureAuthenticated()) {
+      return;
+    }
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
@@ -429,19 +637,15 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       print('🗑️ ========== DELETE STARTED ==========');
       print('🗑️ Event ID: $eventId');
 
-      // Get auth token
-      final session = Supabase.instance.client.auth.currentSession;
-      final authToken = session?.accessToken;
-
-      print('🗑️ Auth token present: ${authToken != null}');
+      // ✅ Get auth headers
+      final authHeaders = await _getAuthHeaders();
+      print('🗑️ Auth token present: ${authHeaders.containsKey('Authorization')}');
 
       // Make DELETE request to the API
       final response = await http.delete(
-        Uri.parse('https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/delete_receipts'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (authToken != null) 'Authorization': 'Bearer $authToken',
-        },
+        Uri.parse(
+            'https://agmwcgxssorjwiinpknr.supabase.co/functions/v1/delete_receipts'),
+        headers: authHeaders,
         body: json.encode({
           'event_id': eventId,
         }),
@@ -460,8 +664,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             .from('events')
             .update({
           'no_of_downloads': 0,
-        })
-            .eq('id', eventId);
+        }).eq('id', eventId);
 
         // Update local state
         setState(() {
@@ -481,7 +684,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         }
       } else {
         // Parse error message from response
-        String errorMessage = 'Failed to delete receipts (Status: ${response.statusCode})';
+        String errorMessage =
+            'Failed to delete receipts (Status: ${response.statusCode})';
         try {
           final errorBody = json.decode(response.body);
           if (errorBody['error'] != null) {
@@ -742,33 +946,41 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     children: [
                       Expanded(
                         child: _buildGridButton('Collect Moi', Icons.add, () {
-                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
+                          final eventDataWithOperator =
+                          Map<String, dynamic>.from(eventData!);
                           eventDataWithOperator['operator_id'] = operatorId;
-                          eventDataWithOperator['skip_denomination'] = eventData!['skip_denomination'] ?? false;
-                          eventDataWithOperator['skip_print'] = eventData!['skip_print'] ?? false;
-                          eventDataWithOperator['skip_whatsapp'] = eventData!['skip_whatsapp'] ?? false;
+                          eventDataWithOperator['skip_denomination'] =
+                              eventData!['skip_denomination'] ?? false;
+                          eventDataWithOperator['skip_print'] =
+                              eventData!['skip_print'] ?? false;
+                          eventDataWithOperator['skip_whatsapp'] =
+                              eventData!['skip_whatsapp'] ?? false;
 
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const CollectMoiScreen(),
-                              settings: RouteSettings(arguments: eventDataWithOperator),
+                              builder: (context) =>
+                              const CollectMoiScreen(),
+                              settings: RouteSettings(
+                                  arguments: eventDataWithOperator),
                             ),
                           );
                         }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Collection Details', Icons.person, () {
-                          final eventDataWithOperator = Map<String, dynamic>.from(eventData!);
-                          eventDataWithOperator['operator_id'] = operatorId;
+                        child: _buildGridButton('Collection Details',
+                            Icons.person, () {
+                              final eventDataWithOperator =
+                              Map<String, dynamic>.from(eventData!);
+                              eventDataWithOperator['operator_id'] = operatorId;
 
-                          Navigator.pushNamed(
-                            context,
-                            '/operator/collection-details',
-                            arguments: eventDataWithOperator,
-                          );
-                        }),
+                              Navigator.pushNamed(
+                                context,
+                                '/operator/collection-details',
+                                arguments: eventDataWithOperator,
+                              );
+                            }),
                       ),
                     ],
                   ),
@@ -777,29 +989,32 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Cash Withdrawal', Icons.money_off, () {
-                          Navigator.pushNamed(
-                            context,
-                            '/operator/cash_withdrawal',
-                            arguments: {
-                              'id': eventData!['id'],
-                              'operator_id': operatorId
-                            },
-                          );
-                        }),
+                        child: _buildGridButton('Cash Withdrawal',
+                            Icons.money_off, () {
+                              Navigator.pushNamed(
+                                context,
+                                '/operator/cash_withdrawal',
+                                arguments: {
+                                  'id': eventData!['id'],
+                                  'operator_id': operatorId
+                                },
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Exchange Deno', Icons.swap_horiz, () {
-                          Navigator.pushNamed(
-                            context,
-                            '/operator/exchange-denomination',
-                            arguments: {
-                              'id': eventData!['id'],
-                              'operator_id': operatorId
-                            },
-                          );
-                        }),
+                        child:
+                        _buildGridButton('Exchange Deno', Icons.swap_horiz,
+                                () {
+                              Navigator.pushNamed(
+                                context,
+                                '/operator/exchange-denomination',
+                                arguments: {
+                                  'id': eventData!['id'],
+                                  'operator_id': operatorId
+                                },
+                              );
+                            }),
                       ),
                     ],
                   ),
@@ -807,28 +1022,31 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Uncle Re-order', Icons.sort_by_alpha, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const UncleReorderScreen(),
-                              settings: RouteSettings(arguments: eventData),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Uncle Re-order',
+                            Icons.sort_by_alpha, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                  const UncleReorderScreen(),
+                                  settings: RouteSettings(arguments: eventData),
+                                ),
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Correct Village', Icons.location_city, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CorrectVillageNamesScreen(
-                                  eventId: eventData!['id']
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Correct Village',
+                            Icons.location_city, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      CorrectVillageNamesScreen(
+                                          eventId: eventData!['id']),
+                                ),
+                              );
+                            }),
                       ),
                     ],
                   ),
@@ -837,16 +1055,17 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildGridButton('Correct Person', Icons.person_search, () {
-                            Navigator.pushNamed(
-                              context,
-                              '/admin/correct-person-data',
-                              arguments: {
-                                'event_id': eventData!['id'],
-                                'operator_id': operatorId,
-                              },
-                            );
-                          }),
+                          child: _buildGridButton('Correct Person',
+                              Icons.person_search, () {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/admin/correct-person-data',
+                                  arguments: {
+                                    'event_id': eventData!['id'],
+                                    'operator_id': operatorId,
+                                  },
+                                );
+                              }),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -871,29 +1090,31 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Similar Entries', Icons.content_copy, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => SimilarEntriesScreen(
-                                eventId: eventData!['id'],
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Similar Entries',
+                            Icons.content_copy, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => SimilarEntriesScreen(
+                                    eventId: eventData!['id'],
+                                  ),
+                                ),
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Cash Deno', Icons.currency_rupee, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DenominationScreen(
-                                eventId: eventData!['id'],
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Cash Deno',
+                            Icons.currency_rupee, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DenominationScreen(
+                                    eventId: eventData!['id'],
+                                  ),
+                                ),
+                              );
+                            }),
                       ),
                     ],
                   ),
@@ -901,16 +1122,17 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Double Entries', Icons.filter_2, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => DoubleEntriesScreen(
-                                eventId: eventData!['id'],
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Double Entries',
+                            Icons.filter_2, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DoubleEntriesScreen(
+                                    eventId: eventData!['id'],
+                                  ),
+                                ),
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -918,9 +1140,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => UserWiseCollectionScreen(
-                                eventId: eventData!['id'],
-                              ),
+                              builder: (context) =>
+                                  UserWiseCollectionScreen(
+                                    eventId: eventData!['id'],
+                                  ),
                             ),
                           );
                         }),
@@ -931,30 +1154,32 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Cash Management', Icons.account_balance_wallet, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => CashManagementScreen(
-                                eventId: eventData!['id'],
-                                operatorId: operatorId,
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Cash Management',
+                            Icons.account_balance_wallet, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => CashManagementScreen(
+                                    eventId: eventData!['id'],
+                                    operatorId: operatorId,
+                                  ),
+                                ),
+                              );
+                            }),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _buildGridButton('Modified Report', Icons.edit_note, () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ModifiedReportScreen(
-                                eventId: eventData!['id'],
-                              ),
-                            ),
-                          );
-                        }),
+                        child: _buildGridButton('Modified Report',
+                            Icons.edit_note, () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ModifiedReportScreen(
+                                    eventId: eventData!['id'],
+                                  ),
+                                ),
+                              );
+                            }),
                       ),
                     ],
                   ),
@@ -963,24 +1188,27 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _buildGridButton('Sample Receipt', Icons.receipt, () {
-                          _showSampleReceipt();
-                        }),
+                        child: _buildGridButton('Sample Receipt',
+                            Icons.receipt, () {
+                              _showSampleReceipt();
+                            }),
                       ),
                       const SizedBox(width: 12),
                       // Final Moi Report Button - Only for Admin
                       if (_isAdminView)
                         Expanded(
-                          child: _buildGridButton('Final Moi Report', Icons.assessment, () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => FinalMoiReportScreen(
-                                  eventId: eventData!['id'],
-                                ),
-                              ),
-                            );
-                          }),
+                          child: _buildGridButton('Final Moi Report',
+                              Icons.assessment, () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        FinalMoiReportScreen(
+                                          eventId: eventData!['id'],
+                                        ),
+                                  ),
+                                );
+                              }),
                         )
                       else
                         Expanded(
@@ -994,9 +1222,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: _buildGridButton('Export Receipts', Icons.file_download, () {
-                            _showExportReceiptsDialog();
-                          }),
+                          child: _buildGridButton('Export Receipts',
+                              Icons.file_download, () {
+                                _showExportReceiptsDialog();
+                              }),
                         ),
                         const SizedBox(width: 12),
                         Expanded(

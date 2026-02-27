@@ -7,11 +7,12 @@ class SessionManager {
   static const String _userRoleKey = 'user_role';
   static const String _userPhoneKey = 'user_phone';
   static const String _userEmailKey = 'user_email';
+  static const String _authTokenKey = 'auth_token'; // ✅ NEW
   static const String _lastActiveKey = 'last_active';
   static const int _sessionTimeoutMinutes = 10;
 
-  // Save user session
-  static Future<void> saveSession(UserModel user) async {
+  // ✅ NEW: Save user session WITH auth token
+  static Future<void> saveSession(UserModel user, {String? authToken}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_userIdKey, user.id);
     await prefs.setString(_userNameKey, user.fullName);
@@ -26,8 +27,20 @@ class SessionManager {
       await prefs.setString(_userEmailKey, user.email!);
     }
 
+    // ✅ NEW: Save auth token if provided
+    if (authToken != null && authToken.isNotEmpty) {
+      await prefs.setString(_authTokenKey, authToken);
+      print('✅ Auth token saved to SharedPreferences');
+    }
+
     await prefs.setInt(_lastActiveKey, DateTime.now().millisecondsSinceEpoch);
     print('✅ Session saved for user: ${user.fullName}');
+  }
+
+  // ✅ NEW: Get stored auth token
+  static Future<String?> getStoredAuthToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_authTokenKey);
   }
 
   /// Update last active timestamp
@@ -97,6 +110,7 @@ class SessionManager {
     await prefs.remove(_userRoleKey);
     await prefs.remove(_userPhoneKey);
     await prefs.remove(_userEmailKey);
+    await prefs.remove(_authTokenKey); // ✅ NEW
     await prefs.remove(_lastActiveKey);
     print('✅ Session cleared');
   }
