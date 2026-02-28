@@ -9,6 +9,7 @@ import 'screens/admin/create_event_screen.dart';
 import 'screens/admin/all_events_screen.dart';
 import 'screens/admin/todays_events_screen.dart';
 import 'screens/admin/event_expenses_screen.dart';
+import 'screens/admin/job_management_screen.dart';
 import 'screens/operator/home_screen.dart';
 import 'screens/operator/event_dashboard_screen.dart'; // Add this import
 import 'screens/operator/collect_moi_screen.dart';
@@ -63,6 +64,7 @@ class MyApp extends StatelessWidget {
         '/admin/correct-person-data': (context) => const CorrectPersonDataScreen(),
         '/admin/cover-image': (context) => const CoverImageManagerScreen(),
         '/admin/profit-dashboard': (context) => const ProfitDashboardScreen(),
+        '/admin/job-management': (context) => const JobManagementScreen(),
       },
     );
   }

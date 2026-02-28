@@ -34,7 +34,6 @@ class AdminDashboard extends StatelessWidget {
     if (confirmed != true) return;
 
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
       await auth.logout();
@@ -158,7 +157,8 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             'Create Event',
                             Icons.event,
-                                () => Navigator.pushNamed(context, '/admin/create-event'),
+                                () => Navigator.pushNamed(
+                                context, '/admin/create-event'),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -166,7 +166,8 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             'All Events',
                             Icons.calendar_month,
-                                () => Navigator.pushNamed(context, '/admin/all-events'),
+                                () => Navigator.pushNamed(
+                                context, '/admin/all-events'),
                           ),
                         ),
                       ],
@@ -178,7 +179,8 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             "Today's Event",
                             Icons.today,
-                                () => Navigator.pushNamed(context, '/admin/todays-event'),
+                                () => Navigator.pushNamed(
+                                context, '/admin/todays-event'),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -186,7 +188,8 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             'Create Operator',
                             Icons.person_add,
-                                () => Navigator.pushNamed(context, '/admin/create-operator'),
+                                () => Navigator.pushNamed(
+                                context, '/admin/create-operator'),
                           ),
                         ),
                       ],
@@ -198,7 +201,8 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             'View Operators',
                             Icons.people,
-                                () => Navigator.pushNamed(context, '/admin/user-list'),
+                                () => Navigator.pushNamed(
+                                context, '/admin/user-list'),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -206,28 +210,38 @@ class AdminDashboard extends StatelessWidget {
                           child: _buildGridButton(
                             'Cover Image',
                             Icons.image,
-                                () => Navigator.pushNamed(context, '/admin/cover-image'),
-                            color: const Color(0xFF8F8F8F), // Purple highlight
+                                () => Navigator.pushNamed(
+                                context, '/admin/cover-image'),
+                            color: const Color(0xFF8F8F8F),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildGridButton(
+                            'Profit Dashboard',
+                            Icons.analytics,
+                                () => Navigator.pushNamed(
+                                context, '/admin/profit-dashboard'),
+                            color: const Color(0xFF8F8F8F),
                           ),
                         ),
                         const SizedBox(width: 12),
+                        // ✅ NEW: Job Management button
+                        Expanded(
+                          child: _buildGridButton(
+                            'Job Management',
+                            Icons.work,
+                                () => Navigator.pushNamed(
+                                context, '/admin/job-management'),
+                            color: const Color(0xFF8F8F8F),
+                          ),
+                        ),
                       ],
                     ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildGridButton(
-                      'Profit Dashboard',
-                      Icons.analytics,
-                          () => Navigator.pushNamed(context, '/admin/profit-dashboard'),
-                      color: const Color(0xFF8F8F8F),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(child: SizedBox()),
-                ],
-              ),
                     const SizedBox(height: 24),
                   ],
                 ),

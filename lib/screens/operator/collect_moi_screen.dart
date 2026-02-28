@@ -102,6 +102,16 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     super.initState();
     _initializeDenominations();
 
+    _person1JobFocusNode.addListener(() async {
+      if (!_person1JobFocusNode.hasFocus) {
+        final jobText = _person1Field2Controller.text.trim();
+        print('🔔 JOB FOCUS LOST - text: "$jobText"');
+        if (jobText.isNotEmpty) {
+          await _saveNewJobToDatabase(jobText);
+        }
+      }
+    });
+
     _villageFocusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
       final key = event.logicalKey;
@@ -172,6 +182,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       // TAB → move highlight DOWN, or exit dropdown and go to next field
       if (key == LogicalKeyboardKey.tab && !isShift && _showJobSuggestions) {
         if (_jobHighlightIndex >= _jobSuggestions.length - 1) {
+          // If no suggestion highlighted, user typed custom value — save it
+          if (_jobHighlightIndex == -1 && _person1Field2Controller.text.trim().isNotEmpty) {
+            _saveNewJobToDatabase(_person1Field2Controller.text.trim());
+          }
           setState(() {
             _jobSuggestions = [];
             _showJobSuggestions = false;
@@ -423,6 +437,41 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           customMessage: 'Error loading event details',
         );
       }
+    }
+  }
+
+  Future<void> _saveNewJobToDatabase(String jobName) async {
+    if (jobName.trim().isEmpty) return;
+
+    print('💾 _saveNewJobToDatabase called with: "$jobName"');
+
+    try {
+      // Check if job already exists (case-insensitive)
+      final existing = await _supabase
+          .from('jobs')
+          .select('id, job')
+          .ilike('job', jobName.trim())
+          .limit(1)
+          .maybeSingle();
+
+      print('🔍 Existing check result: $existing');
+
+      if (existing == null) {
+        print('➕ Inserting new job: "$jobName"');
+
+        final response = await _supabase
+            .from('jobs')
+            .insert({'job': jobName.trim()})
+            .select('id, job')
+            .single();
+
+        print('✅ Successfully inserted job: $response');
+      } else {
+        print('⏭️ Job already exists: ${existing['job']}');
+      }
+    } catch (e, stack) {
+      print('❌ FAILED to save job "$jobName": $e');
+      print('❌ Stack: $stack');
     }
   }
 
@@ -1427,6 +1476,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         onRetry: _handleGroup)) {
       return;
     }
+    final jobText = _person1Field2Controller.text.trim();
+    if (jobText.isNotEmpty) {
+      print('💾 Saving job on Group press: "$jobText"');
+      await _saveNewJobToDatabase(jobText);
+    }
     if (!_validatePhoneForAmountChange()) {
       return;
     }
@@ -2228,6 +2282,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     if (mounted) {
       setState(() => _isLoading = true);
     }
+    final jobText = _person1Field2Controller.text.trim();
+    if (jobText.isNotEmpty) {
+      print('💾 Saving job on Save press: "$jobText"');
+      await _saveNewJobToDatabase(jobText);
+    }
+
 
     try {
       // Around line 1100, after the ungrouped data check
@@ -6688,9 +6748,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           // Job field with autocomplete
           TextFormField(
             controller: _person1Field2Controller,
-            focusNode: _person1JobFocusNode,                 // ADD
-            textInputAction: TextInputAction.next,            // ADD
-            onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_person2FocusNode), // ADD
+            focusNode: _person1JobFocusNode,
+            textInputAction: TextInputAction.next,
+            onFieldSubmitted: (value) {
+              // Save new job to DB when user presses next/done
+              if (value.trim().isNotEmpty) {
+                _saveNewJobToDatabase(value.trim());
+              }
+              setState(() {
+                _jobSuggestions = [];
+                _showJobSuggestions = false;
+                _jobHighlightIndex = -1;
+              });
+              FocusScope.of(context).requestFocus(_person2FocusNode);
+            },
             style: const TextStyle(fontSize: 13),
             decoration: const InputDecoration(
               labelText: 'e.g., education, job',
