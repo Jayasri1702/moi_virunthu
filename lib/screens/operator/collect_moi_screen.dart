@@ -27,6 +27,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   bool _showVillageSuggestions = false;
   int _villageHighlightIndex = -1;
   int _jobHighlightIndex = -1;
+  final LayerLink _villageLayerLink = LayerLink();
+  OverlayEntry? _villageOverlayEntry;
 
   // Add these state variables:
   List<String> _jobSuggestions = [];
@@ -250,6 +252,103 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
+  void _removeVillageOverlay() {
+    _villageOverlayEntry?.remove();
+    _villageOverlayEntry = null;
+  }
+
+  void _showVillageOverlay() {
+    _removeVillageOverlay();
+
+    _villageOverlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        width: 300, // ← wide enough to show full village names
+        child: CompositedTransformFollower(
+          link: _villageLayerLink,
+          showWhenUnlinked: false,
+          offset: const Offset(0, 44), // drop below the text field
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(color: Colors.blue, width: 1.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  itemCount: _villageSuggestions.length,
+                  itemBuilder: (context, index) {
+                    final isHighlighted = index == _villageHighlightIndex;
+                    return InkWell(
+                      onTap: () {
+                        setState(() {
+                          _villageController.text = _villageSuggestions[index];
+                          _villageController.selection =
+                              TextSelection.fromPosition(TextPosition(
+                                  offset: _villageController.text.length));
+                          _villageSuggestions = [];
+                          _showVillageSuggestions = false;
+                          _villageHighlightIndex = -1;
+                        });
+                        _removeVillageOverlay();
+                        FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isHighlighted
+                              ? Colors.blue[100]
+                              : Colors.transparent,
+                          border: Border(
+                            bottom: BorderSide(
+                                color: Colors.grey[200]!, width: 1),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            if (isHighlighted)
+                              const Padding(
+                                padding: EdgeInsets.only(right: 6),
+                                child: Icon(Icons.chevron_right,
+                                    size: 14, color: Colors.blue),
+                              ),
+                            Expanded(
+                              child: Text(
+                                _villageSuggestions[index],
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: isHighlighted
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isHighlighted
+                                      ? Colors.blue[900]
+                                      : Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_villageOverlayEntry!);
+  }
+
   void _updateDenominationRows() {
     if (_denomRows.isEmpty) return;
 
@@ -331,6 +430,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   Future<void> _loadVillageSuggestions(String query) async {
     if (query.trim().isEmpty || _eventId == null) {
       setState(() { _villageSuggestions = []; _showVillageSuggestions = false; });
+      _removeVillageOverlay();
       return;
     }
     try {
@@ -348,10 +448,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           uniqueVillages.add(village);
         }
       }
-      setState(() {
-        _villageSuggestions = uniqueVillages.toList()..sort();
-        _showVillageSuggestions = _villageSuggestions.isNotEmpty;
-      });
+
+      _villageSuggestions = uniqueVillages.toList()..sort();
+      _showVillageSuggestions = _villageSuggestions.isNotEmpty;
+
+      if (_showVillageSuggestions) {
+        _showVillageOverlay();
+      } else {
+        _removeVillageOverlay();
+      }
     } catch (e) {
       print('Error loading village suggestions: $e');
     }
@@ -6470,114 +6575,49 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const Text('Village Name',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                TextFormField(
-                  controller: _villageController,
-                  focusNode: _villageFocusNode,
-                  textInputAction: TextInputAction.next,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Village name is required';
-                    }
-                    return null;
-                  },
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    isDense: true,
+                CompositedTransformTarget(
+                  link: _villageLayerLink,
+                  child: TextFormField(
+                    controller: _villageController,
+                    focusNode: _villageFocusNode,
+                    textInputAction: TextInputAction.next,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Village name is required';
+                      }
+                      return null;
+                    },
+                    style: const TextStyle(fontSize: 13),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      isDense: true,
+                    ),
+                    onFieldSubmitted: (_) {
+                      if (!_showVillageSuggestions) {
+                        FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                      }
+                    },
+                    onChanged: (value) {
+                      if (value.trim().isEmpty) {
+                        setState(() {
+                          _villageSuggestions = [];
+                          _showVillageSuggestions = false;
+                          _villageHighlightIndex = -1;
+                        });
+                        _removeVillageOverlay();
+                      } else {
+                        _loadVillageSuggestions(value);
+                      }
+                    },
+                    onTap: () {
+                      if (_villageController.text.isNotEmpty) {
+                        _loadVillageSuggestions(_villageController.text);
+                      }
+                    },
                   ),
-                  onFieldSubmitted: (_) {
-                    if (!_showVillageSuggestions) {
-                      FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
-                    }
-                  },
-                  onChanged: (value) {
-                    if (value.trim().isEmpty) {
-                      setState(() {
-                        _villageSuggestions = [];
-                        _showVillageSuggestions = false;
-                        _villageHighlightIndex = -1;
-                      });
-                    } else {
-                      _loadVillageSuggestions(value);
-                    }
-                  },
-                  onTap: () {
-                    if (_villageController.text.isNotEmpty) {
-                      _loadVillageSuggestions(_villageController.text);
-                    }
-                  },
                 ),
-                if (_showVillageSuggestions)
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 150),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.blue, width: 1.5),
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 4)
-                      ],
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _villageSuggestions.length,
-                      itemBuilder: (context, index) {
-                        final isHighlighted = index == _villageHighlightIndex;
-                        return InkWell(
-                          onTap: () {
-                            setState(() {
-                              _villageController.text = _villageSuggestions[index];
-                              _villageController.selection =
-                                  TextSelection.fromPosition(TextPosition(
-                                      offset: _villageController.text.length));
-                              _villageSuggestions = [];
-                              _showVillageSuggestions = false;
-                              _villageHighlightIndex = -1;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: isHighlighted
-                                  ? Colors.blue[100]
-                                  : Colors.transparent,
-                              border: Border(
-                                bottom: BorderSide(
-                                    color: Colors.grey[200]!, width: 1),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                if (isHighlighted)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 6),
-                                    child: Icon(Icons.chevron_right,
-                                        size: 14, color: Colors.blue),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    _villageSuggestions[index],
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: isHighlighted
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      color: isHighlighted
-                                          ? Colors.blue[900]
-                                          : Colors.black,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
               ],
             ),
           ),
@@ -6677,7 +6717,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           ),
           if (_showJobSuggestions)
             Container(
-              constraints: const BoxConstraints(maxHeight: 150),
+              constraints: const BoxConstraints(maxHeight: 200),
+              width: double.infinity,  // ← extends full width
               decoration: BoxDecoration(
                 color: Colors.white,
                 border: Border.all(color: Colors.blue, width: 1.5),
@@ -6686,10 +6727,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                   BoxShadow(color: Colors.black26, blurRadius: 4)
                 ],
               ),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _jobSuggestions.length,
-                itemBuilder: (context, index) {
+              child: Scrollbar(
+                thumbVisibility: true,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _jobSuggestions.length,
+                  itemBuilder: (context, index) {
                   final isHighlighted = index == _jobHighlightIndex;
                   return InkWell(
                     onTap: () {
@@ -6742,6 +6785,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                     ),
                   );
                 },
+              ),
               ),
             ),
         ],
@@ -7721,6 +7765,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   @override
   void dispose() {
+    _removeVillageOverlay(); // ← add this line
     _phoneController.dispose();
     _phoneFocusNode.dispose(); // ✅ ADD THIS
     _villageFocusNode.dispose();        // ADD
