@@ -6,15 +6,33 @@ class NetworkUtils {
   // Check if device has actual internet connection (not just network interface)
   static Future<bool> hasConnection() async {
     try {
-      // First check if network interface exists
       var connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult == ConnectivityResult.none) {
         return false;
       }
 
-      // Then verify actual internet connectivity by doing a DNS lookup
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+      // Try multiple hosts - if ANY resolves, we have internet
+      // This handles Jio blocking/throttling specific DNS lookups
+      final hosts = [
+        'google.com',
+        'cloudflare.com',
+        '1.1.1.1',        // Cloudflare IP - no DNS needed
+        '8.8.8.8',        // Google DNS IP - no DNS needed
+      ];
+
+      for (final host in hosts) {
+        try {
+          final result = await InternetAddress.lookup(host)
+              .timeout(const Duration(seconds: 3));
+          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+            return true; // At least one host resolved
+          }
+        } catch (_) {
+          continue; // Try next host
+        }
+      }
+
+      return false; // All hosts failed
     } on SocketException catch (_) {
       return false;
     } catch (e) {

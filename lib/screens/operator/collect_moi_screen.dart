@@ -29,6 +29,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   int _jobHighlightIndex = -1;
   final LayerLink _villageLayerLink = LayerLink();
   OverlayEntry? _villageOverlayEntry;
+  final ScrollController _villageScrollController = ScrollController();
+  final ScrollController _jobScrollController = ScrollController();
 
   // Add these state variables:
   List<String> _jobSuggestions = [];
@@ -117,9 +119,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       final key = event.logicalKey;
       final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-      // TAB → if dropdown open, move highlight DOWN through suggestions
       if (key == LogicalKeyboardKey.tab && !isShift && _showVillageSuggestions) {
-        // If we just reached the last item, close dropdown and go to next field
         if (_villageHighlightIndex >= _villageSuggestions.length - 1) {
           setState(() {
             _villageSuggestions = [];
@@ -129,14 +129,15 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
           return KeyEventResult.handled;
         }
-        // Otherwise highlight next item
         setState(() {
           _villageHighlightIndex = _villageHighlightIndex + 1;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToHighlightedItem(_villageScrollController, _villageHighlightIndex);
         });
         return KeyEventResult.handled;
       }
 
-      // SHIFT+TAB → move highlight UP through suggestions
       if (key == LogicalKeyboardKey.tab && isShift && _showVillageSuggestions) {
         if (_villageHighlightIndex <= 0) {
           setState(() {
@@ -149,12 +150,13 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         setState(() {
           _villageHighlightIndex = _villageHighlightIndex - 1;
         });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToHighlightedItem(_villageScrollController, _villageHighlightIndex);
+        });
         return KeyEventResult.handled;
       }
 
-      // ENTER or SPACE → select highlighted suggestion and go to next field
-      if ((key == LogicalKeyboardKey.enter ||
-          key == LogicalKeyboardKey.space) &&
+      if ((key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.space) &&
           _showVillageSuggestions &&
           _villageHighlightIndex >= 0 &&
           _villageHighlightIndex < _villageSuggestions.length) {
@@ -179,10 +181,8 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       final key = event.logicalKey;
       final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-      // TAB → move highlight DOWN, or exit dropdown and go to next field
       if (key == LogicalKeyboardKey.tab && !isShift && _showJobSuggestions) {
         if (_jobHighlightIndex >= _jobSuggestions.length - 1) {
-          // If no suggestion highlighted, user typed custom value — save it
           if (_jobHighlightIndex == -1 && _person1Field2Controller.text.trim().isNotEmpty) {
             _saveNewJobToDatabase(_person1Field2Controller.text.trim());
           }
@@ -196,6 +196,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
         setState(() {
           _jobHighlightIndex = _jobHighlightIndex + 1;
+        });
+        // ✅ Scroll to keep highlighted item visible
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToHighlightedItem(_jobScrollController, _jobHighlightIndex);
         });
         return KeyEventResult.handled;
       }
@@ -212,6 +216,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
         setState(() {
           _jobHighlightIndex = _jobHighlightIndex - 1;
+        });
+        // ✅ Scroll to keep highlighted item visible
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToHighlightedItem(_jobScrollController, _jobHighlightIndex);
         });
         return KeyEventResult.handled;
       }
@@ -247,6 +255,30 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       _loadArguments();
     }
   }
+  void _scrollToHighlightedItem(ScrollController controller, int index, {double itemHeight = 40.0}) {
+    if (!controller.hasClients) return;
+    const double maxVisible = 5; // ~200px / 40px per item
+    final double scrollOffset = index * itemHeight;
+    final double currentOffset = controller.offset;
+    final double visibleEnd = currentOffset + (maxVisible * itemHeight);
+
+    if (scrollOffset < currentOffset) {
+      // Item is above visible area - scroll up
+      controller.animateTo(
+        scrollOffset,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+    } else if (scrollOffset + itemHeight > visibleEnd) {
+      // Item is below visible area - scroll down
+      controller.animateTo(
+        scrollOffset - ((maxVisible - 1) * itemHeight),
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
 
   void _initializeDenominations() {
     _denomRows.add({
@@ -293,7 +325,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
               child: Scrollbar(
                 thumbVisibility: true,
+                controller: _villageScrollController,
                 child: ListView.builder(
+                  controller: _villageScrollController,
                   shrinkWrap: true,
                   padding: EdgeInsets.zero,
                   itemCount: _villageSuggestions.length,
@@ -395,7 +429,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           .from('jobs')
           .select('job')
           .not('job', 'is', null)
-          .ilike('job', '%${query.trim()}%')
+          .ilike('job', '${query.trim()}%')
           .limit(10);
 
       List<String> suggestions = [];
@@ -478,8 +512,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   // Add this method:
   Future<void> _loadVillageSuggestions(String query) async {
     if (query.trim().isEmpty || _eventId == null) {
-      setState(() { _villageSuggestions = []; _showVillageSuggestions = false; });
-      _removeVillageOverlay();
+      setState(() {
+        _villageSuggestions = [];
+        _showVillageSuggestions = false;
+      });
       return;
     }
     try {
@@ -498,14 +534,10 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
       }
 
-      _villageSuggestions = uniqueVillages.toList()..sort();
-      _showVillageSuggestions = _villageSuggestions.isNotEmpty;
-
-      if (_showVillageSuggestions) {
-        _showVillageOverlay();
-      } else {
-        _removeVillageOverlay();
-      }
+      setState(() {
+        _villageSuggestions = uniqueVillages.toList()..sort();
+        _showVillageSuggestions = _villageSuggestions.isNotEmpty;
+      });
     } catch (e) {
       print('Error loading village suggestions: $e');
     }
@@ -6635,52 +6667,113 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 const Text('Village Name',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 6),
-                CompositedTransformTarget(
-                  link: _villageLayerLink,
-                  child: TextFormField(
-                    controller: _villageController,
-                    focusNode: _villageFocusNode,
-                    textInputAction: TextInputAction.next,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Village name is required';
-                      }
-                      return null;
-                    },
-                    style: const TextStyle(fontSize: 13),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding:
-                      EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      isDense: true,
-                    ),
-                    onFieldSubmitted: (_) {
-                      if (!_showVillageSuggestions) {
-                        FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
-                      }
-                    },
-                    onChanged: (value) {
-                      if (value.trim().isEmpty) {
-                        setState(() {
-                          _villageSuggestions = [];
-                          _showVillageSuggestions = false;
-                          _villageHighlightIndex = -1;
-                        });
-                        _removeVillageOverlay();
-                      } else {
-                        _loadVillageSuggestions(value);
-                      }
-                    },
-                    onTap: () {
-                      if (_villageController.text.isNotEmpty) {
-                        _loadVillageSuggestions(_villageController.text);
-                      }
-                    },
+                TextFormField(
+                  controller: _villageController,
+                  focusNode: _villageFocusNode,
+                  textInputAction: TextInputAction.next,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Village name is required';
+                    }
+                    return null;
+                  },
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    isDense: true,
                   ),
+                  onFieldSubmitted: (_) {
+                    if (!_showVillageSuggestions) {
+                      FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                    }
+                  },
+                  onChanged: (value) {
+                    if (value.trim().isEmpty) {
+                      setState(() {
+                        _villageSuggestions = [];
+                        _showVillageSuggestions = false;
+                        _villageHighlightIndex = -1;
+                      });
+                    } else {
+                      _loadVillageSuggestions(value);
+                    }
+                  },
+                  onTap: () {
+                    if (_villageController.text.isNotEmpty) {
+                      _loadVillageSuggestions(_villageController.text);
+                    }
+                  },
                 ),
-              ],
-            ),
-          ),
+                if (_showVillageSuggestions)
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: Colors.blue, width: 1.5),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black26, blurRadius: 4)
+                      ],
+                    ),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      controller: _villageScrollController,
+                      child: ListView.builder(
+                        controller: _villageScrollController,
+                        shrinkWrap: true,
+                        itemCount: _villageSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final isHighlighted = index == _villageHighlightIndex;
+                          return InkWell(
+                            onTap: () {
+                              setState(() {
+                                _villageController.text = _villageSuggestions[index];
+                                _villageController.selection = TextSelection.fromPosition(
+                                    TextPosition(offset: _villageController.text.length));
+                                _villageSuggestions = [];
+                                _showVillageSuggestions = false;
+                                _villageHighlightIndex = -1;
+                              });
+                              FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isHighlighted ? Colors.blue[100] : Colors.transparent,
+                                border: Border(
+                                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (isHighlighted)
+                                    const Padding(
+                                      padding: EdgeInsets.only(right: 6),
+                                      child: Icon(Icons.chevron_right, size: 14, color: Colors.blue),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      _villageSuggestions[index],
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
+                                        color: isHighlighted ? Colors.blue[900] : Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+              ],  // ← closes Column's children
+            ),    // ← closes Column
+          ),      // ← closes first Expanded
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -6800,7 +6893,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               ),
               child: Scrollbar(
                 thumbVisibility: true,
+                controller: _jobScrollController,
                 child: ListView.builder(
+                  controller: _jobScrollController,
                   shrinkWrap: true,
                   itemCount: _jobSuggestions.length,
                   itemBuilder: (context, index) {
@@ -7836,7 +7931,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   @override
   void dispose() {
-    _removeVillageOverlay(); // ← add this line
+    _removeVillageOverlay();
+    _villageScrollController.dispose();
+    _jobScrollController.dispose();
     _phoneController.dispose();
     _phoneFocusNode.dispose(); // ✅ ADD THIS
     _villageFocusNode.dispose();        // ADD
