@@ -494,6 +494,7 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                     ),
 
                     // Filters Section
+                    // Filters Section
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -502,116 +503,126 @@ class _AllEventsScreenState extends State<AllEventsScreen> {
                           bottom: BorderSide(color: Colors.grey[300]!),
                         ),
                       ),
-                      child: Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        alignment: WrapAlignment.start,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(
-                            width: 100,
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Show',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          // Row 1: Show filter
+                          Row(
+                            children: [
+                              const SizedBox(
+                                width: 90,
+                                child: Text(
+                                  'Show',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _dateFilter,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    isDense: true,
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'All', child: Text('All Events')),
+                                    DropdownMenuItem(value: 'Today', child: Text('Today')),
+                                    DropdownMenuItem(value: 'Upcoming', child: Text('Upcoming')),
+                                    DropdownMenuItem(value: 'Past', child: Text('Past')),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _dateFilter = value!;
+                                      _applyFilters();
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          SizedBox(
-                            width: isSmallScreen ? double.infinity : 150,
-                            child: DropdownButtonFormField<String>(
-                              value: _dateFilter,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                isDense: true,
+                          const SizedBox(height: 12),
+
+                          // Row 2: Event Type filter
+                          Row(
+                            children: [
+                              const SizedBox(
+                                width: 90,
+                                child: Text(
+                                  'Event Type',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                ),
                               ),
-                              items: const [
-                                DropdownMenuItem(value: 'All', child: Text('All Events')),
-                                DropdownMenuItem(value: 'Today', child: Text('Today')),
-                                DropdownMenuItem(value: 'Upcoming', child: Text('Upcoming')),
-                                DropdownMenuItem(value: 'Past', child: Text('Past')),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _dateFilter = value!;
-                                  _applyFilters();
-                                });
-                              },
-                            ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedEventType,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    isDense: true,
+                                    hintText: 'All Events',
+                                  ),
+                                  isExpanded: true, // ← KEY FIX: prevents text overflow
+                                  items: [
+                                    const DropdownMenuItem(value: null, child: Text('All Events')),
+                                    ..._eventTypes.map((type) {
+                                      return DropdownMenuItem<String>(
+                                        value: type['id'],
+                                        child: Text(
+                                          type['name'],
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedEventType = value;
+                                      _applyFilters();
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 20),
-                          const SizedBox(
-                            width: 100,
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Event Type',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                          const SizedBox(height: 12),
+
+                          // Row 3: Status filter
+                          Row(
+                            children: [
+                              const SizedBox(
+                                width: 90,
+                                child: Text(
+                                  'Status',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                                ),
                               ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: isSmallScreen ? double.infinity : 250,
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedEventType,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                isDense: true,
-                                hintText: 'All Events',
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  value: _selectedStatus,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    isDense: true,
+                                    hintText: 'All Status',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: null, child: Text('All Status')),
+                                    DropdownMenuItem(value: 'upcoming', child: Text('Upcoming')),
+                                    DropdownMenuItem(value: 'completed', child: Text('Completed')),
+                                    DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedStatus = value;
+                                      _applyFilters();
+                                    });
+                                  },
+                                ),
                               ),
-                              items: [
-                                const DropdownMenuItem(value: null, child: Text('All Events')),
-                                ..._eventTypes.map((type) {
-                                  return DropdownMenuItem<String>(
-                                    value: type['id'],
-                                    child: Text(type['name']),
-                                  );
-                                }).toList(),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedEventType = value;
-                                  _applyFilters();
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          const SizedBox(
-                            width: 50,
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Status',
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                              ),
-                            ),
-                          ),
-                          SizedBox(
-                            width: isSmallScreen ? double.infinity : 150,
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedStatus,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                isDense: true,
-                                hintText: 'All Status',
-                              ),
-                              items: const [
-                                DropdownMenuItem(value: null, child: Text('All Status')),
-                                DropdownMenuItem(value: 'upcoming', child: Text('Upcoming')),
-                                DropdownMenuItem(value: 'completed', child: Text('Completed')),
-                                DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
-                              ],
-                              onChanged: (value) {
-                                setState(() {
-                                  _selectedStatus = value;
-                                  _applyFilters();
-                                });
-                              },
-                            ),
+                            ],
                           ),
                         ],
                       ),

@@ -3,54 +3,44 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:io';
 
 class NetworkUtils {
-  // Check if device has actual internet connection (not just network interface)
+
   static Future<bool> hasConnection() async {
-    try {
-      var connectivityResult = await Connectivity().checkConnectivity();
-      if (connectivityResult == ConnectivityResult.none) {
-        return false;
-      }
-
-      // Try multiple hosts - if ANY resolves, we have internet
-      // This handles Jio blocking/throttling specific DNS lookups
-      final hosts = [
-        'google.com',
-        'cloudflare.com',
-        '1.1.1.1',        // Cloudflare IP - no DNS needed
-        '8.8.8.8',        // Google DNS IP - no DNS needed
-      ];
-
-      for (final host in hosts) {
-        try {
-          final result = await InternetAddress.lookup(host)
-              .timeout(const Duration(seconds: 3));
-          if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
-            return true; // At least one host resolved
-          }
-        } catch (_) {
-          continue; // Try next host
-        }
-      }
-
-      return false; // All hosts failed
-    } on SocketException catch (_) {
-      return false;
-    } catch (e) {
-      return false;
-    }
+    // Skip pre-check - let the actual API call determine connectivity
+    // Pre-checks are unreliable on mobile networks
+    return true;
   }
 
-  // Check if error is network-related
   static bool isNetworkError(dynamic error) {
     final errorString = error.toString().toLowerCase();
-    return errorString.contains('socketexception') ||
-        errorString.contains('failed host lookup') ||
-        errorString.contains('software caused connection abort') ||
-        errorString.contains('network is unreachable') ||
-        errorString.contains('connection refused') ||
-        errorString.contains('connection timed out') ||
-        errorString.contains('no address associated with hostname') ||
-        errorString.contains('unable to resolve host');
+
+    // Catches all SocketException variants (JIO, Airtel, BSNL, etc.)
+    if (errorString.contains('socketexception')) return true;
+
+    // HTTP client errors from dio/http package
+    if (errorString.contains('connection refused')) return true;
+    if (errorString.contains('connection reset')) return true;
+    if (errorString.contains('connection timed out')) return true;
+    if (errorString.contains('connectiontimeout')) return true;
+    if (errorString.contains('sendtimeout')) return true;
+    if (errorString.contains('receivetimeout')) return true;
+
+    // OS-level network errors
+    if (errorString.contains('network is unreachable')) return true;
+    if (errorString.contains('no internet')) return true;
+    if (errorString.contains('no address associated')) return true;
+    if (errorString.contains('failed host lookup')) return true;
+    if (errorString.contains('unable to resolve')) return true;
+    if (errorString.contains('network error')) return true;
+
+    // Supabase/Postgrest specific
+    if (errorString.contains('clientexception')) return true;
+    if (errorString.contains('handshakeexception')) return true;
+    if (errorString.contains('tlsexception')) return true;
+
+    // Timeout (treat as network issue for retry dialog)
+    if (errorString.contains('timeoutexception')) return true;
+
+    return false;
   }
 
   // Show connection error dialog with retry option
@@ -124,7 +114,6 @@ class NetworkUtils {
     );
   }
 
-  // Handle error globally - use this in all your catch blocks
   static void handleError(
       BuildContext context,
       dynamic error, {
@@ -136,12 +125,13 @@ class NetworkUtils {
     if (isNetworkError(error)) {
       showConnectionErrorDialog(context, onRetry: onRetry);
     } else {
-      // Show other errors in SnackBar
+      final message = customMessage ?? 'Error: ${error.toString()}';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(customMessage ?? 'Error: ${error.toString()}'),
+          content: Text(message),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
           action: onRetry != null
               ? SnackBarAction(
             label: 'Retry',

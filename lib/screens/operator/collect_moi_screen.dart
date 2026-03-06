@@ -114,6 +114,17 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
       }
     });
 
+    _villageFocusNode.addListener(() {
+      if (!_villageFocusNode.hasFocus) {
+        _removeVillageOverlay();
+        setState(() {
+          _showVillageSuggestions = false;
+          _villageSuggestions = [];
+          _villageHighlightIndex = -1;
+        });
+      }
+    });
+
     _villageFocusNode.onKeyEvent = (node, event) {
       if (event is! KeyDownEvent) return KeyEventResult.ignored;
       final key = event.logicalKey;
@@ -129,10 +140,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
           return KeyEventResult.handled;
         }
+        // TAB down
         setState(() {
           _villageHighlightIndex = _villageHighlightIndex + 1;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          _villageOverlayEntry?.markNeedsBuild(); // ← REPLACE _showVillageOverlay()
           _scrollToHighlightedItem(_villageScrollController, _villageHighlightIndex);
         });
         return KeyEventResult.handled;
@@ -147,10 +160,12 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           });
           return KeyEventResult.handled;
         }
+        // SHIFT+TAB up
         setState(() {
           _villageHighlightIndex = _villageHighlightIndex - 1;
         });
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          _villageOverlayEntry?.markNeedsBuild(); // ← REPLACE _showVillageOverlay()
           _scrollToHighlightedItem(_villageScrollController, _villageHighlightIndex);
         });
         return KeyEventResult.handled;
@@ -168,6 +183,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           _showVillageSuggestions = false;
           _villageHighlightIndex = -1;
         });
+        _removeVillageOverlay();   // ← ADD THIS LINE
         FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
         return KeyEventResult.handled;
       }
@@ -307,91 +323,97 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     _removeVillageOverlay();
 
     _villageOverlayEntry = OverlayEntry(
-      builder: (context) => Positioned(
-        width: 300, // ← wide enough to show full village names
-        child: CompositedTransformFollower(
+      builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        return CompositedTransformFollower(
           link: _villageLayerLink,
           showWhenUnlinked: false,
-          offset: const Offset(0, 44), // drop below the text field
-          child: Material(
-            elevation: 4,
-            borderRadius: BorderRadius.circular(4),
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 200),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.blue, width: 1.5),
+          offset: const Offset(0, 40),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: screenWidth - 48,
+              child: Material(
+                elevation: 8,
                 borderRadius: BorderRadius.circular(4),
-              ),
-              child: Scrollbar(
-                thumbVisibility: true,
-                controller: _villageScrollController,
-                child: ListView.builder(
-                  controller: _villageScrollController,
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: _villageSuggestions.length,
-                  itemBuilder: (context, index) {
-                    final isHighlighted = index == _villageHighlightIndex;
-                    return InkWell(
-                      onTap: () {
-                        setState(() {
-                          _villageController.text = _villageSuggestions[index];
-                          _villageController.selection =
-                              TextSelection.fromPosition(TextPosition(
-                                  offset: _villageController.text.length));
-                          _villageSuggestions = [];
-                          _showVillageSuggestions = false;
-                          _villageHighlightIndex = -1;
-                        });
-                        _removeVillageOverlay();
-                        FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isHighlighted
-                              ? Colors.blue[100]
-                              : Colors.transparent,
-                          border: Border(
-                            bottom: BorderSide(
-                                color: Colors.grey[200]!, width: 1),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            if (isHighlighted)
-                              const Padding(
-                                padding: EdgeInsets.only(right: 6),
-                                child: Icon(Icons.chevron_right,
-                                    size: 14, color: Colors.blue),
-                              ),
-                            Expanded(
-                              child: Text(
-                                _villageSuggestions[index],
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: isHighlighted
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isHighlighted
-                                      ? Colors.blue[900]
-                                      : Colors.black,
-                                ),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Colors.blue, width: 1.5),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Scrollbar(
+                    thumbVisibility: true,
+                    controller: _villageScrollController,
+                    child: ListView.builder(
+                      controller: _villageScrollController,
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      itemCount: _villageSuggestions.length,
+                      itemBuilder: (context, index) {
+                        final isHighlighted = index == _villageHighlightIndex;
+                        return InkWell(
+                          onTap: () {
+                            setState(() {
+                              _villageController.text = _villageSuggestions[index];
+                              _villageController.selection =
+                                  TextSelection.fromPosition(TextPosition(
+                                      offset: _villageController.text.length));
+                              _villageSuggestions = [];
+                              _showVillageSuggestions = false;
+                              _villageHighlightIndex = -1;
+                            });
+                            _removeVillageOverlay();
+                            FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isHighlighted
+                                  ? Colors.blue[100]
+                                  : Colors.transparent,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.grey[200]!, width: 1),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+                            child: Row(
+                              children: [
+                                if (isHighlighted)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: Icon(Icons.chevron_right,
+                                        size: 14, color: Colors.blue),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    _villageSuggestions[index],
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: isHighlighted
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isHighlighted
+                                          ? Colors.blue[900]
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
     Overlay.of(context).insert(_villageOverlayEntry!);
@@ -538,6 +560,11 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         _villageSuggestions = uniqueVillages.toList()..sort();
         _showVillageSuggestions = _villageSuggestions.isNotEmpty;
       });
+      if (_villageSuggestions.isNotEmpty) {
+        _showVillageOverlay();
+      } else {
+        _removeVillageOverlay();
+      }
     } catch (e) {
       print('Error loading village suggestions: $e');
     }
@@ -6651,156 +6678,104 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   }
 
   Widget _buildVillageAndLivingPlace() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black, width: 2),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
+    // Village text field height: isDense + padding ≈ 40px, label above ≈ 18px + 6px gap = 64px total
+    // Dropdown top offset = label(18) + gap(6) + field(40) = 64
+    const double _dropdownTopOffset = 64.0;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.black, width: 2),
+            ),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Village Name',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: _villageController,
-                  focusNode: _villageFocusNode,
-                  textInputAction: TextInputAction.next,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Village name is required';
-                    }
-                    return null;
-                  },
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    isDense: true,
-                  ),
-                  onFieldSubmitted: (_) {
-                    if (!_showVillageSuggestions) {
-                      FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
-                    }
-                  },
-                  onChanged: (value) {
-                    if (value.trim().isEmpty) {
-                      setState(() {
-                        _villageSuggestions = [];
-                        _showVillageSuggestions = false;
-                        _villageHighlightIndex = -1;
-                      });
-                    } else {
-                      _loadVillageSuggestions(value);
-                    }
-                  },
-                  onTap: () {
-                    if (_villageController.text.isNotEmpty) {
-                      _loadVillageSuggestions(_villageController.text);
-                    }
-                  },
-                ),
-                if (_showVillageSuggestions)
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 200),
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.blue, width: 1.5),
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black26, blurRadius: 4)
-                      ],
-                    ),
-                    child: Scrollbar(
-                      thumbVisibility: true,
-                      controller: _villageScrollController,
-                      child: ListView.builder(
-                        controller: _villageScrollController,
-                        shrinkWrap: true,
-                        itemCount: _villageSuggestions.length,
-                        itemBuilder: (context, index) {
-                          final isHighlighted = index == _villageHighlightIndex;
-                          return InkWell(
-                            onTap: () {
-                              setState(() {
-                                _villageController.text = _villageSuggestions[index];
-                                _villageController.selection = TextSelection.fromPosition(
-                                    TextPosition(offset: _villageController.text.length));
-                                _villageSuggestions = [];
-                                _showVillageSuggestions = false;
-                                _villageHighlightIndex = -1;
-                              });
-                              FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isHighlighted ? Colors.blue[100] : Colors.transparent,
-                                border: Border(
-                                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  if (isHighlighted)
-                                    const Padding(
-                                      padding: EdgeInsets.only(right: 6),
-                                      child: Icon(Icons.chevron_right, size: 14, color: Colors.blue),
-                                    ),
-                                  Expanded(
-                                    child: Text(
-                                      _villageSuggestions[index],
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
-                                        color: isHighlighted ? Colors.blue[900] : Colors.black,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Village Name',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                  CompositedTransformTarget(
+                    link: _villageLayerLink,
+                    child: TextFormField(
+                        controller: _villageController,
+                        focusNode: _villageFocusNode,
+                        textInputAction: TextInputAction.next,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Village name is required';
+                          }
+                          return null;
+                        },
+                        style: const TextStyle(fontSize: 13),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                        ),
+                        onFieldSubmitted: (_) {
+                          if (!_showVillageSuggestions) {
+                            FocusScope.of(context).requestFocus(_livingPlaceFocusNode);
+                          }
+                        },
+                        onChanged: (value) {
+                          if (value.trim().isEmpty) {
+                            setState(() {
+                              _villageSuggestions = [];
+                              _showVillageSuggestions = false;
+                              _villageHighlightIndex = -1;
+                            });
+                            _removeVillageOverlay();
+                          } else {
+                            _loadVillageSuggestions(value);
+                          }
+                        },
+                        onTap: () {
+                          if (_villageController.text.isNotEmpty) {
+                            _loadVillageSuggestions(_villageController.text);
+                          }
                         },
                       ),
-                    ),
                   ),
-              ],  // ← closes Column's children
-            ),    // ← closes Column
-          ),      // ← closes first Expanded
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Living City',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _livingPlaceController,
-                  focusNode: _livingPlaceFocusNode,
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_person1NameFocusNode),
-                  style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    isDense: true,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Living City',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: _livingPlaceController,
+                        focusNode: _livingPlaceFocusNode,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(_person1NameFocusNode),
+                        style: const TextStyle(fontSize: 13),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          isDense: true,
+                        ),
+                      ),
+
+                    ],
+
                   ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 

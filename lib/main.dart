@@ -30,6 +30,14 @@ void main() async {
     url: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
   );
+  // Warm up Supabase connection in background (fixes JIO slow first-connect)
+  Supabase.instance.client
+      .from('users')
+      .select('id')
+      .limit(1)
+      .timeout(const Duration(seconds: 30))
+      .catchError((_) => <Map<String, dynamic>>[]);
+
   runApp(const MyApp());
 }
 

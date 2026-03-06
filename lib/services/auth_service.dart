@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user.dart';
 import '../utils/network_utils.dart';
 import 'session_manager.dart';
+import 'dart:async'; // for TimeoutException
 
 class AuthService {
   final SupabaseClient client = Supabase.instance.client;
@@ -100,10 +101,9 @@ class AuthService {
     }
   }
 
-  /// ✅ UPDATED: Now returns Map<String, dynamic> with auth token
   Future<Map<String, dynamic>> login(String fullName, String password) async {
     try {
-      print('Attempting login for full_name: $fullName');
+      print('🔍 STEP 1: Starting login for: $fullName');
 
       final data = await client
           .from('users')
@@ -111,8 +111,10 @@ class AuthService {
           .eq('full_name', fullName)
           .limit(1);
 
+      print('🔍 STEP 2: Query completed, data: $data');
+
       if (data == null || data is! List || data.isEmpty) {
-        print('No user found with full_name: $fullName');
+        print('🔍 STEP 3: No user found');
         return {
           'success': false,
           'error': 'invalid_credentials',
@@ -120,11 +122,11 @@ class AuthService {
         };
       }
 
+      print('🔍 STEP 4: User found, verifying password...');
       final row = data[0] as Map<String, dynamic>;
       final storedHash = row['password_hash']?.toString();
 
       if (storedHash == null) {
-        print('No password hash found for user');
         return {
           'success': false,
           'error': 'invalid_credentials',
@@ -133,9 +135,9 @@ class AuthService {
       }
 
       final isValid = await _verifyPassword(password, storedHash);
+      print('🔍 STEP 5: Password valid: $isValid');
 
       if (!isValid) {
-        print('Password verification failed');
         return {
           'success': false,
           'error': 'invalid_credentials',
@@ -143,21 +145,27 @@ class AuthService {
         };
       }
 
-      print('Login successful');
       final user = UserModel.fromMap(row);
-
-      // ✅ Generate auth token
       final authToken = _generateAuthToken(user.id, user.fullName);
+      print('🔍 STEP 6: Login successful!');
 
       return {
         'success': true,
         'user': user,
-        'token': authToken, // ✅ Return auth token
+        'token': authToken,
+      };
+
+    } on TimeoutException {
+      print('❌ TIMEOUT: Supabase query timed out');
+      return {
+        'success': false,
+        'error': 'network_error',
+        'message': 'Connection timed out',
       };
     } catch (e) {
-      print('Login error: $e');
+      print('❌ LOGIN CATCH ERROR TYPE: ${e.runtimeType}');
+      print('❌ LOGIN CATCH ERROR: ${e.toString()}');
 
-      // ✅ Check if it's a network error
       if (NetworkUtils.isNetworkError(e)) {
         return {
           'success': false,

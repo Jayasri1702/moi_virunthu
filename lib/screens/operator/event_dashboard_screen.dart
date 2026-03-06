@@ -448,7 +448,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           throw Exception('Cannot access storage directory');
         }
 
-        final eventFolder = Directory('${downloadsDir.path}/$eventTitle');
+        final eventFolder = Directory('${downloadsDir.path}/receipts');
         if (!await eventFolder.exists()) {
           await eventFolder.create(recursive: true);
         }
@@ -458,7 +458,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         print('✅ Save directory: $saveDirPath');
       } else if (Platform.isIOS) {
         final appDir = await getApplicationDocumentsDirectory();
-        final eventFolder = Directory('${appDir.path}/$eventTitle');
+        final eventFolder = Directory('${appDir.path}/receipts');
         if (!await eventFolder.exists()) {
           await eventFolder.create(recursive: true);
         }

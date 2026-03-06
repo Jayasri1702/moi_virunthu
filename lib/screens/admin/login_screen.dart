@@ -3,6 +3,7 @@ import '../../services/auth_service.dart';
 import '../../utils/network_utils.dart';
 import '../../models/user.dart';
 import '../../services/session_manager.dart';
+import 'dart:async'; // for TimeoutException
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,105 +24,55 @@ class _LoginScreenState extends State<LoginScreen> {
   );
 
   Future<void> _login() async {
-    // Basic validation first (no internet needed)
     if (_usernameController.text.trim().isEmpty) {
       _showMessage('Please enter username');
       return;
     }
-
     if (_passwordController.text.isEmpty) {
       _showMessage('Please enter password');
       return;
     }
 
-    // ✅ STEP 1: Check internet connection BEFORE attempting login
-    if (!await NetworkUtils.checkConnectionBeforeRequest(
-      context,
-      onRetry: _login,
-    )) {
-      return; // Internet dialog will be shown, exit early
-    }
-
-    // ✅ STEP 2: Show loading
     setState(() => _loading = true);
 
     try {
-      // ✅ STEP 3: Attempt login
       final result = await _auth.login(
         _usernameController.text.trim(),
         _passwordController.text,
-      );
+      ).timeout(const Duration(seconds: 35));
 
       if (!mounted) return;
-
       setState(() => _loading = false);
 
-      // ✅ STEP 4: Handle response
       if (result['success'] == true) {
         final user = result['user'] as UserModel;
-
-        // ✅ NEW: Get auth token from login result
         final authToken = result['token'] as String?;
+        await SessionManager.saveSession(user, authToken: authToken);
 
-        if (authToken != null) {
-          print('✅ Using auth token from backend: ${authToken.substring(0, 30)}...');
-        } else {
-          print('⚠️ No auth token in login response');
-        }
-
-        // ✅ Save session WITH auth token
-        await SessionManager.saveSession(
-          user,
-          authToken: authToken,
-        );
-
-        // Navigate based on role
         if (user.role == 'admin') {
           Navigator.pushReplacementNamed(context, '/admin', arguments: user);
         } else {
-          Navigator.pushReplacementNamed(
-            context,
-            '/operator/home',
-            arguments: user,
-          );
+          Navigator.pushReplacementNamed(context, '/operator/home', arguments: user);
         }
       } else {
-        // ✅ STEP 5: Handle errors based on error type
         final errorType = result['error'] ?? 'unknown';
         final errorMessage = result['message'] ?? 'Login failed';
 
         if (errorType == 'network_error') {
-          // Show network error dialog
-          if (mounted) {
-            NetworkUtils.showConnectionErrorDialog(
-              context,
-              onRetry: _login,
-            );
-          }
-        } else if (errorType == 'invalid_credentials') {
-          // Show invalid credentials message
-          if (mounted) {
-            _showMessage(errorMessage);
-          }
+          NetworkUtils.showConnectionErrorDialog(context, onRetry: _login);
         } else {
-          // Show generic error
-          if (mounted) {
-            _showMessage(errorMessage);
-          }
+          _showMessage(errorMessage);
         }
       }
+    } on TimeoutException {
+      // ✅ Actual timeout = real network issue
+      if (!mounted) return;
+      setState(() => _loading = false);
+      NetworkUtils.showConnectionErrorDialog(context, onRetry: _login);
     } catch (e) {
       if (!mounted) return;
-
       setState(() => _loading = false);
-
-      // ✅ Handle unexpected errors with NetworkUtils
-      NetworkUtils.handleError(
-        context,
-        e,
-        onRetry: _login,
-        customMessage: 'Error logging in',
-      );
+      NetworkUtils.handleError(context, e, onRetry: _login, customMessage: 'Error logging in');
     }
   }
 
