@@ -3392,47 +3392,52 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
               }
 
 
-              // ✅ Generate and print in background (async, won't block UI)
-              await _generateAndPrintReceipt(
-                serialNo: entry['serial_no'],
+              // ✅ Snapshot entry before clearing
+              final snapEntry = Map<String, dynamic>.from(entry);
+              final snapEntryAmount = entryAmount;
+              final snapDenominations = denominations;
+
+              // ✅ Clear form IMMEDIATELY
+              if (mounted) {
+                await _clearFormCompletely();
+                _phoneFocusNode.requestFocus();
+                setState(() => _isLoading = false);
+                if (_isCollectionDetailsEditPage) {
+                  Navigator.pop(context);
+                  _isCollectionDetailsEditPage = false;
+                }
+              }
+
+              // ✅ Print in background — does NOT block UI
+              _printReceiptInBackground(
+                serialNo: snapEntry['serial_no'],
                 operatorName: operatorName,
                 eventDate: eventDetails['event_date'],
                 eventTime: eventDetails['event_time'],
-                villageName: entry['village_name'],
-                livingPlace: entry['living_place'],
-                person1Name: entry['persons'] != null && (entry['persons'] as List).isNotEmpty
-                    ? entry['persons'][0]['name'] : null,
-                person1Job: entry['persons'] != null && (entry['persons'] as List).isNotEmpty
-                    ? entry['persons'][0]['job'] : null,
-                person2Details: entry['persons'] != null && (entry['persons'] as List).length > 1
-                    ? entry['persons'][1]['details'] : null,
-                phone: entry['phone'],
-                notes: entry['notes'],
-                amount: entryAmount,
-                paymentMethod: entry['payment_method'] ?? 'CASH',
-                denominations: denominations,
+                villageName: snapEntry['village_name'],
+                livingPlace: snapEntry['living_place'],
+                person1Name: snapEntry['persons'] != null && (snapEntry['persons'] as List).isNotEmpty
+                    ? snapEntry['persons'][0]['name'] : null,
+                person1Job: snapEntry['persons'] != null && (snapEntry['persons'] as List).isNotEmpty
+                    ? snapEntry['persons'][0]['job'] : null,
+                person2Details: snapEntry['persons'] != null && (snapEntry['persons'] as List).length > 1
+                    ? snapEntry['persons'][1]['details'] : null,
+                phone: snapEntry['phone'],
+                notes: snapEntry['notes'],
+                amount: snapEntryAmount,
+                paymentMethod: snapEntry['payment_method'] ?? 'CASH',
+                denominations: snapDenominations,
                 customerName: _customerName,
                 city: _city,
                 customerPhone: _customerPhone,
-                isUncle: entry['is_uncle'] ?? false,
+                isUncle: snapEntry['is_uncle'] ?? false,
                 eventTitle: eventTitle,
                 eventFor: eventFor,
                 eventTypeName: eventTypeName,
                 venue: venue,
               );
 
-              // ✅ Don't return early - let receipt print first
-              if (mounted) {
-                await _clearFormCompletely();
-                _phoneFocusNode.requestFocus();
-                setState(() => _isPrinting = false);
-                if (_isCollectionDetailsEditPage) {
-                  Navigator.pop(context);  // Return to collection details
-                  _isCollectionDetailsEditPage = false;
-                }
-              }
-
-              return; // ✅ Exit immediately, don't wait for printing
+              return; // ✅ UI is free immediately
 
 
 
@@ -3540,15 +3545,20 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
           await _clearFormCompletely();
           await _loadPreviewSerialNo();
 
+          if (mounted) {
+            setState(() => _isLoading = false); // ✅ Free the UI now
+            _phoneFocusNode.requestFocus();     // ✅ Operator can type immediately
+          }
+
           if (_isCollectionDetailsEditPage) {
             _isCollectionDetailsEditPage = false;
             Navigator.pop(context);
-            // Continue with receipt generation in background (don't return yet)
           }
 
-// ✅ Generate receipts based on type
-          try {
-            final operatorName = await _getOperatorName();
+// ✅ Generate receipts in background
+          unawaited(() async {
+            try {
+              final operatorName = await _getOperatorName();
             final eventDetails = await _getEventDetails();
 
             final eventResponse = await _supabase
@@ -3680,22 +3690,18 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 }
               }
             }
-          } catch (e) {
-            print('Error generating receipts: $e');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error: ${e.toString()}'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+            } catch (e) {
+              print('Error generating receipts: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: ${e.toString()}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             }
-          } finally {
-            if (mounted) {
-              _phoneFocusNode.requestFocus();
-              setState(() => _isLoading = false);
-            }
-          }
+          }()); // ✅ closes unawaited(() async {
 
           if (mounted) {
             await _clearFormCompletely();
@@ -3968,43 +3974,60 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             venue: venue,
           );
 
-          // ✅ Print in background
-          await _generateAndPrintReceipt(
-            serialNo: _serialNo!,
+          // ✅ Snapshot all values BEFORE clearing
+          final snapSerialNo = _serialNo!;
+          final snapVillage = _villageController.text.trim();
+          final snapLivingPlace = _livingPlaceController.text.trim();
+          final snapPerson1Name = _person1Field1Controller.text.trim();
+          final snapPerson1Job = _person1Field2Controller.text.trim();
+          final snapPerson2Details = _person2Controller.text.trim();
+          final snapPhone = _phoneController.text.trim();
+          final snapNotes = _notesController.text.trim();
+          final snapAmount = _paymentMethod == 'CASH'
+              ? _getTotalAmount()
+              : int.tryParse(_amountController.text) ?? 0;
+          final snapPaymentMethod = _paymentMethod;
+          final snapIsUncle = _isUncle;
+          final snapDenominations = denominations;
+
+          // ✅ Clear form IMMEDIATELY so operator can type
+          if (mounted) {
+            await _clearFormCompletely();
+            _phoneFocusNode.requestFocus();
+            setState(() => _isLoading = false);
+            if (_isCollectionDetailsEditPage) {
+              Navigator.pop(context);
+              _isCollectionDetailsEditPage = false;
+            }
+          }
+
+          // ✅ Print in background — does NOT block UI
+          _printReceiptInBackground(
+            serialNo: snapSerialNo,
             operatorName: operatorName,
             eventDate: eventDetails['event_date'],
             eventTime: eventDetails['event_time'],
-            villageName: _villageController.text.trim(),
-            livingPlace: _livingPlaceController.text.trim(),
-            person1Name: _person1Field1Controller.text.trim(),
-            person1Job: _person1Field2Controller.text.trim(),
-            person2Details: _person2Controller.text.trim(),
-            phone: _phoneController.text.trim(),
-            notes: _notesController.text.trim(),
-            amount: _paymentMethod == 'CASH'
-                ? _getTotalAmount()
-                : int.tryParse(_amountController.text) ?? 0,
-            paymentMethod: _paymentMethod,
-            denominations: denominations,
+            villageName: snapVillage,
+            livingPlace: snapLivingPlace,
+            person1Name: snapPerson1Name,
+            person1Job: snapPerson1Job,
+            person2Details: snapPerson2Details,
+            phone: snapPhone,
+            notes: snapNotes,
+            amount: snapAmount,
+            paymentMethod: snapPaymentMethod,
+            denominations: snapDenominations,
             customerName: _customerName,
             city: _city,
             customerPhone: _customerPhone,
-            isUncle: _isUncle,
+            isUncle: snapIsUncle,
             eventTitle: eventTitle,
             eventFor: eventFor,
             eventTypeName: eventTypeName,
             venue: venue,
           );
 
-          if (mounted) {
-            await _clearFormCompletely();
-            _phoneFocusNode.requestFocus();
-            setState(() => _isPrinting = false);
-            if (_isCollectionDetailsEditPage) {
-              Navigator.pop(context);  // Return to collection details
-              _isCollectionDetailsEditPage = false;
-            }
-          }
+          return; // ✅ Exit — form is already clear
         }
       }catch (e) {
         print('Error saving: $e');
@@ -4173,7 +4196,58 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     }
   }
 
-
+  // ✅ NEW: Fire-and-forget wrapper for single receipt printing
+  void _printReceiptInBackground({
+    required int serialNo,
+    required String operatorName,
+    required DateTime eventDate,
+    required TimeOfDay eventTime,
+    String? villageName,
+    String? livingPlace,
+    String? person1Name,
+    String? person1Job,
+    String? person2Details,
+    String? phone,
+    String? notes,
+    required int amount,
+    required String paymentMethod,
+    Map<int, int>? denominations,
+    String? customerName,
+    String? city,
+    String? customerPhone,
+    required bool isUncle,
+    String? eventTitle,
+    String? eventFor,
+    String? eventTypeName,
+    String? venue,
+  }) {
+    unawaited(_generateAndPrintReceipt(
+      serialNo: serialNo,
+      operatorName: operatorName,
+      eventDate: eventDate,
+      eventTime: eventTime,
+      villageName: villageName,
+      livingPlace: livingPlace,
+      person1Name: person1Name,
+      person1Job: person1Job,
+      person2Details: person2Details,
+      phone: phone,
+      notes: notes,
+      amount: amount,
+      paymentMethod: paymentMethod,
+      denominations: denominations,
+      customerName: customerName,
+      city: city,
+      customerPhone: customerPhone,
+      isUncle: isUncle,
+      eventTitle: eventTitle,
+      eventFor: eventFor,
+      eventTypeName: eventTypeName,
+      venue: venue,
+    ).catchError((e) {
+      print('❌ Background print error: $e');
+    }));
+  }
 
 
 // ✅ NEW: Background PDF generation for cloud storage

@@ -412,6 +412,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       return;
     }
 
+    // Ask for folder name
+    final folderName = await _askFolderName();
+    if (folderName == null) return; // User cancelled
+
     try {
       // Step 2: Show loading dialog
       showDialog(
@@ -448,7 +452,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           throw Exception('Cannot access storage directory');
         }
 
-        final eventFolder = Directory('${downloadsDir.path}/receipts');
+        final eventFolder = Directory('${downloadsDir.path}/$folderName');
         if (!await eventFolder.exists()) {
           await eventFolder.create(recursive: true);
         }
@@ -458,7 +462,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         print('✅ Save directory: $saveDirPath');
       } else if (Platform.isIOS) {
         final appDir = await getApplicationDocumentsDirectory();
-        final eventFolder = Directory('${appDir.path}/receipts');
+        final eventFolder = Directory('${appDir.path}/$folderName');
         if (!await eventFolder.exists()) {
           await eventFolder.create(recursive: true);
         }
@@ -588,6 +592,52 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         );
       }
     }
+  }
+
+  Future<String?> _askFolderName() async {
+    final controller = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Download Folder Name'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Folder Name',
+              hintText: 'Only letters and numbers allowed',
+            ),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+            ],
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter a folder name';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, controller.text.trim());
+              }
+            },
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _deleteReceipts() async {
