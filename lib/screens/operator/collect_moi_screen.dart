@@ -81,6 +81,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
   bool _skipPrint = false;         // ADD
   bool _isPrinting = false;
   bool _isCollectionDetailsEditPage = false;  // ✅ ADD THIS LINE
+  bool _allowManualPop = false;
 
   // Edit mode variables
   bool _isEditMode = false;
@@ -98,6 +99,25 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
   bool _isClearPressed = false;
   double _clearPressProgress = 0.0;
+
+  bool get _isShortcutModifierPressed =>
+      HardwareKeyboard.instance.isControlPressed ||
+      HardwareKeyboard.instance.isMetaPressed;
+
+  bool _isKeyboardBackEvent(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.escape ||
+        event.logicalKey == LogicalKeyboardKey.goBack ||
+        event.logicalKey == LogicalKeyboardKey.browserBack;
+  }
+
+  void _handleManualBack() {
+    setState(() => _allowManualPop = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -6410,31 +6430,35 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: (node, event) {
+        if (_isKeyboardBackEvent(event)) {
+          return KeyEventResult.handled;
+        }
+
         if (event is KeyDownEvent) {
           // Ctrl+S
           if (event.logicalKey == LogicalKeyboardKey.keyS &&
-              HardwareKeyboard.instance.isControlPressed) {
+              _isShortcutModifierPressed) {
             _handleSaveAndPrint();
             return KeyEventResult.handled;
           }
 
           // Ctrl+Enter
           if (event.logicalKey == LogicalKeyboardKey.enter &&
-              HardwareKeyboard.instance.isControlPressed) {
+              _isShortcutModifierPressed) {
             _handleGroup();
             return KeyEventResult.handled;
           }
 
           // Ctrl+Z → Move to village for next entry (after filling denomination)
           if (event.logicalKey == LogicalKeyboardKey.keyZ &&
-              HardwareKeyboard.instance.isControlPressed) {
+              _isShortcutModifierPressed) {
             FocusScope.of(context).requestFocus(_villageFocusNode);
             return KeyEventResult.handled;
           }
 
           // ✅ FIX: Only allow Ctrl+D if NOT skipping denomination
           if (event.logicalKey == LogicalKeyboardKey.keyD &&
-              HardwareKeyboard.instance.isControlPressed &&
+              _isShortcutModifierPressed &&
               !_skipDenomination) {
             if (_denomRows.isNotEmpty) {
               FocusScope.of(context).requestFocus(_firstDenomFocusNode);
@@ -6442,16 +6466,23 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
             return KeyEventResult.handled;
           }
 
+          // Ctrl+G
+          if (event.logicalKey == LogicalKeyboardKey.keyG &&
+              _isShortcutModifierPressed) {
+            _handleGroup();
+            return KeyEventResult.handled;
+          }
+
           // Ctrl+Delete
           if (event.logicalKey == LogicalKeyboardKey.delete &&
-              HardwareKeyboard.instance.isControlPressed) {
+              _isShortcutModifierPressed) {
             _handleClear();
             return KeyEventResult.handled;
           }
 
           // Ctrl+A (Add Entry)
           if (event.logicalKey == LogicalKeyboardKey.keyA &&
-              HardwareKeyboard.instance.isControlPressed) {
+              _isShortcutModifierPressed) {
             if (_currentGroupId != null) {
               _handleAddEntry();
               return KeyEventResult.handled;
@@ -6460,7 +6491,7 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
 
           // Ctrl+P (Generate receipt) - ✅ FIX: Only if NOT skipping print
           if (event.logicalKey == LogicalKeyboardKey.keyP &&
-              HardwareKeyboard.instance.isControlPressed &&
+              _isShortcutModifierPressed &&
               !_skipPrint) {
             if (_currentGroupId != null && _groupedMois.isNotEmpty) {
               _handleGenerateGroupReceipt();
@@ -6473,27 +6504,97 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
         }
         return KeyEventResult.ignored;
       },
-      child: Form(                    // ✅ ADD THIS
-        key: _formKey,                // ✅ ADD THIS
-        child: Scaffold(
-          backgroundColor: Colors.grey[100],
-          appBar: AppBar(
-            backgroundColor: Colors.white,
-            elevation: 1,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(
-              _isEditMode ? 'Edit MOI' : 'Collect Moi',
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+      child: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.escape): () {},
+          const SingleActivator(LogicalKeyboardKey.goBack): () {},
+          const SingleActivator(LogicalKeyboardKey.browserBack): () {},
+          const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+              _handleSaveAndPrint,
+          const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+              _handleSaveAndPrint,
+          const SingleActivator(LogicalKeyboardKey.enter, control: true):
+              _handleGroup,
+          const SingleActivator(LogicalKeyboardKey.enter, meta: true):
+              _handleGroup,
+          const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () {
+            FocusScope.of(context).requestFocus(_villageFocusNode);
+          },
+          const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () {
+            FocusScope.of(context).requestFocus(_villageFocusNode);
+          },
+          const SingleActivator(LogicalKeyboardKey.keyD, control: true): () {
+            if (!_skipDenomination && _denomRows.isNotEmpty) {
+              FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyD, meta: true): () {
+            if (!_skipDenomination && _denomRows.isNotEmpty) {
+              FocusScope.of(context).requestFocus(_firstDenomFocusNode);
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+              _handleGroup,
+          const SingleActivator(LogicalKeyboardKey.keyG, meta: true):
+              _handleGroup,
+          const SingleActivator(LogicalKeyboardKey.delete, control: true):
+              _handleClear,
+          const SingleActivator(LogicalKeyboardKey.delete, meta: true):
+              _handleClear,
+          const SingleActivator(LogicalKeyboardKey.keyA, control: true): () {
+            if (_currentGroupId != null) {
+              _handleAddEntry();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyA, meta: true): () {
+            if (_currentGroupId != null) {
+              _handleAddEntry();
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyP, control: true): () {
+            if (!_skipPrint) {
+              if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+                _handleGenerateGroupReceipt();
+              } else if (_currentGroupId == null &&
+                  (_isEditMode || _hasFormData())) {
+                _handleGenerateSingleReceipt();
+              }
+            }
+          },
+          const SingleActivator(LogicalKeyboardKey.keyP, meta: true): () {
+            if (!_skipPrint) {
+              if (_currentGroupId != null && _groupedMois.isNotEmpty) {
+                _handleGenerateGroupReceipt();
+              } else if (_currentGroupId == null &&
+                  (_isEditMode || _hasFormData())) {
+                _handleGenerateSingleReceipt();
+              }
+            }
+          },
+        },
+        child: PopScope(
+          canPop: _allowManualPop,
+          child: Form(                    // ✅ ADD THIS
+            key: _formKey,                // ✅ ADD THIS
+            child: Scaffold(
+              backgroundColor: Colors.grey[100],
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 1,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black),
+                  onPressed: _handleManualBack,
+                ),
+                title: Text(
+                  _isEditMode ? 'Edit MOI' : 'Collect Moi',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
-          ),
-          body: Stack(
+              body: Stack(
             children: [
               GestureDetector(              // ← ADD THIS
                   onTap: () {
@@ -6612,7 +6713,9 @@ class _CollectMoiScreenState extends State<CollectMoiScreen> {
                 ),
             ],
           ),
+          ),
         ),
+      ),
       ),
     );
   }
